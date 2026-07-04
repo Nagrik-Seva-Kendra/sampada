@@ -5,7 +5,7 @@ import { IconGuideline, IconEregistry, IconDeed } from "../../components/icons";
 
 const CARDS: { icon: () => JSX.Element; title: StringKey; desc: StringKey }[] = [
   { icon: IconGuideline, title: "svcGuideline", desc: "svcGuidelineDesc" },
-  { icon: IconEregistry, title: "svcEregistry", desc: "svcEregistryDesc" },
+  { icon: IconEregistry, title: "svcDeeds", desc: "svcDeedsDesc" },
   { icon: IconDeed, title: "svcDeed", desc: "svcDeedDesc" },
 ];
 

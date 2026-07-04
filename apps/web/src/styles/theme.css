@@ -939,8 +939,101 @@ h3 {
   white-space: pre-wrap;
 }
 
+/* ---------- deeds ---------- */
+.nav-dd {
+  position: relative;
+  display: inline-flex;
+}
+.nav-dd-caret {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.nav-dd-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-top: 12px;
+  display: none;
+  z-index: 30;
+}
+.nav-dd.open .nav-dd-menu {
+  display: block;
+}
+.nav-dd-menu > * {
+  display: block;
+  white-space: nowrap;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+}
+.nav-dd-menu > *:first-child {
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.nav-dd-menu > *:last-child {
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow);
+}
+.deed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 28px;
+}
+.deed-card {
+  display: block;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.deed-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.deed-card .h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+.deed-card p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+}
+.deed-card-ext {
+  border-style: dashed;
+}
+.deed-about {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--fg);
+  max-width: 720px;
+  margin: 0 0 14px;
+}
+.deed-cta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.deed-cta .btn-calc {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 860px) {
+  .deed-grid {
+    grid-template-columns: 1fr;
+  }
   .er-steps {
     grid-template-columns: 1fr;
   }

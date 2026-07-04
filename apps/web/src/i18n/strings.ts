@@ -12,11 +12,11 @@ export const strings = {
   light: { en: "Light", hi: "लाइट" },
 
   brandName: { en: "Nagrik Seva Kendra", hi: "नागरिक सेवा केंद्र" },
-  brandSub: { en: "Guideline Rates · e-Registry", hi: "गाइडलाइन दरें · ई-रजिस्ट्री" },
+  brandSub: { en: "Guideline Rates · Deeds", hi: "गाइडलाइन दरें · विलेख" },
 
   navHome: { en: "Home", hi: "होम" },
   navGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
-  navEregistry: { en: "e-Registry", hi: "ई-रजिस्ट्री" },
+  navDeeds: { en: "All Deeds", hi: "सभी विलेख" },
   partnerWithUs: { en: "Partner With Us", hi: "हमारे साथ जुड़ें" },
 
   heroKicker: {
@@ -24,12 +24,12 @@ export const strings = {
     hi: "सरकारी गाइडलाइन दरें · 51 जिले",
   },
   heroTitle: {
-    en: "Official guideline rates & e-registry — in one trusted portal.",
-    hi: "सरकारी गाइडलाइन दरें और ई-रजिस्ट्री — एक विश्वसनीय पोर्टल पर।",
+    en: "Official guideline rates & property deeds — in one trusted portal.",
+    hi: "सरकारी गाइडलाइन दरें और संपत्ति विलेख — एक विश्वसनीय पोर्टल पर।",
   },
   heroSub: {
-    en: "Find official collector guideline rates for every district and register your property end-to-end — clearly and bilingually.",
-    hi: "हर जिले के लिए सरकारी कलेक्टर गाइडलाइन दरें पाएँ और अपनी संपत्ति का संपूर्ण पंजीकरण करें — स्पष्ट और द्विभाषी।",
+    en: "Find official collector guideline rates for every district and understand every major deed — clearly and bilingually.",
+    hi: "हर जिले के लिए सरकारी कलेक्टर गाइडलाइन दरें पाएँ और हर प्रमुख विलेख को समझें — स्पष्ट और द्विभाषी।",
   },
 
   captionTitle: { en: "Verified property records", hi: "सत्यापित संपत्ति रिकॉर्ड" },
@@ -41,10 +41,10 @@ export const strings = {
   },
   svcGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
   svcGuidelineDesc: { en: "Official rates 2016–2020.", hi: "सरकारी दरें 2016–2020।" },
-  svcEregistry: { en: "e-Registry", hi: "ई-रजिस्ट्री" },
-  svcEregistryDesc: {
-    en: "Track registration & slots.",
-    hi: "पंजीकरण और स्लॉट ट्रैक करें।",
+  svcDeeds: { en: "Deeds & Instruments", hi: "विलेख व दस्तावेज़" },
+  svcDeedsDesc: {
+    en: "Sale, lease, partition & more — explained.",
+    hi: "विक्रय, पट्टा, विभाजन व अन्य — सरल भाषा में।",
   },
   svcDeed: { en: "Deed Management", hi: "डीड प्रबंधन" },
   svcDeedDesc: {
@@ -75,53 +75,19 @@ export const strings = {
   inboxEmpty: { en: "No messages yet.", hi: "अभी तक कोई संदेश नहीं।" },
   inboxError: { en: "Could not load messages.", hi: "संदेश लोड नहीं हो सके।" },
 
-  erTitle: { en: "e-Registry process", hi: "ई-रजिस्ट्री प्रक्रिया" },
-  erSubtitle: {
-    en: "Register your property end-to-end — from guideline rates to a stamped, registered deed.",
-    hi: "अपनी संपत्ति का संपूर्ण पंजीकरण — गाइडलाइन दरों से लेकर स्टाम्पित, पंजीकृत डीड तक।",
+  // Deeds
+  deedsTitle: { en: "Deeds & instruments", hi: "विलेख व दस्तावेज़" },
+  deedsSubtitle: {
+    en: "The major registrable instruments in Madhya Pradesh — what each deed does, when to use it, and the documents you'll need.",
+    hi: "मध्य प्रदेश के प्रमुख पंजीकरण-योग्य दस्तावेज़ — प्रत्येक विलेख क्या करता है, कब उपयोग होता है, और कौन से दस्तावेज़ लगेंगे।",
   },
-  erStepsHead: { en: "How it works", hi: "प्रक्रिया कैसे काम करती है" },
-  erStep1: { en: "Check guideline value", hi: "गाइडलाइन मूल्य जाँचें" },
-  erStep1d: {
-    en: "Find the official rate for your location and property type.",
-    hi: "अपने स्थान और संपत्ति प्रकार के लिए सरकारी दर पता करें।",
+  deedsDocsHead: { en: "Documents you'll need", hi: "आवश्यक दस्तावेज़" },
+  deedsStampNote: {
+    en: "Stamp duty and registration fees follow the current MP schedule and the collector guideline value for your district.",
+    hi: "स्टाम्प शुल्क व पंजीकरण फीस वर्तमान म.प्र. अनुसूची और आपके जिले के कलेक्टर गाइडलाइन मूल्य के अनुसार होती है।",
   },
-  erStep2: { en: "Prepare the deed", hi: "डीड तैयार करें" },
-  erStep2d: {
-    en: "Draft the sale/gift/lease deed with buyer & seller details.",
-    hi: "क्रेता व विक्रेता विवरण के साथ विक्रय/दान/पट्टा डीड तैयार करें।",
-  },
-  erStep3: { en: "Pay stamp duty & fees", hi: "स्टाम्प शुल्क व फीस भुगतान" },
-  erStep3d: {
-    en: "Pay stamp duty and registration fee online.",
-    hi: "स्टाम्प शुल्क और पंजीकरण फीस ऑनलाइन भुगतान करें।",
-  },
-  erStep4: { en: "Book a slot", hi: "स्लॉट बुक करें" },
-  erStep4d: {
-    en: "Choose a date and time at the Sub-Registrar office.",
-    hi: "उप-पंजीयक कार्यालय में तिथि व समय चुनें।",
-  },
-  erStep5: { en: "Biometric & signing", hi: "बायोमेट्रिक व हस्ताक्षर" },
-  erStep5d: {
-    en: "Parties and witnesses complete biometrics and sign.",
-    hi: "पक्षकार व गवाह बायोमेट्रिक पूर्ण कर हस्ताक्षर करते हैं।",
-  },
-  erStep6: { en: "Get the registered deed", hi: "पंजीकृत डीड प्राप्त करें" },
-  erStep6d: {
-    en: "Download your registered deed with the e-registration number.",
-    hi: "ई-पंजीकरण संख्या के साथ अपनी पंजीकृत डीड डाउनलोड करें।",
-  },
-  erDocsHead: { en: "Documents you'll need", hi: "आवश्यक दस्तावेज़" },
-  erDoc1: { en: "Buyer & seller ID proof (Aadhaar/PAN)", hi: "क्रेता व विक्रेता पहचान प्रमाण (आधार/पैन)" },
-  erDoc2: { en: "Property documents / previous deed", hi: "संपत्ति दस्तावेज़ / पिछली डीड" },
-  erDoc3: { en: "Passport-size photographs", hi: "पासपोर्ट आकार की तस्वीरें" },
-  erDoc4: { en: "Two witnesses with ID proof", hi: "पहचान प्रमाण सहित दो गवाह" },
-  erDoc5: { en: "Stamp duty & fee payment receipt", hi: "स्टाम्प शुल्क व फीस भुगतान रसीद" },
-  erNote: {
-    en: "Guideline rates and slot availability vary by district. Check the current rate PDFs under Guideline Rates before you begin.",
-    hi: "गाइडलाइन दरें और स्लॉट उपलब्धता जिले के अनुसार भिन्न होती हैं। शुरू करने से पहले गाइडलाइन दरें अनुभाग में वर्तमान दर पीडीएफ देखें।",
-  },
-  erViewRates: { en: "View guideline rates", hi: "गाइडलाइन दरें देखें" },
+  deedsBackAll: { en: "← All deeds", hi: "← सभी विलेख" },
+  viewRates: { en: "View guideline rates", hi: "गाइडलाइन दरें देखें" },
 
   footAbout: { en: "About", hi: "परिचय" },
   footPartner: { en: "Partner", hi: "पार्टनर" },
@@ -132,12 +98,12 @@ export const strings = {
   // About
   aboutTitle: { en: "About Nagrik Seva Kendra", hi: "नागरिक सेवा केंद्र के बारे में" },
   aboutP1: {
-    en: "Nagrik Seva Kendra is a citizen-service portal for official guideline rates and end-to-end e-registry across Madhya Pradesh.",
-    hi: "नागरिक सेवा केंद्र मध्य प्रदेश में सरकारी गाइडलाइन दरों और संपूर्ण ई-रजिस्ट्री के लिए एक नागरिक सेवा पोर्टल है।",
+    en: "Nagrik Seva Kendra is a citizen-service portal for official guideline rates and property deed information across Madhya Pradesh.",
+    hi: "नागरिक सेवा केंद्र मध्य प्रदेश में सरकारी गाइडलाइन दरों और संपत्ति विलेख जानकारी के लिए एक नागरिक सेवा पोर्टल है।",
   },
   aboutP2: {
-    en: "We bring official collector guideline rates and deed registration into one trusted, bilingual place — so property registration is faster and clearer for every citizen.",
-    hi: "हम सरकारी कलेक्टर गाइडलाइन दरें और डीड पंजीकरण को एक विश्वसनीय, द्विभाषी स्थान पर लाते हैं — ताकि हर नागरिक के लिए संपत्ति पंजीकरण तेज़ और स्पष्ट हो।",
+    en: "We bring official collector guideline rates and every major deed into one trusted, bilingual place — so property registration is faster and clearer for every citizen.",
+    hi: "हम सरकारी कलेक्टर गाइडलाइन दरें और हर प्रमुख विलेख को एक विश्वसनीय, द्विभाषी स्थान पर लाते हैं — ताकि हर नागरिक के लिए संपत्ति पंजीकरण तेज़ और स्पष्ट हो।",
   },
   aboutStat1: { en: "Districts covered", hi: "कवर किए गए जिले" },
   aboutStat2: { en: "Guideline years", hi: "गाइडलाइन वर्ष" },

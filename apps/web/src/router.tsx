@@ -11,7 +11,8 @@ import { Hero } from "./features/home/Hero";
 import { Services } from "./features/home/Services";
 import { Footer } from "./features/home/Footer";
 import { GuidelinePage } from "./features/guideline/GuidelinePage";
-import { EregistryPage } from "./features/eregistry/EregistryPage";
+import { DeedsPage } from "./features/deeds/DeedsPage";
+import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
 import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
 import { PartnerPage } from "./features/partner/PartnerPage";
@@ -48,7 +49,14 @@ function GuardedInboxPage() {
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/eregistry", component: EregistryPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: DeedsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug", component: DeedDetailPage }),
+  // Old e-Registry URL — feature replaced by the Deeds section.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/eregistry",
+    component: () => <Navigate to="/deeds" />,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/about", component: AboutPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/contact", component: ContactPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/partner", component: PartnerPage }),

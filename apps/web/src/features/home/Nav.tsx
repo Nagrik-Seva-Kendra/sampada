@@ -1,19 +1,33 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
+import { DEEDS } from "../deeds/deedData";
 
 // Buy/Sell intentionally omitted — feature dropped from scope.
 const NAV_ITEMS: { key: StringKey; to: string }[] = [
   { key: "navHome", to: "/" },
   { key: "navGuideline", to: "/guideline" },
-  { key: "navEregistry", to: "/eregistry" },
 ];
 
 export function Nav() {
   const lang = useUiStore((s) => s.lang);
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
+
+  // "All Deeds" opens a click-toggled dropdown; closes on outside click.
+  const [deedsOpen, setDeedsOpen] = useState(false);
+  const ddRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!deedsOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ddRef.current && !ddRef.current.contains(e.target as Node)) setDeedsOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [deedsOpen]);
 
   return (
     <nav className="nav">
@@ -36,6 +50,30 @@ export function Nav() {
               {t(item.key)}
             </Link>
           ))}
+
+          <div className={"nav-dd" + (deedsOpen ? " open" : "")} ref={ddRef}>
+            <a
+              className={pathname.startsWith("/deeds") ? "active" : ""}
+              onClick={() => setDeedsOpen((o) => !o)}
+              aria-expanded={deedsOpen}
+              aria-haspopup="menu"
+            >
+              {t("navDeeds")} <span className="nav-dd-caret">▾</span>
+            </a>
+            <div className="nav-dd-menu" role="menu">
+              {DEEDS.map((d) => (
+                <Link
+                  key={d.slug}
+                  to="/deeds/$slug"
+                  params={{ slug: d.slug }}
+                  onClick={() => setDeedsOpen(false)}
+                >
+                  {d.name[lang]}
+                </Link>
+              ))}
+            </div>
+          </div>
+
           <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
             {t("partnerWithUs")}
           </button>

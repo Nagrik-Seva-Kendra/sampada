@@ -20,10 +20,10 @@ export function Hero() {
 
           <div className="hero-cta">
             <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
-              {t("erViewRates")}
+              {t("viewRates")}
             </button>
-            <button className="btn-partner" onClick={() => navigate({ to: "/eregistry" })}>
-              {t("navEregistry")}
+            <button className="btn-partner" onClick={() => navigate({ to: "/deeds" })}>
+              {t("navDeeds")}
             </button>
           </div>
         </div>
