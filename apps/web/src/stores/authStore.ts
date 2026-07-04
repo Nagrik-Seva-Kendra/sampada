@@ -29,3 +29,9 @@ export const useAuthStore = create<AuthState>()(
 export function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+/** True when signed in as PARTNER or ADMIN — gates the Deeds section. */
+export function useIsStaff(): boolean {
+  const user = useAuthStore((s) => s.user);
+  return !!user && (user.role === "ADMIN" || user.role === "PARTNER");
+}

@@ -1,9 +1,11 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
+import { useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
 export function Hero() {
   const lang = useUiStore((s) => s.lang);
+  const isStaff = useIsStaff();
   const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
@@ -22,9 +24,11 @@ export function Hero() {
             <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
               {t("viewRates")}
             </button>
-            <button className="btn-partner" onClick={() => navigate({ to: "/deeds" })}>
-              {t("navDeeds")}
-            </button>
+            {isStaff && (
+              <button className="btn-partner" onClick={() => navigate({ to: "/deeds" })}>
+                {t("navDeeds")}
+              </button>
+            )}
           </div>
         </div>
 

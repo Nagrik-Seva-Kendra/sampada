@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
+import { useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { DEEDS } from "../deeds/deedData";
@@ -13,6 +14,7 @@ const NAV_ITEMS: { key: StringKey; to: string }[] = [
 
 export function Nav() {
   const lang = useUiStore((s) => s.lang);
+  const isStaff = useIsStaff();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
@@ -51,6 +53,7 @@ export function Nav() {
             </Link>
           ))}
 
+          {isStaff && (
           <div className={"nav-dd" + (deedsOpen ? " open" : "")} ref={ddRef}>
             <a
               className={pathname.startsWith("/deeds") ? "active" : ""}
@@ -73,6 +76,7 @@ export function Nav() {
               ))}
             </div>
           </div>
+          )}
 
           <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
             {t("partnerWithUs")}
