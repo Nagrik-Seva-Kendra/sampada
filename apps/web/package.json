@@ -13,6 +13,7 @@
   "dependencies": {
     "@sampada/shared": "workspace:*",
     "@tanstack/react-query": "^5.66.0",
+    "@tanstack/react-router": "^1.170.17",
     "@tanstack/react-virtual": "^3.11.0",
     "ky": "^1.7.4",
     "react": "^19.0.0",

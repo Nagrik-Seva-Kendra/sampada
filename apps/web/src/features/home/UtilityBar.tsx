@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import type { Language } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -7,7 +8,6 @@ import { LoginModal } from "../auth/LoginModal";
 
 export function UtilityBar() {
   const { theme, lang, toggleTheme, setLang } = useUiStore();
-  const setView = useUiStore((s) => s.setView);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const t = (k: Parameters<typeof translate>[0]) => translate(k, lang);
@@ -45,7 +45,7 @@ export function UtilityBar() {
               <span className="util-user" title={user.email}>
                 {user.email}
               </span>
-              <a onClick={() => setView("inbox")}>{t("inboxLink")}</a>
+              <Link to="/inbox">{t("inboxLink")}</Link>
               <a onClick={logout}>{t("authLogout")}</a>
             </span>
           ) : (

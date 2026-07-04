@@ -1,9 +1,10 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
 export function Hero() {
   const lang = useUiStore((s) => s.lang);
-  const setView = useUiStore((s) => s.setView);
+  const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
   return (
@@ -18,10 +19,10 @@ export function Hero() {
           <p>{t("heroSub")}</p>
 
           <div className="hero-cta">
-            <button className="btn-calc" onClick={() => setView("guideline")}>
+            <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
               {t("erViewRates")}
             </button>
-            <button className="btn-partner" onClick={() => setView("eregistry")}>
+            <button className="btn-partner" onClick={() => navigate({ to: "/eregistry" })}>
               {t("navEregistry")}
             </button>
           </div>

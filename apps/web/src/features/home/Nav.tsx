@@ -1,42 +1,42 @@
-import { useUiStore, type View } from "../../stores/uiStore";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 
 // Buy/Sell intentionally omitted — feature dropped from scope.
-// `implemented: false` items route to home until their page is built.
-const NAV_ITEMS: { key: StringKey; view: View; implemented: boolean }[] = [
-  { key: "navHome", view: "home", implemented: true },
-  { key: "navGuideline", view: "guideline", implemented: true },
-  { key: "navEregistry", view: "eregistry", implemented: true },
+const NAV_ITEMS: { key: StringKey; to: string }[] = [
+  { key: "navHome", to: "/" },
+  { key: "navGuideline", to: "/guideline" },
+  { key: "navEregistry", to: "/eregistry" },
 ];
 
 export function Nav() {
   const lang = useUiStore((s) => s.lang);
-  const view = useUiStore((s) => s.view);
-  const setView = useUiStore((s) => s.setView);
+  const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
   return (
     <nav className="nav">
       <div className="wrap">
-        <div className="brand" onClick={() => setView("home")}>
+        <Link to="/" className="brand">
           <BrandMark />
           <div>
             <div className="name">{t("brandName")}</div>
             <div className="sub">{t("brandSub")}</div>
           </div>
-        </div>
+        </Link>
         <div className="menu">
-          {NAV_ITEMS.map((item, i) => (
-            <a
-              key={i}
-              className={item.implemented && item.view === view ? "active" : ""}
-              onClick={() => setView(item.view)}
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              activeProps={{ className: "active" }}
+              activeOptions={{ exact: item.to === "/" }}
             >
               {t(item.key)}
-            </a>
+            </Link>
           ))}
-          <button className="btn-partner" onClick={() => setView("partner")}>
+          <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
             {t("partnerWithUs")}
           </button>
         </div>

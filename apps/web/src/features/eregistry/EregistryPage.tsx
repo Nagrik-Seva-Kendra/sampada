@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
@@ -14,7 +15,7 @@ const DOCS: StringKey[] = ["erDoc1", "erDoc2", "erDoc3", "erDoc4", "erDoc5"];
 
 export function EregistryPage() {
   const lang = useUiStore((s) => s.lang);
-  const setView = useUiStore((s) => s.setView);
+  const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
   return (
@@ -54,7 +55,7 @@ export function EregistryPage() {
         {/* Note + CTA */}
         <div className="er-note">
           <p>{t("erNote")}</p>
-          <button className="btn-calc" onClick={() => setView("guideline")}>
+          <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
             {t("erViewRates")}
           </button>
         </div>

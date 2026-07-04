@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
@@ -5,7 +6,7 @@ const BENEFITS: StringKey[] = ["partnerB1", "partnerB2", "partnerB3"];
 
 export function PartnerPage() {
   const lang = useUiStore((s) => s.lang);
-  const setView = useUiStore((s) => s.setView);
+  const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
   return (
@@ -27,7 +28,7 @@ export function PartnerPage() {
         </ul>
 
         <div className="er-note">
-          <button className="btn-calc" onClick={() => setView("contact")}>
+          <button className="btn-calc" onClick={() => navigate({ to: "/contact" })}>
             {t("partnerCta")}
           </button>
         </div>

@@ -1,16 +1,16 @@
-import { useUiStore, type View } from "../../stores/uiStore";
+import { Link } from "@tanstack/react-router";
+import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
-const LINKS: { key: StringKey; view?: View; href?: string }[] = [
-  { key: "footAbout", view: "about" },
-  { key: "footPartner", view: "partner" },
-  { key: "footContact", view: "contact" },
+const LINKS: { key: StringKey; to?: string; href?: string }[] = [
+  { key: "footAbout", to: "/about" },
+  { key: "footPartner", to: "/partner" },
+  { key: "footContact", to: "/contact" },
   { key: "footMpigr", href: "https://www.mpigr.gov.in/" },
 ];
 
 export function Footer() {
   const lang = useUiStore((s) => s.lang);
-  const setView = useUiStore((s) => s.setView);
   const t = (k: StringKey) => translate(k, lang);
 
   return (
@@ -24,9 +24,9 @@ export function Footer() {
                 {t(l.key)}
               </a>
             ) : (
-              <a key={l.key} onClick={() => setView(l.view!)}>
+              <Link key={l.key} to={l.to!}>
                 {t(l.key)}
-              </a>
+              </Link>
             ),
           )}
         </div>
