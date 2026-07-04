@@ -2,35 +2,53 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { timingSafeEqual } from "node:crypto";
 import type { AuthResponse, AuthUser, LoginInput } from "@sampada/shared";
+import { UsersService, verifyPassword } from "../users/users.service.js";
 
 /**
- * Interim admin auth: validates against ADMIN_EMAIL / ADMIN_PASSWORD env vars
- * and issues a JWT. TODO: back with a users table + argon2 hashes in the DB phase.
+ * Interim auth: the ADMIN validates against ADMIN_EMAIL / ADMIN_PASSWORD env
+ * vars; PARTNER accounts live in the disk user store (created by the admin).
+ * TODO: move the admin into the users table too in the DB phase.
  */
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly users: UsersService,
+  ) {}
 
   async login(input: LoginInput): Promise<AuthResponse> {
-    const email = process.env.ADMIN_EMAIL;
-    const password = process.env.ADMIN_PASSWORD;
-    if (!email || !password) {
-      throw new UnauthorizedException("Admin login is not configured (set ADMIN_EMAIL / ADMIN_PASSWORD).");
-    }
+    const user = (await this.tryAdmin(input)) ?? (await this.tryPartner(input));
+    if (!user) throw new UnauthorizedException("Invalid email or password.");
 
-    const emailOk = input.email.trim().toLowerCase() === email.trim().toLowerCase();
-    const passOk = safeEqual(input.password, password);
-    if (!emailOk || !passOk) {
-      throw new UnauthorizedException("Invalid email or password.");
-    }
-
-    const user: AuthUser = { id: "admin", email, fname: "Admin", lname: "", role: "ADMIN" };
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
       email: user.email,
       role: user.role,
+      name: `${user.fname} ${user.lname}`.trim(),
     });
     return { accessToken, user };
+  }
+
+  private async tryAdmin(input: LoginInput): Promise<AuthUser | null> {
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
+    if (!email || !password) return null;
+
+    const emailOk = input.email.trim().toLowerCase() === email.trim().toLowerCase();
+    if (!emailOk || !safeEqual(input.password, password)) return null;
+    return { id: "admin", email, fname: "Admin", lname: "", role: "ADMIN" };
+  }
+
+  private async tryPartner(input: LoginInput): Promise<AuthUser | null> {
+    const stored = await this.users.findByEmail(input.email);
+    if (!stored || !verifyPassword(input.password, stored.passwordHash)) return null;
+    return {
+      id: stored.id,
+      email: stored.email,
+      fname: stored.fname,
+      lname: stored.lname,
+      role: stored.role,
+    };
   }
 }
 

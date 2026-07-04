@@ -64,6 +64,9 @@ export function Nav() {
               {t("navDeeds")} <span className="nav-dd-caret">▾</span>
             </a>
             <div className="nav-dd-menu" role="menu">
+              <Link to="/deed-register" onClick={() => setDeedsOpen(false)}>
+                {t("drTitle")}
+              </Link>
               {DEEDS.map((d) => (
                 <Link
                   key={d.slug}

@@ -3,12 +3,15 @@ import { JwtModule } from "@nestjs/jwt";
 import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtAdminGuard } from "./jwt-admin.guard.js";
+import { JwtStaffGuard } from "./jwt-staff.guard.js";
+import { UsersModule } from "../users/users.module.js";
 
 @Module({
   imports: [
+    UsersModule,
     JwtModule.registerAsync({
       global: true, // JwtService available app-wide (guards in other modules)
-      // No token expiry — the admin stays logged in until they explicitly log
+      // No token expiry — users stay logged in until they explicitly log
       // out (session persists in localStorage on the client).
       useFactory: () => ({
         secret: process.env.JWT_SECRET ?? "dev-only-change-me",
@@ -16,7 +19,7 @@ import { JwtAdminGuard } from "./jwt-admin.guard.js";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAdminGuard],
-  exports: [JwtAdminGuard],
+  providers: [AuthService, JwtAdminGuard, JwtStaffGuard],
+  exports: [JwtAdminGuard, JwtStaffGuard],
 })
 export class AuthModule {}

@@ -13,6 +13,7 @@ import { Footer } from "./features/home/Footer";
 import { GuidelinePage } from "./features/guideline/GuidelinePage";
 import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
+import { DeedRegisterPage } from "./features/deeds/DeedRegisterPage";
 import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
 import { PartnerPage } from "./features/partner/PartnerPage";
@@ -53,10 +54,14 @@ function GuardedDeedsPage() {
 function GuardedDeedDetailPage() {
   return useIsStaff() ? <DeedDetailPage /> : <Navigate to="/" />;
 }
+function GuardedDeedRegisterPage() {
+  return useIsStaff() ? <DeedRegisterPage /> : <Navigate to="/" />;
+}
 
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/deed-register", component: GuardedDeedRegisterPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: GuardedDeedsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug", component: GuardedDeedDetailPage }),
   // Old e-Registry URL — feature replaced by the Deeds section.
