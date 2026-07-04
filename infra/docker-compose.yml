@@ -1,0 +1,33 @@
+services:
+  # New application database (PostgreSQL). Empty — schema managed by Prisma.
+  postgres:
+    image: postgres:16
+    container_name: sampada-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sampada
+      POSTGRES_PASSWORD: sampada
+      POSTGRES_DB: sampada
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Staging copy of the LEGACY MariaDB, for testing & migration reference.
+  # Auto-loads any .sql placed in ./legacy-db on first boot (read-only source).
+  legacy-mariadb:
+    image: mariadb:10.6
+    container_name: sampada-legacy-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: codelogi_sampada
+    ports:
+      - "3307:3306"
+    volumes:
+      - legacydata:/var/lib/mysql
+      - ./legacy-db:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  pgdata:
+  legacydata:

@@ -1,0 +1,174 @@
+// Nagrik Seva Kendra — new PostgreSQL schema.
+// NOTE: not migrated against any real data yet. Data migration from the legacy
+// MariaDB dump is a later, separate phase (see MODERNIZATION_PLAN.md §4).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PUBLIC
+  PARTNER
+  ADMIN
+}
+
+enum PropertyType {
+  AGRICULTURE
+  BUILDING_INDEPENDENT
+  BUILDING_MULTISTOREY
+  PLOT
+  OPEN_TERRACE
+}
+
+enum DeedStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  COMPLETED
+}
+
+enum PartyCategory {
+  INDIVIDUAL
+  ORGANIZATION
+  GOV_OFFICIAL
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(PUBLIC)
+  fname        String
+  lname        String
+  mobile       String?
+  address      String?
+  occupation   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  partner      Partner?
+  valuations   Valuation[]
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  deeds     Deed[]
+  buyers    Buyer[]
+  sellers   Seller[]
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  district  String
+  area      String
+  subArea   String   @default("")
+  createdAt DateTime @default(now())
+  rates     GuidelineRate[]
+  properties Property[]
+
+  @@unique([district, area, subArea])
+  @@index([district, area])
+}
+
+model GuidelineRate {
+  id           String       @id @default(cuid())
+  locationId   String
+  location     Location     @relation(fields: [locationId], references: [id])
+  year         Int // guideline year, 2015 .. current
+  propertyType PropertyType
+  subType      String       @default("")
+  ratePerUnit  Decimal      @db.Decimal(14, 2)
+  unit         String
+  updatedAt    DateTime     @updatedAt
+  valuations   Valuation[]
+
+  @@unique([locationId, year, propertyType, subType])
+  @@index([year])
+}
+
+model Property {
+  id         String       @id @default(cuid())
+  type       PropertyType
+  subType    String?
+  ownerId    String?
+  locationId String
+  location   Location     @relation(fields: [locationId], references: [id])
+  attributes Json
+  createdAt  DateTime     @default(now())
+  valuations Valuation[]
+  deeds      Deed[]
+}
+
+model Valuation {
+  id              String        @id @default(cuid())
+  propertyId      String?
+  property        Property?     @relation(fields: [propertyId], references: [id])
+  guidelineRateId String?
+  guidelineRate   GuidelineRate? @relation(fields: [guidelineRateId], references: [id])
+  inputs          Json
+  computedValue   Decimal       @db.Decimal(16, 2)
+  createdById     String?
+  createdBy       User?         @relation(fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+}
+
+model Deed {
+  id         String     @id @default(cuid())
+  propertyId String?
+  property   Property?  @relation(fields: [propertyId], references: [id])
+  buyerId    String?
+  buyer      Buyer?     @relation(fields: [buyerId], references: [id])
+  sellerId   String?
+  seller     Seller?    @relation(fields: [sellerId], references: [id])
+  partnerId  String?
+  partner    Partner?   @relation(fields: [partnerId], references: [id])
+  status     DeedStatus @default(DRAFT)
+  slot       String?
+  mapUrl     String?
+  year       Int
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([year, status])
+}
+
+model Buyer {
+  id        String        @id @default(cuid())
+  category  PartyCategory
+  name      String
+  details   Json
+  partnerId String?
+  partner   Partner?      @relation(fields: [partnerId], references: [id])
+  deeds     Deed[]
+  createdAt DateTime      @default(now())
+}
+
+model Seller {
+  id        String        @id @default(cuid())
+  category  PartyCategory
+  name      String
+  details   Json
+  partnerId String?
+  partner   Partner?      @relation(fields: [partnerId], references: [id])
+  deeds     Deed[]
+  createdAt DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String
+  diff      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}

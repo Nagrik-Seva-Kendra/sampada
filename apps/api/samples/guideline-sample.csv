@@ -1,0 +1,9 @@
+district,area,subArea,propertyType,subType,ratePerUnit,unit
+Gwalior,Lashkar,,PLOT,,24000,sqft
+Gwalior,Lashkar,,BUILDING_INDEPENDENT,RESIDENTIAL,32000,sqft
+Gwalior,Lashkar,,BUILDING_INDEPENDENT,COMMERCIAL,60000,sqft
+Gwalior,Morar,Ward 5,BUILDING_MULTISTOREY,RESIDENTIAL,28000,sqft
+Gwalior,City Centre,,BUILDING_INDEPENDENT,COMMERCIAL,64000,sqft
+Bhopal,MP Nagar,,AGRICULTURE,AGRI_DIVERTED,1800000,hectare
+Bhopal,MP Nagar,,AGRICULTURE,AGRI_UNDIVERTED,1200000,hectare
+Indore,Vijay Nagar,,PLOT,,30000,sqft

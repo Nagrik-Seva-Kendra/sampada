@@ -1,0 +1,23 @@
+{
+  "name": "sampada",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nagrik Seva Kendra — property valuation & deed registry (modernized)",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "turbo": "2.10.2",
+    "typescript": "^5.7.3"
+  }
+}
