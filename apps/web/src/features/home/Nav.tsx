@@ -79,12 +79,6 @@ export function Nav() {
           </div>
           )}
 
-          {isStaff && (
-            <Link to="/my-deeds" activeProps={{ className: "active" }}>
-              {t("navMyDeeds")}
-            </Link>
-          )}
-
           {isAdmin && (
             <Link to="/partner-deeds" activeProps={{ className: "active" }}>
               {t("navPartnerDeeds")}
