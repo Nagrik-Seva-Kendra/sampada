@@ -16,7 +16,7 @@ export const strings = {
 
   navHome: { en: "Home", hi: "होम" },
   navGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
-  navDeeds: { en: "All Deeds", hi: "सभी विलेख" },
+  navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
   partnerWithUs: { en: "Partner With Us", hi: "हमारे साथ जुड़ें" },
 
   heroKicker: {
