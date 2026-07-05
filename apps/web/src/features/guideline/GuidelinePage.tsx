@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { guidelineYears } from "@sampada/shared";
+import { guidelineYears, formatGuidelineSession } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -10,15 +10,60 @@ import {
   useDeleteGuidelineDoc,
 } from "./useGuideline";
 
-// Common MP districts as suggestions (free text still allowed).
+// All Madhya Pradesh districts as suggestions (free text still allowed).
 const DISTRICT_SUGGESTIONS = [
-  "Gwalior",
+  "Agar Malwa",
+  "Alirajpur",
+  "Anuppur",
+  "Ashok Nagar",
+  "Balaghat",
+  "Barwani",
+  "Betul",
+  "Bhind",
   "Bhopal",
+  "Burhanpur",
+  "Chhatarpur",
+  "Chhindwara",
+  "Damoh",
+  "Datia",
+  "Dewas",
+  "Dhar",
+  "Dindori",
+  "Guna",
+  "Gwalior",
+  "Harda",
   "Indore",
   "Jabalpur",
+  "Jhabua",
+  "Katni",
+  "Khandwa",
+  "Khargone",
+  "Mandla",
+  "Mandsaur",
+  "Morena",
+  "Narmadapuram",
+  "Narsinghpur",
+  "Neemuch",
+  "Niwari",
+  "Panna",
+  "Raisen",
+  "Rajgarh",
+  "Ratlam",
+  "Rewa",
+  "Sagar",
+  "Satna",
+  "Sehore",
+  "Seoni",
+  "Shahdol",
+  "Shajapur",
+  "Sheopur",
+  "Shivpuri",
+  "Sidhi",
+  "Singrauli",
+  "Tikamgarh",
   "Ujjain",
-  "Morar",
-  "Lashkar",
+  "Umaria",
+  "Vidisha",
 ];
 
 function formatSize(bytes: number): string {
@@ -84,7 +129,7 @@ export function GuidelinePage() {
                 setDistrictFilter("");
               }}
             >
-              {y}
+              {formatGuidelineSession(y)}
               <span className="year-count">{countFor(y)}</span>
             </button>
           ))}
@@ -94,7 +139,7 @@ export function GuidelinePage() {
         {isAdmin ? (
           <form className="upload" onSubmit={onUpload}>
             <div className="upload-head">
-              {t("glUploadFor")} <strong>{year}</strong>
+              {t("glUploadFor")} <strong>{formatGuidelineSession(year)}</strong>
             </div>
             <p className="upload-hint">{t("glOnlyPdf")}</p>
             <div className="upload-row">
@@ -157,7 +202,7 @@ export function GuidelinePage() {
                   <span className="doc-district">{d.district}</span> {d.fileName}
                 </div>
                 <div className="doc-sub">
-                  {d.year} · {formatSize(d.sizeBytes)} ·{" "}
+                  {formatGuidelineSession(d.year)} · {formatSize(d.sizeBytes)} ·{" "}
                   {new Date(d.uploadedAt).toLocaleDateString()}
                 </div>
               </div>
