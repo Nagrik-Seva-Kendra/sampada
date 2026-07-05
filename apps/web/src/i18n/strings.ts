@@ -90,7 +90,8 @@ export const strings = {
   viewRates: { en: "View guideline rates", hi: "गाइडलाइन दरें देखें" },
 
   // Deed register (create/list deeds; role-scoped)
-  drTitle: { en: "Deed Register", hi: "डीड रजिस्टर" },
+  navMyDeeds: { en: "My All Deeds", hi: "मेरी सभी डीड" },
+  navPartnerDeeds: { en: "All Partner Deeds", hi: "सभी पार्टनर डीड" },
   drNew: { en: "New deed", hi: "नई डीड" },
   drType: { en: "Deed type", hi: "डीड प्रकार" },
   drDeedTitle: { en: "Title / parties", hi: "शीर्षक / पक्षकार" },

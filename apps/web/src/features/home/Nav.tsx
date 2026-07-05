@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
-import { useIsStaff } from "../../stores/authStore";
+import { useAuthStore, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { DEEDS } from "../deeds/deedData";
@@ -15,6 +15,7 @@ const NAV_ITEMS: { key: StringKey; to: string }[] = [
 export function Nav() {
   const lang = useUiStore((s) => s.lang);
   const isStaff = useIsStaff();
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
@@ -64,9 +65,6 @@ export function Nav() {
               {t("navDeeds")} <span className="nav-dd-caret">▾</span>
             </a>
             <div className="nav-dd-menu" role="menu">
-              <Link to="/deed-register" onClick={() => setDeedsOpen(false)}>
-                {t("drTitle")}
-              </Link>
               {DEEDS.map((d) => (
                 <Link
                   key={d.slug}
@@ -79,6 +77,18 @@ export function Nav() {
               ))}
             </div>
           </div>
+          )}
+
+          {isStaff && (
+            <Link to="/my-deeds" activeProps={{ className: "active" }}>
+              {t("navMyDeeds")}
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link to="/partner-deeds" activeProps={{ className: "active" }}>
+              {t("navPartnerDeeds")}
+            </Link>
           )}
 
           <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
