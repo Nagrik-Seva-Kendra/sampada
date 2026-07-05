@@ -14,7 +14,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
-import { District, GuidelineYear } from "@sampada/shared";
+import { District, GuidelineYear, Language } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { GuidelineDocsService } from "./guideline-docs.service.js";
 
@@ -34,11 +34,16 @@ export class GuidelineDocsController {
     return this.service.years();
   }
 
-  /** Public: list a year's PDFs (optionally filtered by district). */
+  /** Public: list a year's PDFs (optionally filtered by district and/or language). */
   @Get()
-  list(@Query("year") yearRaw: unknown, @Query("district") district?: string) {
+  list(
+    @Query("year") yearRaw: unknown,
+    @Query("district") district?: string,
+    @Query("language") languageRaw?: unknown,
+  ) {
     const year = GuidelineYear.parse(yearRaw);
-    return this.service.listByYear(year, district?.trim() || undefined);
+    const language = languageRaw ? Language.parse(languageRaw) : undefined;
+    return this.service.listByYear(year, district?.trim() || undefined, language);
   }
 
   /** Public: view/download a PDF inline. */
@@ -57,19 +62,21 @@ export class GuidelineDocsController {
     return new StreamableFile(this.service.stream(filePath));
   }
 
-  /** Admin only: upload a PDF for a year. */
+  /** Admin only: upload a PDF for a year + district + language. */
   @Post("upload")
   @UseGuards(JwtAdminGuard)
   @UseInterceptors(FileInterceptor("file"))
   upload(
     @Query("year") yearRaw: unknown,
     @Query("district") districtRaw: unknown,
+    @Query("language") languageRaw: unknown,
     @UploadedFile() file?: UploadedPdf,
   ) {
     const year = GuidelineYear.parse(yearRaw);
     const district = District.parse(districtRaw);
+    const language = Language.parse(languageRaw);
     if (!file) throw new BadRequestException("PDF file is required (field 'file').");
-    return this.service.save(year, district, file);
+    return this.service.save(year, district, language, file);
   }
 
   /** Admin only: delete a PDF. */

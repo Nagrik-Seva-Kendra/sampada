@@ -59,6 +59,8 @@ export const strings = {
   glUploadFor: { en: "Upload guideline PDF for", hi: "गाइडलाइन पीडीएफ अपलोड करें —" },
   glDistrict: { en: "District", hi: "जिला" },
   glAllDistricts: { en: "All districts", hi: "सभी जिले" },
+  glLangEnglish: { en: "English", hi: "अंग्रेज़ी" },
+  glLangHindi: { en: "Hindi", hi: "हिंदी" },
   glUploadBtn: { en: "Upload PDF", hi: "पीडीएफ अपलोड करें" },
   glOnlyPdf: { en: "PDF files only.", hi: "केवल पीडीएफ फ़ाइलें।" },
   glNoPdfs: { en: "No guideline PDF uploaded for this year yet.", hi: "इस वर्ष के लिए अभी तक कोई गाइडलाइन पीडीएफ अपलोड नहीं हुआ।" },

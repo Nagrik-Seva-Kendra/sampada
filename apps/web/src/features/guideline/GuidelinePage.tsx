@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { guidelineYears, formatGuidelineSession } from "@sampada/shared";
+import { guidelineYears, formatGuidelineSession, type Language } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -81,6 +81,7 @@ export function GuidelinePage() {
 
   const isAdmin = !!useAuthStore((s) => s.user);
   const [district, setDistrict] = useState("");
+  const [language, setLanguage] = useState<Language>("en");
 
   const yearsInfo = useGuidelineYears();
   const docs = useGuidelineDocs(year);
@@ -96,7 +97,7 @@ export function GuidelinePage() {
     const file = fileRef.current?.files?.[0];
     if (file && district.trim()) {
       upload.mutate(
-        { year, district: district.trim(), file },
+        { year, district: district.trim(), language, file },
         { onSuccess: () => fileRef.current && (fileRef.current.value = "") },
       );
     }
@@ -116,23 +117,6 @@ export function GuidelinePage() {
       <div className="wrap">
         <div className="page-head">
           <h2 className="page-title">{t("glGuidelinePdfs")}</h2>
-        </div>
-
-        {/* Year selector — 2015 → latest, with PDF counts */}
-        <div className="year-bar">
-          {years.map((y) => (
-            <button
-              key={y}
-              className={y === year ? "year on" : "year"}
-              onClick={() => {
-                setYear(y);
-                setDistrictFilter("");
-              }}
-            >
-              {formatGuidelineSession(y)}
-              <span className="year-count">{countFor(y)}</span>
-            </button>
-          ))}
         </div>
 
         {/* Upload — admin only, district-wise */}
@@ -157,6 +141,28 @@ export function GuidelinePage() {
                     {d}
                   </option>
                 ))}
+              </select>
+              <select
+                className="district-input"
+                value={year}
+                onChange={(e) => {
+                  setYear(Number(e.target.value));
+                  setDistrictFilter("");
+                }}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {formatGuidelineSession(y)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="district-input"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+              >
+                <option value="en">{t("glLangEnglish")}</option>
+                <option value="hi">{t("glLangHindi")}</option>
               </select>
               <input ref={fileRef} type="file" accept="application/pdf,.pdf" />
               <button
@@ -201,7 +207,9 @@ export function GuidelinePage() {
               <span className="doc-icon">📄</span>
               <div className="doc-meta">
                 <div className="doc-name">
-                  <span className="doc-district">{d.district}</span> {d.fileName}
+                  <span className="doc-district">{d.district}</span>{" "}
+                  <span className="doc-lang">{d.language === "hi" ? t("glLangHindi") : t("glLangEnglish")}</span>{" "}
+                  {d.fileName}
                 </div>
                 <div className="doc-sub">
                   {formatGuidelineSession(d.year)} · {formatSize(d.sizeBytes)} ·{" "}

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { GuidelineDocItem, GuidelineYearInfo } from "@sampada/shared";
+import type { GuidelineDocItem, GuidelineYearInfo, Language } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -22,18 +22,22 @@ export function useGuidelineDocs(year: number) {
   });
 }
 
-/** Admin: upload a PDF for a year + district. */
+/** Admin: upload a PDF for a year + district + language. */
 export function useUploadGuidelinePdf() {
   const qc = useQueryClient();
   const token = useAuthStore((s) => s.token);
-  return useMutation<GuidelineDocItem, Error, { year: number; district: string; file: File }>({
-    mutationFn: ({ year, district, file }) => {
+  return useMutation<
+    GuidelineDocItem,
+    Error,
+    { year: number; district: string; language: Language; file: File }
+  >({
+    mutationFn: ({ year, district, language, file }) => {
       const form = new FormData();
       form.append("file", file);
       return api
         .post("guideline-docs/upload", {
           body: form,
-          searchParams: { year, district },
+          searchParams: { year, district, language },
           headers: authHeaders(token),
         })
         .json<GuidelineDocItem>();

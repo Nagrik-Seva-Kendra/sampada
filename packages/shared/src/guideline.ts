@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Language } from "./enums.js";
 
 /** Guideline (collector) rate PDFs start with the 2015-2016 session. */
 export const GUIDELINE_START_YEAR = 2015;
@@ -35,11 +36,12 @@ export const GuidelineYear = z.coerce
 /** District name for a guideline PDF (free text; MP has 50+ districts). */
 export const District = z.string().trim().min(1).max(80);
 
-/** An uploaded guideline PDF document. */
+/** An uploaded guideline PDF document. Each district+year can have an EN and/or HI copy. */
 export const GuidelineDocItem = z.object({
   id: z.string(),
   year: z.number().int(),
   district: z.string(),
+  language: Language,
   fileName: z.string(),
   sizeBytes: z.number().int(),
   uploadedAt: z.string(), // ISO timestamp
