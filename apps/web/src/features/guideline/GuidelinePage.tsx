@@ -10,7 +10,7 @@ import {
   useDeleteGuidelineDoc,
 } from "./useGuideline";
 
-// All Madhya Pradesh districts as suggestions (free text still allowed).
+// All Madhya Pradesh districts — upload district dropdown options.
 const DISTRICT_SUGGESTIONS = [
   "Agar Malwa",
   "Alirajpur",
@@ -143,19 +143,21 @@ export function GuidelinePage() {
             </div>
             <p className="upload-hint">{t("glOnlyPdf")}</p>
             <div className="upload-row">
-              <input
+              <select
                 className="district-input"
-                list="district-list"
-                placeholder={t("glDistrict")}
                 value={district}
                 onChange={(e) => setDistrict(e.target.value)}
                 required
-              />
-              <datalist id="district-list">
+              >
+                <option value="" disabled>
+                  {t("glDistrict")}
+                </option>
                 {DISTRICT_SUGGESTIONS.map((d) => (
-                  <option key={d} value={d} />
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
                 ))}
-              </datalist>
+              </select>
               <input ref={fileRef} type="file" accept="application/pdf,.pdf" />
               <button
                 className="btn-calc"
