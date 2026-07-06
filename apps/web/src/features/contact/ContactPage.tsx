@@ -64,7 +64,9 @@ export function ContactPage() {
             <h3 className="er-section" style={{ marginTop: 0 }}>
               {t("contactReach")}
             </h3>
+            <p>{t("contactReachName")}</p>
             <p>📞 {t("phone")}</p>
+            <p>📞 {t("contactReachPhone2")}</p>
             <p>✉️ {t("email")}</p>
             <p>📍 {t("contactAddress")}</p>
           </aside>

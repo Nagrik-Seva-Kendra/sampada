@@ -43,9 +43,12 @@ export function UtilityBar() {
           {user ? (
             <span className="util-auth">
               <span className="util-user" title={user.email}>
-                {user.email}
+                {user.fname} {user.lname}
               </span>
-              <Link to="/inbox">{t("inboxLink")}</Link>
+              {(user.role === "PARTNER" || user.role === "EMPLOYEE") && (
+                <Link to="/profile">{t("navProfile")}</Link>
+              )}
+              {user.role === "ADMIN" && <Link to="/inbox">{t("inboxLink")}</Link>}
               <a onClick={logout}>{t("authLogout")}</a>
             </span>
           ) : (

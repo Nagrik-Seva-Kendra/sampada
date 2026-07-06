@@ -162,6 +162,8 @@ h3 {
 .modal-card {
   width: 100%;
   max-width: 380px;
+  max-height: 90vh;
+  overflow-y: auto;
   background: var(--surface);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -186,6 +188,31 @@ h3 {
   color: var(--muted);
   font-size: 16px;
 }
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+.login-tabs button {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.login-tabs button.on {
+  background: var(--accent);
+  color: #fff;
+}
+
 .modal-form {
   display: grid;
   gap: 14px;
@@ -208,6 +235,26 @@ h3 {
   font-size: 14px;
   font-family: inherit;
 }
+.password-field {
+  position: relative;
+  display: flex;
+}
+.modal-field .password-field input {
+  width: 100%;
+  padding-right: 40px;
+}
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px;
+}
 .modal-error {
   margin: 0;
   font-size: 13px;
@@ -216,6 +263,19 @@ h3 {
 .modal-submit {
   width: 100%;
   padding: 12px;
+}
+.modal-link {
+  width: 100%;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+}
+.modal-link:hover {
+  text-decoration: underline;
 }
 
 /* ---------- nav ---------- */
@@ -227,12 +287,13 @@ h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 32px;
+  padding: 18px 32px 18px 0;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 13px;
+  margin-left: -96px;
 }
 .brand .name {
   font-family: var(--font-display);
@@ -243,9 +304,10 @@ h3 {
 }
 .brand .sub {
   font-size: 11px;
+  font-weight: 700;
   color: var(--muted);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: pre-line;
 }
 .menu {
   display: flex;
@@ -254,8 +316,13 @@ h3 {
   font-size: 14px;
   font-weight: 600;
 }
+.menu > * {
+  flex-shrink: 0;
+}
 .menu a {
   color: var(--fg);
+  border-bottom: 2px solid transparent;
+  padding-bottom: 3px;
   transition: color 0.15s;
 }
 .menu a:hover {
@@ -263,8 +330,7 @@ h3 {
 }
 .menu a.active {
   color: var(--primary);
-  border-bottom: 2px solid var(--accent);
-  padding-bottom: 3px;
+  border-bottom-color: var(--accent);
 }
 .btn-partner {
   background: var(--accent);
@@ -272,9 +338,14 @@ h3 {
   border: none;
   border-radius: 6px;
   padding: 10px 18px;
+  margin-right: -96px;
   font-weight: 700;
   font-size: 13.5px;
   transition: background 0.15s;
+}
+.btn-partner-sm {
+  padding: 7px 13px;
+  font-size: 12px;
 }
 .btn-partner:hover {
   background: var(--accent-2);
@@ -742,6 +813,13 @@ h3 {
   max-width: 620px;
   margin: 8px 0 12px;
 }
+.er-about {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg);
+  max-width: 720px;
+  margin: 0 0 12px;
+}
 .er-section {
   font-family: var(--font-display);
   font-size: 20px;
@@ -1079,48 +1157,111 @@ h3 {
   font-weight: 600;
   color: var(--accent);
 }
-.dr-back {
-  display: inline-block;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.dr-partners {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  max-width: 720px;
-}
-.dr-partner {
+
+.dr-profile-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  padding: 13px 16px;
-  transition: border-color 0.15s;
+  font-size: 13.5px;
 }
-.dr-partner:hover {
-  border-color: var(--accent);
+.dr-profile-card strong {
+  margin-right: 10px;
 }
-.dr-partner-name {
-  font-weight: 700;
-}
-.dr-partner-email {
+.dr-profile-card span {
   color: var(--muted);
-  font-size: 13px;
-  flex: 1;
 }
-.dr-partner-count {
-  font-size: 12.5px;
+
+.profile-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+.profile-photo,
+.profile-photo-placeholder {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.profile-photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 28px;
   font-weight: 700;
-  color: var(--primary);
-  background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 3px 11px;
+}
+.profile-photo-btn {
+  cursor: pointer;
+}
+
+/* ---------- deed records table (per deed-type drafting) ---------- */
+.dr-records {
+  margin-top: 14px;
+}
+.dr-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.dr-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.dr-table th,
+.dr-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.dr-table th {
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+.dr-table td:nth-child(3) {
+  white-space: normal;
+  min-width: 220px;
+}
+.dr-table tr:last-child td {
+  border-bottom: none;
+}
+.dr-status-active {
+  color: var(--accent);
+  font-weight: 700;
+}
+.dr-status-inactive {
+  color: var(--muted);
+  font-weight: 700;
+}
+.dr-action-select {
+  min-width: 130px;
 }
 
 /* ---------- responsive ---------- */

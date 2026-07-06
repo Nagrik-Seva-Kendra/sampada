@@ -24,9 +24,13 @@ export function Hero() {
             <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
               {t("viewRates")}
             </button>
-            {isStaff && (
+            {isStaff ? (
               <button className="btn-partner" onClick={() => navigate({ to: "/deeds" })}>
                 {t("navDeeds")}
+              </button>
+            ) : (
+              <button className="btn-partner" onClick={() => navigate({ to: "/contact" })}>
+                {t("contactTitle")}
               </button>
             )}
           </div>

@@ -16,6 +16,7 @@ export function Nav() {
   const lang = useUiStore((s) => s.lang);
   const isStaff = useIsStaff();
   const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  const isEmployee = useAuthStore((s) => s.user?.role === "EMPLOYEE");
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
@@ -31,6 +32,18 @@ export function Nav() {
     document.addEventListener("click", onDoc);
     return () => document.removeEventListener("click", onDoc);
   }, [deedsOpen]);
+
+  // Admin "Services" dropdown (Employee Requests, Partner Requests) — same toggle pattern.
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const svcRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!servicesOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (svcRef.current && !svcRef.current.contains(e.target as Node)) setServicesOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [servicesOpen]);
 
   return (
     <nav className="nav">
@@ -85,7 +98,44 @@ export function Nav() {
             </Link>
           )}
 
-          <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
+          {isEmployee && (
+            <Link to="/all-deeds" activeProps={{ className: "active" }}>
+              {t("navAllDeeds")}
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link to="/company-docs" activeProps={{ className: "active" }}>
+              {t("navCompanyDocs")}
+            </Link>
+          )}
+
+          {isAdmin && (
+            <div className={"nav-dd" + (servicesOpen ? " open" : "")} ref={svcRef}>
+              <a
+                className={
+                  pathname === "/employee-requests" || pathname === "/partner-requests"
+                    ? "active"
+                    : ""
+                }
+                onClick={() => setServicesOpen((o) => !o)}
+                aria-expanded={servicesOpen}
+                aria-haspopup="menu"
+              >
+                {t("navServices")} <span className="nav-dd-caret">▾</span>
+              </a>
+              <div className="nav-dd-menu" role="menu">
+                <Link to="/employee-requests" onClick={() => setServicesOpen(false)}>
+                  {t("navEmployeeRequests")}
+                </Link>
+                <Link to="/partner-requests" onClick={() => setServicesOpen(false)}>
+                  {t("navPartnerRequests")}
+                </Link>
+              </div>
+            </div>
+          )}
+
+          <button className="btn-partner btn-partner-sm" onClick={() => navigate({ to: "/partner" })}>
             {t("partnerWithUs")}
           </button>
         </div>
