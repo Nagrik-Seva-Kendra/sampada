@@ -11,60 +11,67 @@ import {
 } from "./useGuideline";
 
 // All Madhya Pradesh districts — upload district dropdown options.
-const DISTRICT_SUGGESTIONS = [
-  "Agar Malwa",
-  "Alirajpur",
-  "Anuppur",
-  "Ashok Nagar",
-  "Balaghat",
-  "Barwani",
-  "Betul",
-  "Bhind",
-  "Bhopal",
-  "Burhanpur",
-  "Chhatarpur",
-  "Chhindwara",
-  "Damoh",
-  "Datia",
-  "Dewas",
-  "Dhar",
-  "Dindori",
-  "Guna",
-  "Gwalior",
-  "Harda",
-  "Indore",
-  "Jabalpur",
-  "Jhabua",
-  "Katni",
-  "Khandwa",
-  "Khargone",
-  "Mandla",
-  "Mandsaur",
-  "Morena",
-  "Narmadapuram",
-  "Narsinghpur",
-  "Neemuch",
-  "Niwari",
-  "Panna",
-  "Raisen",
-  "Rajgarh",
-  "Ratlam",
-  "Rewa",
-  "Sagar",
-  "Satna",
-  "Sehore",
-  "Seoni",
-  "Shahdol",
-  "Shajapur",
-  "Sheopur",
-  "Shivpuri",
-  "Sidhi",
-  "Singrauli",
-  "Tikamgarh",
-  "Ujjain",
-  "Umaria",
-  "Vidisha",
+// Stored/filtered by the English name; Hindi is only the display label.
+const DISTRICT_SUGGESTIONS: { en: string; hi: string }[] = [
+  { en: "Agar Malwa", hi: "आगर मालवा" },
+  { en: "Alirajpur", hi: "अलीराजपुर" },
+  { en: "Anuppur", hi: "अनूपपुर" },
+  { en: "Ashok Nagar", hi: "अशोकनगर" },
+  { en: "Balaghat", hi: "बालाघाट" },
+  { en: "Barwani", hi: "बड़वानी" },
+  { en: "Betul", hi: "बेतूल" },
+  { en: "Bhind", hi: "भिण्ड" },
+  { en: "Bhopal", hi: "भोपाल" },
+  { en: "Burhanpur", hi: "बुरहानपुर" },
+  { en: "Chhatarpur", hi: "छतरपुर" },
+  { en: "Chhindwara", hi: "छिन्दवाड़ा" },
+  { en: "Damoh", hi: "दमोह" },
+  { en: "Datia", hi: "दतिया" },
+  { en: "Dewas", hi: "देवास" },
+  { en: "Dhar", hi: "धार" },
+  { en: "Dindori", hi: "डिंडोरी" },
+  { en: "Guna", hi: "गुना" },
+  { en: "Gwalior", hi: "ग्वालियर" },
+  { en: "Harda", hi: "हरदा" },
+  { en: "Indore", hi: "इन्दौर" },
+  { en: "Jabalpur", hi: "जबलपुर" },
+  { en: "Jhabua", hi: "झाबुआ" },
+  { en: "Katni", hi: "कटनी" },
+  { en: "Khandwa", hi: "खण्डवा" },
+  { en: "Khargone", hi: "खरगोन" },
+  { en: "Mandla", hi: "मंडला" },
+  { en: "Mandsaur", hi: "मन्दसौर" },
+  { en: "Morena", hi: "मुरैना" },
+  { en: "Narmadapuram", hi: "नर्मदापुरम" },
+  { en: "Narsinghpur", hi: "नरसिंहपुर" },
+  { en: "Neemuch", hi: "नीमच" },
+  { en: "Niwari", hi: "निवाड़ी" },
+  { en: "Panna", hi: "पन्ना" },
+  { en: "Raisen", hi: "रायसेन" },
+  { en: "Rajgarh", hi: "राजगढ़" },
+  { en: "Ratlam", hi: "रतलाम" },
+  { en: "Rewa", hi: "रीवा" },
+  { en: "Sagar", hi: "सागर" },
+  { en: "Satna", hi: "सतना" },
+  { en: "Sehore", hi: "सीहोर" },
+  { en: "Seoni", hi: "सिवनी" },
+  { en: "Shahdol", hi: "शहडोल" },
+  { en: "Shajapur", hi: "शाजापुर" },
+  { en: "Sheopur", hi: "श्योपुर" },
+  { en: "Shivpuri", hi: "शिवपुरी" },
+  { en: "Sidhi", hi: "सीधी" },
+  { en: "Singrauli", hi: "सिंगरौली" },
+  { en: "Tikamgarh", hi: "टीकमगढ़" },
+  { en: "Ujjain", hi: "उज्जैन" },
+  { en: "Umaria", hi: "उमरिया" },
+  { en: "Vidisha", hi: "विदिशा" },
 ];
+
+const DISTRICT_HI_BY_EN = new Map(DISTRICT_SUGGESTIONS.map((d) => [d.en, d.hi]));
+
+function districtLabel(en: string, lang: Language): string {
+  return lang === "hi" ? DISTRICT_HI_BY_EN.get(en) ?? en : en;
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -79,7 +86,7 @@ export function GuidelinePage() {
   const [year, setYear] = useState<number>(years[0]!);
   const [districtFilter, setDistrictFilter] = useState<string>("");
 
-  const isAdmin = !!useAuthStore((s) => s.user);
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
   const [district, setDistrict] = useState("");
   const [language, setLanguage] = useState<Language>("en");
 
@@ -137,8 +144,8 @@ export function GuidelinePage() {
                   {t("glDistrict")}
                 </option>
                 {DISTRICT_SUGGESTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
+                  <option key={d.en} value={d.en}>
+                    {districtLabel(d.en, lang)}
                   </option>
                 ))}
               </select>
@@ -194,7 +201,7 @@ export function GuidelinePage() {
                 className={districtFilter === d ? "district-chip on" : "district-chip"}
                 onClick={() => setDistrictFilter(d)}
               >
-                {d}
+                {districtLabel(d, lang)}
               </button>
             ))}
           </div>
@@ -207,7 +214,7 @@ export function GuidelinePage() {
               <span className="doc-icon">📄</span>
               <div className="doc-meta">
                 <div className="doc-name">
-                  <span className="doc-district">{d.district}</span>{" "}
+                  <span className="doc-district">{districtLabel(d.district, lang)}</span>{" "}
                   <span className="doc-lang">{d.language === "hi" ? t("glLangHindi") : t("glLangEnglish")}</span>{" "}
                   {d.fileName}
                 </div>
