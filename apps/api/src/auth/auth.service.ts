@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { timingSafeEqual } from "node:crypto";
 import type { AuthResponse, AuthUser, LoginInput } from "@sampada/shared";
@@ -17,7 +17,8 @@ export class AuthService {
   ) {}
 
   async login(input: LoginInput): Promise<AuthResponse> {
-    const user = (await this.tryAdmin(input)) ?? (await this.tryPartner(input));
+    const user =
+      input.role === "ADMIN" ? await this.tryAdmin(input) : await this.tryStaff(input);
     if (!user) throw new UnauthorizedException("Invalid email or password.");
 
     const accessToken = await this.jwt.signAsync({
@@ -34,17 +35,23 @@ export class AuthService {
     const password = process.env.ADMIN_PASSWORD;
     if (!email || !password) return null;
 
-    const emailOk = input.email.trim().toLowerCase() === email.trim().toLowerCase();
-    if (!emailOk || !safeEqual(input.password, password)) return null;
-    return { id: "admin", email, fname: "Admin", lname: "", role: "ADMIN" };
+    const loginOk = input.login.trim().toLowerCase() === email.trim().toLowerCase();
+    if (!loginOk || !safeEqual(input.password, password)) return null;
+    return { id: "admin", email, username: null, fname: "Admin", lname: "", role: "ADMIN" };
   }
 
-  private async tryPartner(input: LoginInput): Promise<AuthUser | null> {
-    const stored = await this.users.findByEmail(input.email);
-    if (!stored || !verifyPassword(input.password, stored.passwordHash)) return null;
+  /** PARTNER or EMPLOYEE — the stored account's role must match the tab the user picked. */
+  private async tryStaff(input: LoginInput): Promise<AuthUser | null> {
+    const stored = await this.users.findByLogin(input.login);
+    if (!stored || stored.role !== input.role) return null;
+    if (!verifyPassword(input.password, stored.passwordHash)) return null;
+    if (stored.status === "PENDING") {
+      throw new ForbiddenException("Your signup is awaiting admin approval.");
+    }
     return {
       id: stored.id,
       email: stored.email,
+      username: stored.username,
       fname: stored.fname,
       lname: stored.lname,
       role: stored.role,

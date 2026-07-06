@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { AuthController } from "./auth.controller.js";
+import { ProfileController } from "./profile.controller.js";
+import { ProfilePhotoController } from "./profile-photo.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtAdminGuard } from "./jwt-admin.guard.js";
 import { JwtStaffGuard } from "./jwt-staff.guard.js";
@@ -18,7 +20,7 @@ import { UsersModule } from "../users/users.module.js";
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, ProfileController, ProfilePhotoController],
   providers: [AuthService, JwtAdminGuard, JwtStaffGuard],
   exports: [JwtAdminGuard, JwtStaffGuard],
 })

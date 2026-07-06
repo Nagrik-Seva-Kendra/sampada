@@ -11,11 +11,11 @@ import type { Request } from "express";
 export interface StaffUser {
   id: string;
   email: string;
-  role: "ADMIN" | "PARTNER";
+  role: "ADMIN" | "PARTNER" | "EMPLOYEE";
   name: string;
 }
 
-/** Verifies a Bearer JWT and requires role ADMIN or PARTNER. */
+/** Verifies a Bearer JWT and requires role ADMIN, PARTNER, or EMPLOYEE. */
 @Injectable()
 export class JwtStaffGuard implements CanActivate {
   constructor(private readonly jwt: JwtService) {}
@@ -32,8 +32,8 @@ export class JwtStaffGuard implements CanActivate {
       throw new UnauthorizedException("Invalid or expired session.");
     }
 
-    if (payload.role !== "ADMIN" && payload.role !== "PARTNER") {
-      throw new ForbiddenException("Partner or admin access required.");
+    if (payload.role !== "ADMIN" && payload.role !== "PARTNER" && payload.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Staff access required.");
     }
     req.user = {
       id: payload.sub,

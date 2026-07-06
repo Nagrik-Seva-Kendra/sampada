@@ -18,7 +18,7 @@ export class JwtAdminGuard implements CanActivate {
     const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
     if (!token) throw new UnauthorizedException("Login required.");
 
-    let payload: { sub: string; email: string; role: string };
+    let payload: { sub: string; email: string; role: string; name?: string };
     try {
       payload = await this.jwt.verifyAsync(token);
     } catch {
@@ -26,7 +26,12 @@ export class JwtAdminGuard implements CanActivate {
     }
 
     if (payload.role !== "ADMIN") throw new ForbiddenException("Admin access required.");
-    req.user = { id: payload.sub, email: payload.email, role: payload.role };
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      name: payload.name ?? payload.email,
+    };
     return true;
   }
 }
