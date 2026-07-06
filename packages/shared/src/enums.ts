@@ -1,8 +1,12 @@
 import { z } from "zod";
 
-/** User roles — gates public site, partner portal, admin panel. */
-export const Role = z.enum(["PUBLIC", "PARTNER", "ADMIN"]);
+/** User roles — gates public site, partner portal, employee portal, admin panel. */
+export const Role = z.enum(["PUBLIC", "PARTNER", "EMPLOYEE", "ADMIN"]);
 export type Role = z.infer<typeof Role>;
+
+/** Roles that log in via the staff login form (excludes PUBLIC). */
+export const StaffRole = z.enum(["PARTNER", "EMPLOYEE", "ADMIN"]);
+export type StaffRole = z.infer<typeof StaffRole>;
 
 /** Top-level property categories (mapped from legacy include/*.form.php). */
 export const PropertyType = z.enum([

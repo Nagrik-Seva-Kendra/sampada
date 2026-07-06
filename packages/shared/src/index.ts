@@ -5,3 +5,6 @@ export * from "./guideline.js";
 export * from "./contact.js";
 export * from "./deed.js";
 export * from "./partner.js";
+export * from "./employee.js";
+export * from "./company-docs.js";
+export * from "./otp.js";

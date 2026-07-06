@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { Role } from "./enums.js";
+import { Role, StaffRole } from "./enums.js";
 
 export const LoginInput = z.object({
-  email: z.string().email(),
+  /** Which login tab the user picked — the resolved account must match this role. */
+  role: StaffRole,
+  /** Partner/Employee: username (or email, kept working as a fallback). Admin: email. */
+  login: z.string().trim().min(1),
   password: z.string().min(1),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
@@ -21,6 +24,7 @@ export type RegisterInput = z.infer<typeof RegisterInput>;
 export const AuthUser = z.object({
   id: z.string(),
   email: z.string().email(),
+  username: z.string().nullable(),
   fname: z.string(),
   lname: z.string(),
   role: Role,
