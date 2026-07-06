@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { CreateDeedInput, DeedRecordItem } from "@sampada/shared";
+import type { CreateDeedInput, DeedRecordItem, UpdateDeedInput } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 
 /**
@@ -67,6 +67,18 @@ export class DeedsService {
       .reverse();
   }
 
+  /** ADMIN: every partner's deeds combined (excludes the admin's own), newest first. */
+  async listAllPartners(): Promise<DeedRecordItem[]> {
+    return (await this.readAll())
+      .filter((d) => d.createdByRole === "PARTNER")
+      .reverse();
+  }
+
+  /** EMPLOYEE (view-all access): literally every deed — admin's, every partner's, every employee's. */
+  async listEveryone(): Promise<DeedRecordItem[]> {
+    return (await this.readAll()).reverse();
+  }
+
   /** Deed counts per creator id (for the admin's partner list). */
   async countsByCreator(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {};
@@ -76,8 +88,25 @@ export class DeedsService {
     return counts;
   }
 
-  /** Delete own deed; ADMIN may delete any. */
+  /** Edit own deed; ADMIN and EMPLOYEE may edit any. */
+  async update(id: string, input: UpdateDeedInput, user: StaffUser): Promise<DeedRecordItem> {
+    const canEditAny = user.role === "ADMIN" || user.role === "EMPLOYEE";
+    const deeds = await this.readAll();
+    const index = deeds.findIndex((d) => d.id === id);
+    if (index === -1 || (!canEditAny && deeds[index]!.createdById !== user.id)) {
+      throw new NotFoundException("Deed not found.");
+    }
+    const updated = { ...deeds[index]!, ...input };
+    deeds[index] = updated;
+    await this.writeAll(deeds);
+    return updated;
+  }
+
+  /** Delete own deed; ADMIN may delete any. EMPLOYEE can never delete. */
   async remove(id: string, user: StaffUser): Promise<void> {
+    if (user.role === "EMPLOYEE") {
+      throw new ForbiddenException("Employees cannot delete deeds.");
+    }
     const deeds = await this.readAll();
     const deed = deeds.find((d) => d.id === id);
     if (!deed || (user.role !== "ADMIN" && deed.createdById !== user.id)) {

@@ -1,12 +1,13 @@
-import { Link, Navigate, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, Navigate, useParams } from "@tanstack/react-router";
+import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
+import { DeedRecordsTable } from "./DeedRecordsTable";
 
 export function DeedDetailPage() {
   const { slug } = useParams({ from: "/deeds/$slug" });
   const lang = useLang();
-  const navigate = useNavigate();
   const t = (k: StringKey) => translate(k, lang);
 
   const deed = findDeed(slug);
@@ -22,27 +23,8 @@ export function DeedDetailPage() {
         <h2 className="page-title">{deed.name[lang]}</h2>
         <p className="er-sub">{deed.tagline[lang]}</p>
 
-        {deed.about.map((p, i) => (
-          <p key={i} className="deed-about">
-            {p[lang]}
-          </p>
-        ))}
-
-        <h3 className="er-section">{t("deedsDocsHead")}</h3>
-        <ul className="er-docs">
-          {deed.docs.map((d, i) => (
-            <li key={i}>
-              <span className="er-check">✓</span> {d[lang]}
-            </li>
-          ))}
-        </ul>
-
-        <div className="er-note">
-          <p>{t("deedsStampNote")}</p>
-          <button className="btn-calc" onClick={() => navigate({ to: "/guideline" })}>
-            {t("viewRates")}
-          </button>
-        </div>
+        <h3 className="er-section">{t("deedsSamplesHead")}</h3>
+        <DeedRecordsTable type={slug as DeedType} />
       </div>
     </section>
   );

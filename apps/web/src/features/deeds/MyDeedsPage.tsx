@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CreateDeedInput, DeedType } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
+import { useCanDeleteDeeds } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { DEEDS } from "./deedData";
 import { DeedList } from "./DeedList";
@@ -13,6 +14,7 @@ export function MyDeedsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const deeds = useMyDeeds();
+  const canDelete = useCanDeleteDeeds();
 
   return (
     <section className="page">
@@ -27,13 +29,13 @@ export function MyDeedsPage() {
 
         <h3 className="er-section">{t("drMine")}</h3>
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}
-        {deeds.data && <DeedList deeds={deeds.data} showCreator={false} canDelete />}
+        {deeds.data && <DeedList deeds={deeds.data} showCreator={false} canDelete={canDelete} />}
       </div>
     </section>
   );
 }
 
-function NewDeedForm() {
+export function NewDeedForm() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const create = useCreateDeed();
@@ -81,7 +83,7 @@ function NewDeedForm() {
         <label className="modal-field dr-notes">
           {t("drNotes")}
           <textarea
-            rows={2}
+            rows={6}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             maxLength={2000}

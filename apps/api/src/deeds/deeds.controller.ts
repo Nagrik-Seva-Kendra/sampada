@@ -5,13 +5,14 @@ import {
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { CreateDeedInput } from "@sampada/shared";
+import { CreateDeedInput, UpdateDeedInput } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { DeedsService } from "./deeds.service.js";
 
@@ -30,17 +31,36 @@ export class DeedsController {
 
   /**
    * Own deeds by default. ADMIN may pass ?creatorId=<partner-id> to view one
-   * partner's register (kept separate from the admin's own).
+   * partner's register, or ?creatorId=all to view every partner's deeds
+   * combined (kept separate from the admin's own).
    */
   @Get()
   list(@Req() req: StaffRequest, @Query("creatorId") creatorId?: string) {
-    if (creatorId && creatorId !== req.user.id) {
+    if (creatorId === "all") {
       if (req.user.role !== "ADMIN") {
         throw new ForbiddenException("Only the admin can view other registers.");
+      }
+      return this.service.listAllPartners();
+    }
+    if (creatorId === "everyone") {
+      if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+        throw new ForbiddenException("Only admin/employee can view every register.");
+      }
+      return this.service.listEveryone();
+    }
+    if (creatorId && creatorId !== req.user.id) {
+      if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+        throw new ForbiddenException("Only the admin/employee can view other registers.");
       }
       return this.service.listByCreator(creatorId);
     }
     return this.service.listOwn(req.user);
+  }
+
+  /** Edit own deed (ADMIN: any deed, e.g. a partner's). */
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() body: unknown, @Req() req: StaffRequest) {
+    return this.service.update(id, UpdateDeedInput.parse(body), req.user);
   }
 
   /** Delete own deed (ADMIN: any deed). */
