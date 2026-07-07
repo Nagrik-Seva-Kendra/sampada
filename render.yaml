@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     region: singapore
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @sampada/shared build && pnpm --filter @sampada/web build && pnpm --filter @sampada/api bundle
+    buildCommand: npx --yes pnpm@11.9.0 install --frozen-lockfile && npx --yes pnpm@11.9.0 --filter @sampada/shared build && npx --yes pnpm@11.9.0 --filter @sampada/web build && npx --yes pnpm@11.9.0 --filter @sampada/api bundle
     startCommand: node apps/api/deploy/server.cjs
     healthCheckPath: /api/v1/health
     envVars:
