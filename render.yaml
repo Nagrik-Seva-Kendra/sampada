@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: sampada
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @sampada/shared build && pnpm --filter @sampada/web build && pnpm --filter @sampada/api bundle
+    startCommand: node apps/api/deploy/server.cjs
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: WEB_DIST
+        value: apps/web/dist
+      - key: UPLOAD_DIR
+        value: /data/guideline
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
