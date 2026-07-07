@@ -22,9 +22,10 @@ export const EmployeeSignupInput = CreateEmployeeInput.extend({
 });
 export type EmployeeSignupInput = z.infer<typeof EmployeeSignupInput>;
 
-/** Employee as listed to the admin (never exposes the password hash). */
+/** Employee as listed to the admin (never exposes the password itself — see the separate reveal endpoint). */
 export const EmployeeItem = z.object({
   id: z.string(),
+  employeeCode: z.string().nullable(),
   fname: z.string(),
   lname: z.string(),
   email: z.string(),

@@ -67,7 +67,7 @@ export class DeedsService {
       .reverse();
   }
 
-  /** ADMIN: every partner's deeds combined (excludes the admin's own), newest first. */
+  /** ADMIN/EMPLOYEE: every partner's deeds combined (excludes admin's/employees' own), newest first. */
   async listAllPartners(): Promise<DeedRecordItem[]> {
     return (await this.readAll())
       .filter((d) => d.createdByRole === "PARTNER")

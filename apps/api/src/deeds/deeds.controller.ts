@@ -30,15 +30,15 @@ export class DeedsController {
   }
 
   /**
-   * Own deeds by default. ADMIN may pass ?creatorId=<partner-id> to view one
-   * partner's register, or ?creatorId=all to view every partner's deeds
-   * combined (kept separate from the admin's own).
+   * Own deeds by default. ADMIN/EMPLOYEE may pass ?creatorId=<partner-id> to
+   * view one partner's register, or ?creatorId=all to view every partner's
+   * deeds combined (excludes the admin's and employees' own deeds).
    */
   @Get()
   list(@Req() req: StaffRequest, @Query("creatorId") creatorId?: string) {
     if (creatorId === "all") {
-      if (req.user.role !== "ADMIN") {
-        throw new ForbiddenException("Only the admin can view other registers.");
+      if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+        throw new ForbiddenException("Only admin/employee can view other registers.");
       }
       return this.service.listAllPartners();
     }

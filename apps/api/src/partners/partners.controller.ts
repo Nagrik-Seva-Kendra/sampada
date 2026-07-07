@@ -1,9 +1,23 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import type { Request } from "express";
 import { CreatePartnerInput, PartnerSignupInput, type PartnerItem } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
+import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { UsersService, type StoredUser } from "../users/users.service.js";
 import { DeedsService } from "../deeds/deeds.service.js";
 import { OtpService } from "../otp/otp.service.js";
+
+type StaffRequest = Request & { user: StaffUser };
 
 function toItem(user: StoredUser, deedCount: number): PartnerItem {
   return {
@@ -44,10 +58,13 @@ export class PartnersController {
     return toItem(user, 0);
   }
 
-  /** Admin-only: active partners, with deed counts. */
+  /** Admin/Employee: active partners, with deed counts. */
   @Get()
-  @UseGuards(JwtAdminGuard)
-  async list(): Promise<PartnerItem[]> {
+  @UseGuards(JwtStaffGuard)
+  async list(@Req() req: StaffRequest): Promise<PartnerItem[]> {
+    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only admin/employee can view the partner list.");
+    }
     const [users, counts] = await Promise.all([
       this.users.list(),
       this.deeds.countsByCreator(),

@@ -7,6 +7,7 @@ import { OtpService } from "../otp/otp.service.js";
 function toItem(user: StoredUser): EmployeeItem {
   return {
     id: user.id,
+    employeeCode: user.employeeCode,
     fname: user.fname,
     lname: user.lname,
     email: user.email,
@@ -73,5 +74,12 @@ export class EmployeesController {
   @UseGuards(JwtAdminGuard)
   async reject(@Param("id") id: string): Promise<void> {
     await this.users.rejectEmployee(id);
+  }
+
+  /** Admin-only: reveal the password an employee set at signup. */
+  @Get(":id/password")
+  @UseGuards(JwtAdminGuard)
+  async password(@Param("id") id: string): Promise<{ password: string }> {
+    return { password: await this.users.getPassword(id) };
   }
 }

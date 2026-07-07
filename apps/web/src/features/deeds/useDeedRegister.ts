@@ -34,29 +34,17 @@ export function usePartnerDeeds(creatorId: string | null) {
   });
 }
 
-/** Admin: every partner's deeds combined (shown when no partner is selected). */
+/** ADMIN/EMPLOYEE: every partner's deeds combined (excludes admin's/employees' own). */
 export function useAllPartnerDeeds(enabled: boolean) {
   const token = useAuthStore((s) => s.token);
-  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  const role = useAuthStore((s) => s.user?.role);
+  const canViewAll = role === "ADMIN" || role === "EMPLOYEE";
   return useQuery({
     queryKey: ["deeds", "all-partners"],
-    enabled: enabled && !!token && isAdmin,
+    enabled: enabled && !!token && canViewAll,
     queryFn: () =>
       api
         .get("deeds", { headers: authHeaders(token), searchParams: { creatorId: "all" } })
-        .json<DeedRecordItem[]>(),
-  });
-}
-
-/** EMPLOYEE (and ADMIN): literally every deed — admin's, every partner's, every employee's. */
-export function useEveryoneDeeds() {
-  const token = useAuthStore((s) => s.token);
-  return useQuery({
-    queryKey: ["deeds", "everyone"],
-    enabled: !!token,
-    queryFn: () =>
-      api
-        .get("deeds", { headers: authHeaders(token), searchParams: { creatorId: "everyone" } })
         .json<DeedRecordItem[]>(),
   });
 }
@@ -95,13 +83,14 @@ export function useDeleteDeed() {
   });
 }
 
-/** Admin: partner list with deed counts. */
+/** Admin/Employee: partner list with deed counts. */
 export function usePartners() {
   const token = useAuthStore((s) => s.token);
-  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  const role = useAuthStore((s) => s.user?.role);
+  const canView = role === "ADMIN" || role === "EMPLOYEE";
   return useQuery({
     queryKey: ["partners"],
-    enabled: !!token && isAdmin,
+    enabled: !!token && canView,
     queryFn: () =>
       api.get("partners", { headers: authHeaders(token) }).json<PartnerItem[]>(),
   });
