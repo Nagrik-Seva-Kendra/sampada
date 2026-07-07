@@ -86,7 +86,13 @@ function PartnerSignupForm({ t }: { t: (k: StringKey) => string }) {
       </label>
       <label className="modal-field">
         {t("profileEmail")}
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="off"
+          required
+        />
       </label>
       <div className="modal-field">
         <button
@@ -134,6 +140,7 @@ function PartnerSignupForm({ t }: { t: (k: StringKey) => string }) {
           minLength={3}
           maxLength={50}
           placeholder={t("profileUsernamePlaceholder")}
+          autoComplete="off"
           required
         />
       </label>
@@ -146,6 +153,7 @@ function PartnerSignupForm({ t }: { t: (k: StringKey) => string }) {
           onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
           pattern="[0-9]{10}"
           maxLength={10}
+          autoComplete="off"
           required
         />
       </label>
@@ -155,10 +163,11 @@ function PartnerSignupForm({ t }: { t: (k: StringKey) => string }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           minLength={8}
+          autoComplete="new-password"
           required
         />
       </label>
-      {signup.isError && <p className="modal-error">{t("partnerSignupFailed")}</p>}
+      {signup.isError && <p className="modal-error">{signup.error.message}</p>}
       <button className="btn-calc" type="submit" disabled={signup.isPending}>
         {signup.isPending ? "…" : t("partnerSignupSubmit")}
       </button>

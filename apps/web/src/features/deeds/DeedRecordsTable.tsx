@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DeedType, SampleDeedItem } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
-import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
+import { useAuthStore, useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { useCreateSampleDeed, useDeleteSampleDeed, useSampleDeeds } from "./useSampleDeeds";
 import { printDeed } from "./printDeed";
@@ -21,6 +21,9 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
   const t = (k: StringKey) => translate(k, lang);
   const isStaff = useIsStaff();
   const canDelete = useCanDeleteDeeds();
+  const role = useAuthStore((s) => s.user?.role);
+  // ADMIN/EMPLOYEE see every staff member's sample deeds combined (see sample-deeds.service.ts) — show who made each one.
+  const showCreator = role === "ADMIN" || role === "EMPLOYEE";
 
   const records = useSampleDeeds(type);
   const create = useCreateSampleDeed();
@@ -109,6 +112,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
               <th>{t("deedsColId")}</th>
               <th>{t("deedsColDate")}</th>
               <th>{t("deedsColName")}</th>
+              {showCreator && <th>{t("deedsColUser")}</th>}
               <th>{t("deedsColUpdate")}</th>
             </tr>
           </thead>
@@ -118,6 +122,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                 <td>{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
                 <td>{formatDate(r.createdAt)}</td>
                 <td>{r.title}</td>
+                {showCreator && <td>{r.createdByName}</td>}
                 <td>
                   <select
                     className="district-input dr-action-select"
@@ -145,7 +150,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="doc-empty">
+                <td colSpan={showCreator ? 5 : 4} className="doc-empty">
                   {debouncedSearch.trim() ? t("deedsSearchEmpty") : t("drEmpty")}
                 </td>
               </tr>
@@ -185,6 +190,11 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                 ✕
               </button>
             </div>
+            {showCreator && (
+              <p>
+                {t("drBy")} <strong>{viewing.createdByName}</strong>
+              </p>
+            )}
             <p style={{ whiteSpace: "pre-wrap" }}>{viewing.content}</p>
           </div>
         </div>

@@ -42,13 +42,13 @@ export class EmployeesController {
     return toItem(user);
   }
 
-  /** Admin-only: active employees. */
+  /** Admin-only: approved employees (active and discontinued; excludes pending signups). */
   @Get()
   @UseGuards(JwtAdminGuard)
   async list(): Promise<EmployeeItem[]> {
     const users = await this.users.list();
     return users
-      .filter((u) => u.role === "EMPLOYEE" && u.status === "ACTIVE")
+      .filter((u) => u.role === "EMPLOYEE" && u.status !== "PENDING")
       .map(toItem)
       .reverse();
   }
@@ -74,6 +74,22 @@ export class EmployeesController {
   @UseGuards(JwtAdminGuard)
   async reject(@Param("id") id: string): Promise<void> {
     await this.users.rejectEmployee(id);
+  }
+
+  /** Admin-only: discontinue an employee's services (blocks login, keeps the record). */
+  @Post(":id/deactivate")
+  @UseGuards(JwtAdminGuard)
+  async deactivate(@Param("id") id: string): Promise<EmployeeItem> {
+    const user = await this.users.deactivateEmployee(id);
+    return toItem(user);
+  }
+
+  /** Admin-only: restore a discontinued employee's access. */
+  @Post(":id/reactivate")
+  @UseGuards(JwtAdminGuard)
+  async reactivate(@Param("id") id: string): Promise<EmployeeItem> {
+    const user = await this.users.reactivateEmployee(id);
+    return toItem(user);
   }
 
   /** Admin-only: reveal the password an employee set at signup. */

@@ -48,6 +48,9 @@ export class AuthService {
     if (stored.status === "PENDING") {
       throw new ForbiddenException("Your signup is awaiting admin approval.");
     }
+    if (stored.status === "INACTIVE") {
+      throw new ForbiddenException("Your services have been discontinued by the admin.");
+    }
     return {
       id: stored.id,
       email: stored.email,

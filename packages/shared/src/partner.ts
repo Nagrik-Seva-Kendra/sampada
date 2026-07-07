@@ -54,6 +54,6 @@ export const PartnerItem = z.object({
   username: z.string().nullable(),
   createdAt: z.string(),
   deedCount: z.number().int(),
-  status: z.enum(["PENDING", "ACTIVE"]),
+  status: z.enum(["PENDING", "ACTIVE", "INACTIVE"]),
 });
 export type PartnerItem = z.infer<typeof PartnerItem>;

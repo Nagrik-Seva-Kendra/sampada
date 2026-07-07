@@ -3,22 +3,32 @@ import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import {
   useApproveEmployee,
+  useDeactivateEmployee,
   useEmployeePassword,
+  useEmployeesList,
   usePendingEmployees,
+  useReactivateEmployee,
   useRejectEmployee,
 } from "./useEmployees";
 
-/** Admin only: approve or reject pending employee self-signups. */
+/** Admin only: approve or reject pending employee self-signups; browse/discontinue already-approved employees. */
 export function EmployeeRequestsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const pending = usePendingEmployees();
+  const active = useEmployeesList();
   const approve = useApproveEmployee();
   const reject = useRejectEmployee();
+  const deactivate = useDeactivateEmployee();
+  const reactivate = useReactivateEmployee();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function onReject(id: string) {
     if (window.confirm(t("reqRejectConfirm"))) reject.mutate(id);
+  }
+
+  function onDeactivate(id: string) {
+    if (window.confirm(t("reqDiscontinueConfirm"))) deactivate.mutate(id);
   }
 
   return (
@@ -30,7 +40,7 @@ export function EmployeeRequestsPage() {
         </div>
         <h2 className="page-title">{t("navEmployeeRequests")}</h2>
 
-        {(approve.isError || reject.isError) && (
+        {(approve.isError || reject.isError || deactivate.isError || reactivate.isError) && (
           <p className="modal-error">{t("reqActionFailed")}</p>
         )}
 
@@ -80,6 +90,64 @@ export function EmployeeRequestsPage() {
                 </div>
               </div>
               {expandedId === req.id && <EmployeeDetails id={req.id} username={req.username} t={t} />}
+            </div>
+          ))}
+        </div>
+
+        <h3 className="er-section">{t("reqActiveEmployees")}</h3>
+        {(active.data ?? []).length === 0 && !active.isLoading && (
+          <p className="doc-empty">{t("reqActiveEmpty")}</p>
+        )}
+        <div className="doc-list" style={{ marginTop: 16 }}>
+          {(active.data ?? []).map((emp) => (
+            <div className="doc" key={emp.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="doc-meta">
+                  <div className="doc-name">
+                    {emp.fname} {emp.lname}
+                    {emp.employeeCode && (
+                      <span className="doc-sub" style={{ marginLeft: 8 }}>
+                        [{emp.employeeCode}]
+                      </span>
+                    )}
+                    <span
+                      className={emp.status === "ACTIVE" ? "dr-status-active" : "modal-error"}
+                      style={{ marginLeft: 8 }}
+                    >
+                      {t(emp.status === "ACTIVE" ? "reqStatusActive" : "reqStatusInactive")}
+                    </span>
+                  </div>
+                  <div className="doc-sub">
+                    {emp.email} · {emp.phone}
+                  </div>
+                </div>
+                <div className="doc-actions">
+                  <button
+                    className="doc-btn"
+                    onClick={() => setExpandedId(expandedId === emp.id ? null : emp.id)}
+                  >
+                    {expandedId === emp.id ? t("empHideDetails") : t("empViewDetails")}
+                  </button>
+                  {emp.status === "ACTIVE" ? (
+                    <button
+                      className="doc-btn danger"
+                      onClick={() => onDeactivate(emp.id)}
+                      disabled={deactivate.isPending}
+                    >
+                      {t("reqDiscontinue")}
+                    </button>
+                  ) : (
+                    <button
+                      className="doc-btn"
+                      onClick={() => reactivate.mutate(emp.id)}
+                      disabled={reactivate.isPending}
+                    >
+                      {t("reqReactivate")}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {expandedId === emp.id && <EmployeeDetails id={emp.id} username={emp.username} t={t} />}
             </div>
           ))}
         </div>

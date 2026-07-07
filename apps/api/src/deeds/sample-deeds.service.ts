@@ -2,12 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type {
-  CreateSampleDeedInput,
-  DeedType,
-  SampleDeedItem,
-  UpdateSampleDeedInput,
-} from "@sampada/shared";
+import { DeedType } from "@sampada/shared";
+import type { CreateSampleDeedInput, SampleDeedItem, UpdateSampleDeedInput } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 
 /**
@@ -107,11 +103,32 @@ export class SampleDeedsService {
     return (await this.loadType(type)).get(id) ?? null;
   }
 
-  /** ADMIN and EMPLOYEE see every deed of this type; PARTNER sees only their own. Newest first. */
+  /**
+   * ADMIN and EMPLOYEE see every ADMIN/EMPLOYEE deed of this type combined
+   * (partners' own drafts are excluded here — those surface only in the
+   * partner's own register / the admin's "All Partner Deeds" page). PARTNER
+   * sees only their own. Newest first.
+   */
   async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedItem[]> {
     const items = [...(await this.loadType(type)).values()];
     const canViewAll = user.role === "ADMIN" || user.role === "EMPLOYEE";
-    const visible = canViewAll ? items : items.filter((i) => i.createdById === user.id);
+    const visible = canViewAll
+      ? items.filter((i) => i.createdByRole !== "PARTNER")
+      : items.filter((i) => i.createdById === user.id);
+    return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  /**
+   * ADMIN/EMPLOYEE: every partner's sample deeds across every deed type,
+   * combined, newest first — powers the admin's "All Partner Deeds" page.
+   * Pass creatorId to narrow it down to one partner.
+   */
+  async listPartners(creatorId?: string): Promise<SampleDeedItem[]> {
+    const buckets = await Promise.all(DeedType.options.map((t) => this.loadType(t)));
+    const all = buckets.flatMap((bucket) => [...bucket.values()]);
+    const visible = all.filter(
+      (i) => i.createdByRole === "PARTNER" && (!creatorId || i.createdById === creatorId),
+    );
     return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -123,6 +140,7 @@ export class SampleDeedsService {
       status: "active",
       createdById: user.id,
       createdByName: user.name,
+      createdByRole: user.role,
       createdAt: new Date().toISOString(),
     };
     await fs.mkdir(this.baseDir, { recursive: true });

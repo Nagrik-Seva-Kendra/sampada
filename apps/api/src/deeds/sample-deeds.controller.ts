@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -26,6 +27,15 @@ export class SampleDeedsController {
   @Get()
   list(@Query("type") typeRaw: unknown, @Req() req: StaffRequest) {
     return this.service.listByType(DeedType.parse(typeRaw), req.user);
+  }
+
+  /** Admin/Employee: every partner's sample deeds across every type; ?creatorId narrows to one partner. */
+  @Get("partners")
+  partners(@Query("creatorId") creatorId: string | undefined, @Req() req: StaffRequest) {
+    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only admin/employee can view the partner list.");
+    }
+    return this.service.listPartners(creatorId);
   }
 
   /** Draft a new deed for a type, owned by the caller. */

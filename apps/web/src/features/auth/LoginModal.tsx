@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { HTTPError } from "ky";
 import type { StaffRole } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -35,8 +34,6 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     login.mutate({ role, login: loginValue, password }, { onSuccess: onClose });
   }
-
-  const loginPending = login.error instanceof HTTPError && login.error.response.status === 403;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -90,9 +87,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
                   required
                 />
               </label>
-              {login.isError && (
-                <p className="modal-error">{t(loginPending ? "authPending" : "authInvalid")}</p>
-              )}
+              {login.isError && <p className="modal-error">{login.error.message}</p>}
               <button className="btn-calc modal-submit" type="submit" disabled={login.isPending}>
                 {login.isPending ? "…" : t("authLogin")}
               </button>
@@ -168,6 +163,7 @@ function EmployeeSignupForm({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="off"
           required
         />
       </label>
@@ -217,6 +213,7 @@ function EmployeeSignupForm({
           minLength={3}
           maxLength={50}
           placeholder={t("profileUsernamePlaceholder")}
+          autoComplete="off"
           required
         />
       </label>
@@ -229,6 +226,7 @@ function EmployeeSignupForm({
           onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
           pattern="[0-9]{10}"
           maxLength={10}
+          autoComplete="off"
           required
         />
       </label>
@@ -238,10 +236,11 @@ function EmployeeSignupForm({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           minLength={8}
+          autoComplete="new-password"
           required
         />
       </label>
-      {signup.isError && <p className="modal-error">{t("authSignupFailed")}</p>}
+      {signup.isError && <p className="modal-error">{signup.error.message}</p>}
       <button className="btn-calc modal-submit" type="submit" disabled={signup.isPending}>
         {signup.isPending ? "…" : t("authSignupSubmit")}
       </button>

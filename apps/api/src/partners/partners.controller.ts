@@ -58,7 +58,7 @@ export class PartnersController {
     return toItem(user, 0);
   }
 
-  /** Admin/Employee: active partners, with deed counts. */
+  /** Admin/Employee: approved partners (active and discontinued; excludes pending signups), with deed counts. */
   @Get()
   @UseGuards(JwtStaffGuard)
   async list(@Req() req: StaffRequest): Promise<PartnerItem[]> {
@@ -70,7 +70,7 @@ export class PartnersController {
       this.deeds.countsByCreator(),
     ]);
     return users
-      .filter((u) => u.role === "PARTNER" && u.status === "ACTIVE")
+      .filter((u) => u.role === "PARTNER" && u.status !== "PENDING")
       .map((u) => toItem(u, counts[u.id] ?? 0))
       .reverse();
   }
@@ -96,5 +96,28 @@ export class PartnersController {
   @UseGuards(JwtAdminGuard)
   async reject(@Param("id") id: string): Promise<void> {
     await this.users.rejectPartner(id);
+  }
+
+  /** Admin-only: discontinue a partner's services (blocks login, keeps the record). */
+  @Post(":id/deactivate")
+  @UseGuards(JwtAdminGuard)
+  async deactivate(@Param("id") id: string): Promise<PartnerItem> {
+    const user = await this.users.deactivatePartner(id);
+    return toItem(user, 0);
+  }
+
+  /** Admin-only: restore a discontinued partner's access. */
+  @Post(":id/reactivate")
+  @UseGuards(JwtAdminGuard)
+  async reactivate(@Param("id") id: string): Promise<PartnerItem> {
+    const user = await this.users.reactivatePartner(id);
+    return toItem(user, 0);
+  }
+
+  /** Admin-only: reveal the password a partner set at signup. */
+  @Get(":id/password")
+  @UseGuards(JwtAdminGuard)
+  async password(@Param("id") id: string): Promise<{ password: string }> {
+    return { password: await this.users.getPassword(id) };
   }
 }

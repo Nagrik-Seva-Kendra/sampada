@@ -1,19 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { DeedList } from "./DeedList";
-import { useAllPartnerDeeds, usePartnerDeeds, usePartners } from "./useDeedRegister";
+import { PartnerSampleDeedList } from "./PartnerSampleDeedList";
+import { useAllPartnerSampleDeeds } from "./useSampleDeeds";
+import { usePartners } from "./useDeedRegister";
 
-/** Employee view: every partner's deeds (admin's/employees' own excluded). Edit/print, never create or delete. */
+/** Employee view: every partner's sample deeds across every category. View/print, never create or delete. */
 export function EmployeeDeedsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const partners = usePartners();
   const [selectedId, setSelectedId] = useState("");
   const selected = (partners.data ?? []).find((p) => p.id === selectedId);
-  const onePartner = usePartnerDeeds(selectedId || null);
-  const allPartners = useAllPartnerDeeds(!selectedId);
-  const deeds = selectedId ? onePartner : allPartners;
+  const allDeeds = useAllPartnerSampleDeeds(null);
+  const deedCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of allDeeds.data ?? []) counts[d.createdById] = (counts[d.createdById] ?? 0) + 1;
+    return counts;
+  }, [allDeeds.data]);
+  const deeds = {
+    ...allDeeds,
+    data: selectedId ? allDeeds.data?.filter((d) => d.createdById === selectedId) : allDeeds.data,
+  };
 
   return (
     <section className="page">
@@ -37,7 +45,7 @@ export function EmployeeDeedsPage() {
               <option value="">{t("drAllPartners")}</option>
               {(partners.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.fname} {p.lname} ({p.deedCount} {t("drDeedCount")})
+                  {p.fname} {p.lname} ({deedCounts[p.id] ?? 0} {t("drDeedCount")})
                 </option>
               ))}
             </select>
@@ -59,7 +67,7 @@ export function EmployeeDeedsPage() {
           </>
         )}
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}
-        {deeds.data && <DeedList deeds={deeds.data} showCreator canDelete={false} canEdit />}
+        {deeds.data && <PartnerSampleDeedList deeds={deeds.data} />}
       </div>
     </section>
   );

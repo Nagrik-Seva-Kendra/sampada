@@ -21,6 +21,24 @@ export function useSampleDeeds(type: DeedType) {
   });
 }
 
+/** Admin/Employee: every partner's sample deeds across every type; pass a creatorId to narrow to one partner. */
+export function useAllPartnerSampleDeeds(creatorId: string | null) {
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.user?.role);
+  const canView = role === "ADMIN" || role === "EMPLOYEE";
+  return useQuery({
+    queryKey: ["sample-deeds", "partners", creatorId],
+    enabled: !!token && canView,
+    queryFn: () =>
+      api
+        .get("sample-deeds/partners", {
+          headers: authHeaders(token),
+          searchParams: creatorId ? { creatorId } : {},
+        })
+        .json<SampleDeedItem[]>(),
+  });
+}
+
 export function useCreateSampleDeed() {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();

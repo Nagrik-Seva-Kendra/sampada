@@ -7,7 +7,7 @@ import type {
   PartnerSignupInput,
   UpdateDeedInput,
 } from "@sampada/shared";
-import { api } from "../../lib/api";
+import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
 /** Own deeds (partner: theirs; admin: admin's own — partner deeds are separate). */
@@ -30,21 +30,6 @@ export function usePartnerDeeds(creatorId: string | null) {
     queryFn: () =>
       api
         .get("deeds", { headers: authHeaders(token), searchParams: { creatorId: creatorId! } })
-        .json<DeedRecordItem[]>(),
-  });
-}
-
-/** ADMIN/EMPLOYEE: every partner's deeds combined (excludes admin's/employees' own). */
-export function useAllPartnerDeeds(enabled: boolean) {
-  const token = useAuthStore((s) => s.token);
-  const role = useAuthStore((s) => s.user?.role);
-  const canViewAll = role === "ADMIN" || role === "EMPLOYEE";
-  return useQuery({
-    queryKey: ["deeds", "all-partners"],
-    enabled: enabled && !!token && canViewAll,
-    queryFn: () =>
-      api
-        .get("deeds", { headers: authHeaders(token), searchParams: { creatorId: "all" } })
         .json<DeedRecordItem[]>(),
   });
 }
@@ -106,11 +91,47 @@ export function useCreatePartner() {
   });
 }
 
+/** Admin: reveal the password a partner set at signup (fetched on demand, not preloaded with the list). */
+export function usePartnerPassword() {
+  const token = useAuthStore((s) => s.token);
+  return useMutation<{ password: string }, Error, string>({
+    mutationFn: (id) =>
+      api.get(`partners/${id}/password`, { headers: authHeaders(token) }).json<{ password: string }>(),
+  });
+}
+
+/** Admin: discontinue a partner's services (blocks login, keeps the record). */
+export function useDeactivatePartner() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<PartnerItem, Error, string>({
+    mutationFn: (id) =>
+      api.post(`partners/${id}/deactivate`, { headers: authHeaders(token) }).json<PartnerItem>(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["partners"] }),
+  });
+}
+
+/** Admin: restore a discontinued partner's access. */
+export function useReactivatePartner() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<PartnerItem, Error, string>({
+    mutationFn: (id) =>
+      api.post(`partners/${id}/reactivate`, { headers: authHeaders(token) }).json<PartnerItem>(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["partners"] }),
+  });
+}
+
 /** Public: partner self-signup. Account stays PENDING until the admin approves it. */
 export function usePartnerSignup() {
   return useMutation<PartnerItem, Error, PartnerSignupInput>({
-    mutationFn: (input) =>
-      api.post("partners/signup", { json: input }).json<PartnerItem>(),
+    mutationFn: async (input) => {
+      try {
+        return await api.post("partners/signup", { json: input }).json<PartnerItem>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Registration failed — that email may already be registered."));
+      }
+    },
   });
 }
 

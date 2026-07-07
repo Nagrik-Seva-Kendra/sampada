@@ -17,6 +17,7 @@ export function Nav() {
   const isStaff = useIsStaff();
   const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
   const isEmployee = useAuthStore((s) => s.user?.role === "EMPLOYEE");
+  const isPartner = useAuthStore((s) => s.user?.role === "PARTNER");
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
@@ -135,9 +136,11 @@ export function Nav() {
             </div>
           )}
 
-          <button className="btn-partner btn-partner-sm" onClick={() => navigate({ to: "/partner" })}>
-            {t("partnerWithUs")}
-          </button>
+          {!isEmployee && !isPartner && (
+            <button className="btn-partner btn-partner-sm" onClick={() => navigate({ to: "/partner" })}>
+              {t("partnerWithUs")}
+            </button>
+          )}
         </div>
       </div>
     </nav>

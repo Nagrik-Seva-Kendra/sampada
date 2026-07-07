@@ -1,14 +1,19 @@
 import { useMutation } from "@tanstack/react-query";
 import type { AuthResponse, EmployeeItem, EmployeeSignupInput, LoginInput } from "@sampada/shared";
-import { api } from "../../lib/api";
+import { api, apiErrorMessage } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 
 /** POST /auth/login → stores token + user on success. */
 export function useLogin() {
   const setSession = useAuthStore((s) => s.setSession);
   return useMutation<AuthResponse, Error, LoginInput>({
-    mutationFn: (input) =>
-      api.post("auth/login", { json: input }).json<AuthResponse>(),
+    mutationFn: async (input) => {
+      try {
+        return await api.post("auth/login", { json: input }).json<AuthResponse>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Invalid email or password."));
+      }
+    },
     onSuccess: (res) => setSession(res.accessToken, res.user),
   });
 }
@@ -16,8 +21,13 @@ export function useLogin() {
 /** Public: employee self-signup. Account stays PENDING until the admin approves it. */
 export function useEmployeeSignup() {
   return useMutation<EmployeeItem, Error, EmployeeSignupInput>({
-    mutationFn: (input) =>
-      api.post("employees/signup", { json: input }).json<EmployeeItem>(),
+    mutationFn: async (input) => {
+      try {
+        return await api.post("employees/signup", { json: input }).json<EmployeeItem>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Signup failed — that email may already be registered."));
+      }
+    },
   });
 }
 

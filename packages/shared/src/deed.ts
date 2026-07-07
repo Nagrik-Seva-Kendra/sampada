@@ -61,6 +61,8 @@ export const SampleDeedItem = z.object({
   status: DeedRecordStatus,
   createdById: z.string(),
   createdByName: z.string(),
+  // Optional: absent on records drafted before this field existed.
+  createdByRole: Role.optional(),
   createdAt: z.string(), // ISO timestamp
 });
 export type SampleDeedItem = z.infer<typeof SampleDeedItem>;

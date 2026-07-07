@@ -34,8 +34,8 @@ export interface StoredUser {
   createdAt: string;
   /** Stored profile-photo filename (under uploads/profile-photos/); null if none. */
   photoFileName: string | null;
-  /** PENDING employee self-signups can't log in until the admin approves them. */
-  status: "PENDING" | "ACTIVE";
+  /** PENDING: awaiting admin approval. INACTIVE: services discontinued by the admin (can be reactivated). */
+  status: "PENDING" | "ACTIVE" | "INACTIVE";
   /** 10-digit mobile number; only collected for employees so far. */
   phone: string | null;
   /** Sequential admin-facing id, e.g. "EMP-0007"; only assigned to EMPLOYEE accounts. */
@@ -207,6 +207,41 @@ export class UsersService {
   /** Admin: reject (delete) a pending employee signup. */
   async rejectEmployee(id: string): Promise<void> {
     return this.rejectStaff(id, "EMPLOYEE");
+  }
+
+  /** Admin: discontinue a partner's services — blocks login, keeps the record (reversible). */
+  async deactivatePartner(id: string): Promise<StoredUser> {
+    return this.setStaffStatus(id, "PARTNER", "INACTIVE");
+  }
+
+  /** Admin: restore a discontinued partner's access. */
+  async reactivatePartner(id: string): Promise<StoredUser> {
+    return this.setStaffStatus(id, "PARTNER", "ACTIVE");
+  }
+
+  /** Admin: discontinue an employee's services — blocks login, keeps the record (reversible). */
+  async deactivateEmployee(id: string): Promise<StoredUser> {
+    return this.setStaffStatus(id, "EMPLOYEE", "INACTIVE");
+  }
+
+  /** Admin: restore a discontinued employee's access. */
+  async reactivateEmployee(id: string): Promise<StoredUser> {
+    return this.setStaffStatus(id, "EMPLOYEE", "ACTIVE");
+  }
+
+  private async setStaffStatus(
+    id: string,
+    role: "PARTNER" | "EMPLOYEE",
+    status: "ACTIVE" | "INACTIVE",
+  ): Promise<StoredUser> {
+    const users = await this.list();
+    const index = users.findIndex((u) => u.id === id && u.role === role);
+    if (index === -1 || users[index]!.status === "PENDING") {
+      throw new NotFoundException("Account not found.");
+    }
+    users[index] = { ...users[index]!, status };
+    await this.writeAll(users);
+    return users[index]!;
   }
 
   private async listPending(role: "PARTNER" | "EMPLOYEE"): Promise<StoredUser[]> {

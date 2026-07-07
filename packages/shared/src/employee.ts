@@ -32,6 +32,6 @@ export const EmployeeItem = z.object({
   phone: z.string().nullable(),
   username: z.string().nullable(),
   createdAt: z.string(),
-  status: z.enum(["PENDING", "ACTIVE"]),
+  status: z.enum(["PENDING", "ACTIVE", "INACTIVE"]),
 });
 export type EmployeeItem = z.infer<typeof EmployeeItem>;

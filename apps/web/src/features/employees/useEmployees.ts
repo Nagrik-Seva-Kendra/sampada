@@ -3,6 +3,17 @@ import type { EmployeeItem } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
+/** Admin: active (already-approved) employees. */
+export function useEmployeesList() {
+  const token = useAuthStore((s) => s.token);
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  return useQuery({
+    queryKey: ["employees"],
+    enabled: !!token && isAdmin,
+    queryFn: () => api.get("employees", { headers: authHeaders(token) }).json<EmployeeItem[]>(),
+  });
+}
+
 /** Admin: employee signups awaiting approval. */
 export function usePendingEmployees() {
   const token = useAuthStore((s) => s.token);
@@ -30,6 +41,28 @@ export function useRejectEmployee() {
   const qc = useQueryClient();
   return useMutation<unknown, Error, string>({
     mutationFn: (id) => api.delete(`employees/${id}`, { headers: authHeaders(token) }).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+  });
+}
+
+/** Admin: discontinue an employee's services (blocks login, keeps the record). */
+export function useDeactivateEmployee() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<EmployeeItem, Error, string>({
+    mutationFn: (id) =>
+      api.post(`employees/${id}/deactivate`, { headers: authHeaders(token) }).json<EmployeeItem>(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+  });
+}
+
+/** Admin: restore a discontinued employee's access. */
+export function useReactivateEmployee() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<EmployeeItem, Error, string>({
+    mutationFn: (id) =>
+      api.post(`employees/${id}/reactivate`, { headers: authHeaders(token) }).json<EmployeeItem>(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
   });
 }
