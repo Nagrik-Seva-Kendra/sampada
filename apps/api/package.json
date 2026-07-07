@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
+    "bundle": "nest build && node scripts/bundle.mjs",
     "start": "node dist/main.js",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
@@ -33,6 +34,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.0",
     "@types/nodemailer": "^8.0.1",
+    "esbuild": "^0.28.1",
     "prisma": "^6.3.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
