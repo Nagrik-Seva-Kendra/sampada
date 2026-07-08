@@ -6,12 +6,12 @@ Migrates the legacy PHP/MariaDB app to a decoupled TypeScript stack.
 ## Structure
 ```
 apps/
-  api/         NestJS REST API                → deploy: Render / Fly.io
-  web/         Vite + React SPA               → deploy: Cloudflare Pages
+  api/         NestJS REST API                → deploy: Render (Neon Postgres + Cloudflare R2)
+  web/         Vite + React SPA               → deploy: Vercel
 packages/
   shared/      Zod schemas + shared types (the API contract)
 infra/
-  docker-compose.yml   Postgres (new) + MariaDB (legacy staging copy)
+  docker-compose.yml   Postgres (new) + MariaDB (legacy staging copy) — local dev only
 ```
 
 ## Stack
