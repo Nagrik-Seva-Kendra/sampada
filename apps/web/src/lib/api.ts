@@ -1,8 +1,12 @@
 import ky, { HTTPError } from "ky";
 
-/** Typed HTTP client. Proxied to the API via Vite in dev (see vite.config.ts). */
+/**
+ * Typed HTTP client. Proxied to the API via Vite in dev (see vite.config.ts).
+ * In production (web and api deployed as separate Vercel projects), set
+ * VITE_API_URL to the api project's URL; the API's CORS_ORIGIN must allow it.
+ */
 export const api = ky.create({
-  prefixUrl: "/api/v1",
+  prefixUrl: `${import.meta.env.VITE_API_URL ?? ""}/api/v1`,
   retry: 1,
   // credentials: "include" — enable when auth/refresh cookies land.
 });
