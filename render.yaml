@@ -1,17 +1,15 @@
 services:
   - type: web
-    name: sampada
+    name: sampada-api
     runtime: node
     plan: starter
     region: singapore
-    buildCommand: npx --yes pnpm@11.9.0 install --frozen-lockfile && npx --yes pnpm@11.9.0 --filter @sampada/shared build && npx --yes pnpm@11.9.0 --filter @sampada/web build && npx --yes pnpm@11.9.0 --filter @sampada/api bundle
+    buildCommand: npx --yes pnpm@11.9.0 install --frozen-lockfile && npx --yes pnpm@11.9.0 --filter @sampada/shared build && npx --yes pnpm@11.9.0 --filter @sampada/api bundle
     startCommand: node apps/api/deploy/server.cjs
     healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_VERSION
         value: 22.16.0
-      - key: WEB_DIST
-        value: apps/web/dist
       - key: UPLOAD_DIR
         value: /data/guideline
       - key: CORS_ORIGIN

@@ -38,9 +38,6 @@ importers:
       '@sampada/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      express:
-        specifier: ^5.0.1
-        version: 5.2.1
       helmet:
         specifier: ^8.0.0
         version: 8.2.0
