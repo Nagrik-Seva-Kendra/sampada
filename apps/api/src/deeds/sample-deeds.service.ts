@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { DeedType } from "@sampada/shared";
-import type { CreateSampleDeedInput, SampleDeedItem, UpdateSampleDeedInput } from "@sampada/shared";
+import type {
+  CreateSampleDeedInput,
+  SampleDeedItem,
+  SampleDeedListItem,
+  UpdateSampleDeedInput,
+} from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 
 /**
@@ -130,6 +135,24 @@ export class SampleDeedsService {
       (i) => i.createdByRole === "PARTNER" && (!creatorId || i.createdById === creatorId),
     );
     return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  /**
+   * ADMIN/EMPLOYEE: every sample deed across every type (all creators),
+   * combined, newest first — powers the "All Deeds" management page. Drops the
+   * heavy content body (fetched on demand via findById) to keep the list light.
+   */
+  async listAll(): Promise<SampleDeedListItem[]> {
+    const buckets = await Promise.all(DeedType.options.map((t) => this.loadType(t)));
+    const all = buckets.flatMap((bucket) => [...bucket.values()]);
+    return all
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(({ content: _content, ...rest }) => rest);
+  }
+
+  /** Fetch one sample deed (with its full content) by id, or null if absent. */
+  async getOne(id: string): Promise<SampleDeedItem | null> {
+    return this.findById(id);
   }
 
   /** Draft a new deed for a type, owned by the caller. */

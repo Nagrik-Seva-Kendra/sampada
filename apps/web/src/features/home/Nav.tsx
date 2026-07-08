@@ -79,6 +79,11 @@ export function Nav() {
               {t("navDeeds")} <span className="nav-dd-caret">▾</span>
             </a>
             <div className="nav-dd-menu" role="menu">
+              {(isAdmin || isEmployee) && (
+                <Link to="/all-deed-details" onClick={() => setDeedsOpen(false)}>
+                  {t("navAllDeedDetails")}
+                </Link>
+              )}
               {DEEDS.map((d) => (
                 <Link
                   key={d.slug}

@@ -17,6 +17,7 @@ import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { MyDeedsPage } from "./features/deeds/MyDeedsPage";
 import { EmployeeDeedsPage } from "./features/deeds/EmployeeDeedsPage";
 import { PartnerDeedsPage } from "./features/deeds/PartnerDeedsPage";
+import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { DeedRegisterEditPage } from "./features/deeds/DeedRegisterEditPage";
 import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
@@ -103,6 +104,11 @@ function GuardedEmployeeDeedsPage() {
   const isEmployee = useAuthStore((s) => s.user?.role === "EMPLOYEE");
   return isEmployee ? <EmployeeDeedsPage /> : <Navigate to="/" />;
 }
+// "All Deeds" management table (every user's deeds) is admin + employee only.
+function GuardedAllDeedsPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  return role === "ADMIN" || role === "EMPLOYEE" ? <AllDeedsPage /> : <Navigate to="/" />;
+}
 
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
@@ -121,6 +127,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/employee-requests", component: GuardedEmployeeRequestsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/partner-requests", component: GuardedPartnerRequestsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/all-deeds", component: GuardedEmployeeDeedsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/all-deed-details", component: GuardedAllDeedsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/profile", component: GuardedProfilePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: GuardedDeedsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug", component: GuardedDeedDetailPage }),

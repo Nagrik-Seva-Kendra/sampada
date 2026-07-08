@@ -67,6 +67,10 @@ export const SampleDeedItem = z.object({
 });
 export type SampleDeedItem = z.infer<typeof SampleDeedItem>;
 
+/** Lightweight row for the "All Deeds" listing (drops the heavy content body). */
+export const SampleDeedListItem = SampleDeedItem.omit({ content: true });
+export type SampleDeedListItem = z.infer<typeof SampleDeedListItem>;
+
 /** A deed record. Visibility: creator always; ADMIN sees partners' deeds too. */
 export const DeedRecordItem = z.object({
   id: z.string(),

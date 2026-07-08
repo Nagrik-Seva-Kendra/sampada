@@ -37,3 +37,4 @@ apps/api/uploads/
 apps/api/deploy/
 deploy-dist/
 nsk-deploy.zip
+dist-cpanel/

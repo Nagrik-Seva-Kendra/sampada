@@ -4,6 +4,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -36,6 +37,26 @@ export class SampleDeedsController {
       throw new ForbiddenException("Only admin/employee can view the partner list.");
     }
     return this.service.listPartners(creatorId);
+  }
+
+  /** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page. */
+  @Get("all")
+  all(@Req() req: StaffRequest) {
+    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only admin/employee can view all deeds.");
+    }
+    return this.service.listAll();
+  }
+
+  /** Admin/Employee: one sample deed with its full content (for view/print). */
+  @Get(":id")
+  async getOne(@Param("id") id: string, @Req() req: StaffRequest) {
+    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only admin/employee can view this deed.");
+    }
+    const deed = await this.service.getOne(id);
+    if (!deed) throw new NotFoundException("Deed not found.");
+    return deed;
   }
 
   /** Draft a new deed for a type, owned by the caller. */

@@ -3,6 +3,7 @@ import type {
   CreateSampleDeedInput,
   DeedType,
   SampleDeedItem,
+  SampleDeedListItem,
   UpdateSampleDeedInput,
 } from "@sampada/shared";
 import { api } from "../../lib/api";
@@ -36,6 +37,30 @@ export function useAllPartnerSampleDeeds(creatorId: string | null) {
           searchParams: creatorId ? { creatorId } : {},
         })
         .json<SampleDeedItem[]>(),
+  });
+}
+
+/** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page. Light rows (no content). */
+export function useAllDeeds() {
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.user?.role);
+  const canView = role === "ADMIN" || role === "EMPLOYEE";
+  return useQuery({
+    queryKey: ["sample-deeds", "all"],
+    enabled: !!token && canView,
+    queryFn: () =>
+      api.get("sample-deeds/all", { headers: authHeaders(token) }).json<SampleDeedListItem[]>(),
+  });
+}
+
+/** Admin/Employee: fetch one sample deed with its full content (for view/print). */
+export function useSampleDeed(id: string | null) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["sample-deeds", "one", id],
+    enabled: !!token && !!id,
+    queryFn: () =>
+      api.get(`sample-deeds/${id}`, { headers: authHeaders(token) }).json<SampleDeedItem>(),
   });
 }
 
