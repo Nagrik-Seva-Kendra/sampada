@@ -3,6 +3,14 @@
 // PostgreSQL. Deed templates are read from the live records/ directory (the
 // source SampleDeedsService actually reads/writes), not the stale .bak
 // snapshot. User passwords are kept as-is (rehash required on next login).
+//
+// Templates are inserted with createMany({ skipDuplicates }) in chunks: one
+// round-trip per CHUNK_SIZE rows rather than two per row, which is the
+// difference between seconds and half an hour against a remote database.
+// skipDuplicates makes the whole script safely re-runnable — a partial import
+// tops itself up instead of erroring on ids that already landed.
+//
+//   node scripts/migrate-real-data.mjs [--dry-run]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -14,6 +22,19 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const usersFile = path.resolve(here, "..", "uploads", "users", "users.jsonl");
 const templatesDir = path.resolve(here, "..", "uploads", "sample-deeds", "records");
 const prisma = new PrismaClient();
+
+const DRY_RUN = process.argv.includes("--dry-run");
+const CHUNK_SIZE = 500;
+
+/** Host of the target database, credentials stripped — so a prod run is never a surprise. */
+function targetHost() {
+  try {
+    const u = new URL(process.env.DATABASE_URL ?? "");
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return "<unparseable DATABASE_URL>";
+  }
+}
 
 async function readJsonLines(filePath) {
   const rows = [];
@@ -44,7 +65,6 @@ async function migrateUsers() {
 
   // Legacy roles map 1:1 onto the new Role enum — no remapping needed.
   const validRoles = new Set(["PUBLIC", "PARTNER", "EMPLOYEE", "ADMIN"]);
-
   const validStatuses = new Set(["PENDING", "ACTIVE", "INACTIVE"]);
 
   for (const user of legacyUsers) {
@@ -65,6 +85,11 @@ async function migrateUsers() {
         status,
       };
 
+      if (DRY_RUN) {
+        console.log(`· would upsert: ${user.email} (${role})`);
+        continue;
+      }
+
       const existing = await prisma.user.findUnique({ where: { email: user.email } });
       if (existing) {
         await prisma.user.update({ where: { id: existing.id }, data });
@@ -80,6 +105,24 @@ async function migrateUsers() {
   }
 }
 
+/** One template file → a DeedTemplate row, or null if it can't be parsed. */
+function toRow(file) {
+  const raw = fs.readFileSync(path.join(templatesDir, file), "utf8");
+  const item = JSON.parse(raw);
+  if (!item.id) throw new Error("missing id");
+  return {
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    content: item.content ?? "",
+    status: item.status === "inactive" ? "inactive" : "active",
+    createdById: item.createdById || "legacy",
+    createdByName: item.createdByName || "Unknown",
+    createdByRole: item.createdByRole ?? null,
+    createdAt: new Date(item.createdAt),
+  };
+}
+
 async function migrateDeedTemplates() {
   if (!fs.existsSync(templatesDir)) {
     console.log("⊘ Deed template records directory not found, skipping");
@@ -90,57 +133,59 @@ async function migrateDeedTemplates() {
   const files = fs.readdirSync(templatesDir).filter((f) => f.endsWith(".json"));
   console.log(`✓ Found ${files.length} template files`);
 
-  let count = 0;
-  let skipped = 0;
   const errors = [];
+  const seen = new Set(); // guards against two files carrying the same id
+  let inserted = 0;
+  let processed = 0;
+  let batch = [];
+
+  const flush = async () => {
+    if (batch.length === 0) return;
+    if (DRY_RUN) {
+      inserted += batch.length;
+    } else {
+      const res = await prisma.deedTemplate.createMany({ data: batch, skipDuplicates: true });
+      inserted += res.count;
+    }
+    processed += batch.length;
+    batch = [];
+    process.stdout.write(`  ... processed ${processed}/${files.length} (inserted ${inserted})\r`);
+  };
 
   for (const file of files) {
     try {
-      const raw = fs.readFileSync(path.join(templatesDir, file), "utf8");
-      const item = JSON.parse(raw);
-
-      const existing = await prisma.deedTemplate.findUnique({
-        where: { id: item.id },
-        select: { id: true },
-      });
-      if (existing) {
-        skipped++;
-        continue;
-      }
-
-      await prisma.deedTemplate.create({
-        data: {
-          id: item.id,
-          type: item.type,
-          title: item.title,
-          content: item.content ?? "",
-          status: item.status === "inactive" ? "inactive" : "active",
-          createdById: item.createdById || "legacy",
-          createdByName: item.createdByName || "Unknown",
-          createdByRole: item.createdByRole ?? null,
-          createdAt: new Date(item.createdAt),
-        },
-      });
-
-      count++;
-      if (count % 1000 === 0) console.log(`  ... imported ${count}`);
+      const row = toRow(file);
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      batch.push(row);
+      if (batch.length >= CHUNK_SIZE) await flush();
     } catch (error) {
       errors.push({ file, error: error.message });
     }
   }
+  await flush();
+  process.stdout.write("\n");
 
+  const skipped = seen.size - inserted;
   if (skipped > 0) console.log(`⊘ Skipped ${skipped} already-imported templates`);
   if (errors.length > 0) {
     console.warn(`⚠️  ${errors.length} templates had errors (sample):`);
     errors.slice(0, 5).forEach((e) => console.warn(`   ${e.file}: ${e.error}`));
   }
 
-  return count;
+  return inserted;
 }
 
 async function main() {
   try {
-    console.log("🚀 Starting data migration...\n");
+    console.log(`🚀 Starting data migration${DRY_RUN ? " (DRY RUN — no writes)" : ""}`);
+    console.log(`   target: ${targetHost()}\n`);
+
+    const before = DRY_RUN
+      ? null
+      : { users: await prisma.user.count(), templates: await prisma.deedTemplate.count() };
+    if (before) console.log(`   before: User=${before.users} DeedTemplate=${before.templates}\n`);
+
     await migrateUsers();
     const templateCount = await migrateDeedTemplates();
 
@@ -148,6 +193,12 @@ async function main() {
     console.log("\n📋 Summary:");
     console.log("   - Users migrated with legacy password hash (rehash on first login)");
     console.log(`   - ${templateCount} deed templates imported (full content preserved)`);
+
+    if (!DRY_RUN) {
+      const users = await prisma.user.count();
+      const templates = await prisma.deedTemplate.count();
+      console.log(`   - after: User=${users} DeedTemplate=${templates}`);
+    }
   } catch (error) {
     console.error("\n❌ Migration failed:", error);
     process.exit(1);

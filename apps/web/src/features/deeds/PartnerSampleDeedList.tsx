@@ -1,23 +1,31 @@
 import { useState } from "react";
-import type { SampleDeedItem } from "@sampada/shared";
+import type { SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
-import { useScrollLock } from "../../lib/useScrollLock";
+import { DeedViewModal } from "./DeedViewModal";
+import { useFetchSampleDeed } from "./useSampleDeeds";
 
 /** Read-only oversight table: a partner's sample deeds across every category (admin's "All Partner Deeds" page). */
-export function PartnerSampleDeedList({ deeds }: { deeds: SampleDeedItem[] }) {
+export function PartnerSampleDeedList({ deeds }: { deeds: SampleDeedListItem[] }) {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
-  const [viewing, setViewing] = useState<SampleDeedItem | null>(null);
-  useScrollLock(!!viewing);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fetchDeed = useFetchSampleDeed();
+
+  async function onPrint(item: SampleDeedListItem) {
+    setBusy(true);
+    try {
+      const full = await fetchDeed(item.id);
+      printDeed(full.title, full.content);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (deeds.length === 0) return <p className="doc-empty">{t("drEmpty")}</p>;
-
-  function onPrint(item: SampleDeedItem) {
-    printDeed(item.title, item.content);
-  }
 
   return (
     <div className="dr-records" style={{ marginTop: 12 }}>
@@ -45,10 +53,11 @@ export function PartnerSampleDeedList({ deeds }: { deeds: SampleDeedItem[] }) {
                   <select
                     className="district-input dr-action-select"
                     value=""
+                    disabled={busy}
                     onChange={(e) => {
                       const action = e.target.value;
-                      if (action === "view") setViewing(d);
-                      else if (action === "print") onPrint(d);
+                      if (action === "view") setViewingId(d.id);
+                      else if (action === "print") void onPrint(d);
                     }}
                   >
                     <option value="" disabled hidden>
@@ -64,24 +73,13 @@ export function PartnerSampleDeedList({ deeds }: { deeds: SampleDeedItem[] }) {
         </table>
       </div>
 
-      {viewing && (
-        <div className="modal-overlay" onClick={() => setViewing(null)}>
-          <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <h3>{viewing.title}</h3>
-              <button className="modal-close" onClick={() => setViewing(null)} aria-label="Close">
-                ✕
-              </button>
-            </div>
-            <p>
-              <strong>{findDeed(viewing.type)?.name[lang] ?? viewing.type}</strong>
-            </p>
-            <p>
-              {t("drBy")} <strong>{viewing.createdByName}</strong>
-            </p>
-            <p style={{ whiteSpace: "pre-wrap" }}>{viewing.content}</p>
-          </div>
-        </div>
+      {viewingId && (
+        <DeedViewModal
+          id={viewingId}
+          onClose={() => setViewingId(null)}
+          showCategory
+          showCreator
+        />
       )}
     </div>
   );

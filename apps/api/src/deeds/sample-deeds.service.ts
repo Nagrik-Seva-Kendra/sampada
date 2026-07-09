@@ -26,6 +26,37 @@ function toItem(row: DeedTemplate): SampleDeedItem {
 }
 
 /**
+ * Every column except `content`. Lists must never select it: one deed body runs
+ * to 30KB, so a full deed type (sale-deed: ~5.8k rows) would serialize ~40MB
+ * and exhaust the API's memory. Callers fetch the body per-deed via getOne().
+ */
+const LIST_SELECT = {
+  id: true,
+  type: true,
+  title: true,
+  status: true,
+  createdById: true,
+  createdByName: true,
+  createdByRole: true,
+  createdAt: true,
+} as const;
+
+type ListRow = Omit<DeedTemplate, "content" | "updatedAt">;
+
+function toListItem(row: ListRow): SampleDeedListItem {
+  return {
+    id: row.id,
+    type: row.type as DeedType,
+    title: row.title,
+    status: row.status as SampleDeedListItem["status"],
+    createdById: row.createdById,
+    createdByName: row.createdByName,
+    createdByRole: (row.createdByRole ?? undefined) as SampleDeedListItem["createdByRole"],
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
  * Example deeds shown on a deed-type's public info page. Each staff member
  * (admin or partner) can draft their own; ADMIN additionally sees everyone's.
  * Backed by the DeedTemplate table.
@@ -40,15 +71,16 @@ export class SampleDeedsService {
    * partner's own register / the admin's "All Partner Deeds" page). PARTNER
    * sees only their own. Newest first.
    */
-  async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedItem[]> {
+  async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedListItem[]> {
     const canViewAll = user.role === "ADMIN" || user.role === "EMPLOYEE";
     const rows = await this.prisma.deedTemplate.findMany({
       where: canViewAll
         ? { type, OR: [{ createdByRole: { not: "PARTNER" } }, { createdByRole: null }] }
         : { type, createdById: user.id },
       orderBy: { createdAt: "desc" },
+      select: LIST_SELECT,
     });
-    return rows.map(toItem);
+    return rows.map(toListItem);
   }
 
   /**
@@ -56,12 +88,13 @@ export class SampleDeedsService {
    * combined, newest first — powers the admin's "All Partner Deeds" page.
    * Pass creatorId to narrow it down to one partner.
    */
-  async listPartners(creatorId?: string): Promise<SampleDeedItem[]> {
+  async listPartners(creatorId?: string): Promise<SampleDeedListItem[]> {
     const rows = await this.prisma.deedTemplate.findMany({
       where: { createdByRole: "PARTNER", ...(creatorId ? { createdById: creatorId } : {}) },
       orderBy: { createdAt: "desc" },
+      select: LIST_SELECT,
     });
-    return rows.map(toItem);
+    return rows.map(toListItem);
   }
 
   /**
@@ -72,27 +105,9 @@ export class SampleDeedsService {
   async listAll(): Promise<SampleDeedListItem[]> {
     const rows = await this.prisma.deedTemplate.findMany({
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        type: true,
-        title: true,
-        status: true,
-        createdById: true,
-        createdByName: true,
-        createdByRole: true,
-        createdAt: true,
-      },
+      select: LIST_SELECT,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      type: row.type as DeedType,
-      title: row.title,
-      status: row.status as SampleDeedListItem["status"],
-      createdById: row.createdById,
-      createdByName: row.createdByName,
-      createdByRole: (row.createdByRole ?? undefined) as SampleDeedListItem["createdByRole"],
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return rows.map(toListItem);
   }
 
   /** Deed counts per creator id (for the admin's partner list). */

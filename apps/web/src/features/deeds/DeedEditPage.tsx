@@ -4,7 +4,7 @@ import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
-import { useSampleDeeds, useUpdateSampleDeed } from "./useSampleDeeds";
+import { useSampleDeed, useUpdateSampleDeed } from "./useSampleDeeds";
 import { printDeed } from "./printDeed";
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
@@ -15,9 +15,9 @@ export function DeedEditPage() {
   const type = slug as DeedType;
   const deed = findDeed(slug);
 
-  const records = useSampleDeeds(type);
+  const record = useSampleDeed(id);
   const update = useUpdateSampleDeed(type);
-  const item = records.data?.find((r) => r.id === id);
+  const item = record.data;
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -40,7 +40,7 @@ export function DeedEditPage() {
     );
   }
 
-  if (records.isLoading) {
+  if (record.isLoading) {
     return (
       <section className="page">
         <div className="wrap">…</div>

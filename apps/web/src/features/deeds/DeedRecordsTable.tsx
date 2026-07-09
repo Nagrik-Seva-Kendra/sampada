@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DeedType, SampleDeedItem } from "@sampada/shared";
+import type { DeedType, SampleDeedListItem } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { useAuthStore, useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { useCreateSampleDeed, useDeleteSampleDeed, useSampleDeeds } from "./useSampleDeeds";
+import {
+  useCreateSampleDeed,
+  useDeleteSampleDeed,
+  useFetchSampleDeed,
+  useSampleDeeds,
+} from "./useSampleDeeds";
 import { printDeed } from "./printDeed";
-import { useScrollLock } from "../../lib/useScrollLock";
+import { DeedViewModal } from "./DeedViewModal";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -28,9 +33,10 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
   const records = useSampleDeeds(type);
   const create = useCreateSampleDeed();
   const del = useDeleteSampleDeed(type);
+  const fetchDeed = useFetchSampleDeed();
 
-  const [viewing, setViewing] = useState<SampleDeedItem | null>(null);
-  useScrollLock(!!viewing);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -48,24 +54,36 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
   }
 
   /** Duplicate an existing deed's content into a new deed under a new name. */
-  function onDuplicate(source: SampleDeedItem) {
+  async function onDuplicate(source: SampleDeedListItem) {
     const name = window.prompt(t("deedsCreateNamePrompt"));
     if (!name || !name.trim()) return;
-    create.mutate(
-      { type, title: name.trim(), content: source.content },
-      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
-    );
+    setBusy(true);
+    try {
+      const full = await fetchDeed(source.id);
+      create.mutate(
+        { type, title: name.trim(), content: full.content },
+        { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function openEdit(item: SampleDeedItem) {
+  function openEdit(item: SampleDeedListItem) {
     window.open(`/deeds/${type}/edit/${item.id}`, "_blank");
   }
 
-  function onPrint(item: SampleDeedItem) {
-    printDeed(item.title, item.content);
+  async function onPrint(item: SampleDeedListItem) {
+    setBusy(true);
+    try {
+      const full = await fetchDeed(item.id);
+      printDeed(full.title, full.content);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function onDelete(item: SampleDeedItem) {
+  function onDelete(item: SampleDeedListItem) {
     if (window.confirm(t("deedsDeleteConfirm"))) {
       del.mutate(item.id);
     }
@@ -127,12 +145,13 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                   <select
                     className="district-input dr-action-select"
                     value=""
+                    disabled={busy}
                     onChange={(e) => {
                       const action = e.target.value;
-                      if (action === "view") setViewing(r);
+                      if (action === "view") setViewingId(r.id);
                       else if (action === "edit") openEdit(r);
-                      else if (action === "create") onDuplicate(r);
-                      else if (action === "print") onPrint(r);
+                      else if (action === "create") void onDuplicate(r);
+                      else if (action === "print") void onPrint(r);
                       else if (action === "delete") onDelete(r);
                     }}
                   >
@@ -181,23 +200,12 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
         </div>
       )}
 
-      {viewing && (
-        <div className="modal-overlay" onClick={() => setViewing(null)}>
-          <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <h3>{viewing.title}</h3>
-              <button className="modal-close" onClick={() => setViewing(null)} aria-label="Close">
-                ✕
-              </button>
-            </div>
-            {showCreator && (
-              <p>
-                {t("drBy")} <strong>{viewing.createdByName}</strong>
-              </p>
-            )}
-            <p style={{ whiteSpace: "pre-wrap" }}>{viewing.content}</p>
-          </div>
-        </div>
+      {viewingId && (
+        <DeedViewModal
+          id={viewingId}
+          onClose={() => setViewingId(null)}
+          showCreator={showCreator}
+        />
       )}
     </div>
   );

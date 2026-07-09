@@ -48,14 +48,19 @@ export class SampleDeedsController {
     return this.service.listAll();
   }
 
-  /** Admin/Employee: one sample deed with its full content (for view/print). */
+  /**
+   * One sample deed with its full content (for view/print/edit). Lists omit the
+   * body, so this is the only way to read it. ADMIN/EMPLOYEE may read any deed;
+   * a PARTNER may read only their own.
+   */
   @Get(":id")
   async getOne(@Param("id") id: string, @Req() req: StaffRequest) {
-    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
-      throw new ForbiddenException("Only admin/employee can view this deed.");
-    }
     const deed = await this.service.getOne(id);
     if (!deed) throw new NotFoundException("Deed not found.");
+    const canViewAny = req.user.role === "ADMIN" || req.user.role === "EMPLOYEE";
+    if (!canViewAny && deed.createdById !== req.user.id) {
+      throw new NotFoundException("Deed not found.");
+    }
     return deed;
   }
 

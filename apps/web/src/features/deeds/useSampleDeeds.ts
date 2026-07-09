@@ -9,7 +9,7 @@ import type {
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
-/** Own sample deeds for one deed type (ADMIN: everyone's). */
+/** Own sample deeds for one deed type (ADMIN: everyone's). Metadata only — no `content`. */
 export function useSampleDeeds(type: DeedType) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
@@ -18,7 +18,7 @@ export function useSampleDeeds(type: DeedType) {
     queryFn: () =>
       api
         .get("sample-deeds", { headers: authHeaders(token), searchParams: { type } })
-        .json<SampleDeedItem[]>(),
+        .json<SampleDeedListItem[]>(),
   });
 }
 
@@ -36,7 +36,7 @@ export function useAllPartnerSampleDeeds(creatorId: string | null) {
           headers: authHeaders(token),
           searchParams: creatorId ? { creatorId } : {},
         })
-        .json<SampleDeedItem[]>(),
+        .json<SampleDeedListItem[]>(),
   });
 }
 
@@ -53,7 +53,7 @@ export function useAllDeeds() {
   });
 }
 
-/** Admin/Employee: fetch one sample deed with its full content (for view/print). */
+/** Fetch one sample deed with its full content (for view/print/edit). */
 export function useSampleDeed(id: string | null) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
@@ -62,6 +62,21 @@ export function useSampleDeed(id: string | null) {
     queryFn: () =>
       api.get(`sample-deeds/${id}`, { headers: authHeaders(token) }).json<SampleDeedItem>(),
   });
+}
+
+/**
+ * Imperative counterpart to useSampleDeed, for actions that need the body but
+ * don't render it (print, duplicate). Shares useSampleDeed's cache entry.
+ */
+export function useFetchSampleDeed() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return (id: string) =>
+    qc.fetchQuery({
+      queryKey: ["sample-deeds", "one", id],
+      queryFn: () =>
+        api.get(`sample-deeds/${id}`, { headers: authHeaders(token) }).json<SampleDeedItem>(),
+    });
 }
 
 export function useCreateSampleDeed() {
@@ -85,7 +100,12 @@ export function useUpdateSampleDeed(type: DeedType) {
       api
         .patch(`sample-deeds/${id}`, { headers: authHeaders(token), json: input })
         .json<SampleDeedItem>(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sample-deeds", type] }),
+    // The body lives in its own cache entry now — stale it too, or view/print
+    // would keep serving the pre-edit content.
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
+      qc.invalidateQueries({ queryKey: ["sample-deeds", "one", id] });
+    },
   });
 }
 
@@ -95,6 +115,9 @@ export function useDeleteSampleDeed(type: DeedType) {
   return useMutation<unknown, Error, string>({
     mutationFn: (id) =>
       api.delete(`sample-deeds/${id}`, { headers: authHeaders(token) }).json(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sample-deeds", type] }),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
+      qc.removeQueries({ queryKey: ["sample-deeds", "one", id] });
+    },
   });
 }
