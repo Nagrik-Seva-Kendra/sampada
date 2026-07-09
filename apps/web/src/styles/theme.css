@@ -4,6 +4,36 @@
    Colors, radii, shadows, and type are locked — do not re-theme.
    ============================================================ */
 
+@import "tailwindcss";
+
+/* shadcn/ui variables mapped onto the locked design tokens below,
+   so shadcn components render in the same theme instead of a second palette. */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: #b3261e;
+  --color-destructive-foreground: var(--primary-fg);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 :root {
   --bg: #f8f3ec;
   --surface: #fffdf9;
@@ -75,77 +105,6 @@ h3 {
 .wrap {
   max-width: 1120px;
   margin: 0 auto;
-}
-
-/* ---------- utility bar ---------- */
-.util {
-  background: var(--primary);
-  color: var(--primary-fg);
-  font-size: 12.5px;
-}
-.util .wrap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 9px 32px;
-}
-.util .left {
-  display: flex;
-  gap: 20px;
-  opacity: 0.92;
-}
-.util .right {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-.seg {
-  display: flex;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  padding: 2px;
-}
-.seg button {
-  border: none;
-  border-radius: 4px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.8);
-}
-.seg button.on {
-  background: var(--accent);
-  color: #fff;
-}
-.util .toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.13);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 6px;
-  padding: 5px 11px;
-  color: var(--primary-fg);
-  font-size: 12px;
-  font-weight: 600;
-}
-.util-auth {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.util-user {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.92;
-}
-.util-auth a {
-  font-weight: 700;
-  text-decoration: underline;
 }
 
 /* login modal */
@@ -342,12 +301,72 @@ h3 {
   font-size: 13.5px;
   transition: background 0.15s;
 }
-.btn-partner-sm {
-  padding: 7px 13px;
-  font-size: 12px;
-}
 .btn-partner:hover {
   background: var(--accent-2);
+}
+
+/* header controls: language segment + theme toggle + avatar, on the neutral nav bar */
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nav-seg {
+  display: flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.nav-seg button {
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  background: transparent;
+  color: var(--muted);
+}
+.nav-seg button.on {
+  background: var(--accent);
+  color: #fff;
+}
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.nav-dd-menu.right {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.nav-dd-user {
+  padding: 10px 18px !important;
+  font-size: 12.5px !important;
+  color: var(--muted) !important;
+  font-weight: 600;
 }
 
 /* ---------- hero ---------- */
@@ -548,6 +567,11 @@ h3 {
   letter-spacing: -0.01em;
 }
 .foot .links {
+  display: flex;
+  gap: 18px;
+  opacity: 0.85;
+}
+.foot .contact {
   display: flex;
   gap: 18px;
   opacity: 0.85;

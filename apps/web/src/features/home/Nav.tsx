@@ -1,31 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import type { Language } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
+import { LoginModal } from "../auth/LoginModal";
 
 // Buy/Sell intentionally omitted — feature dropped from scope.
 const NAV_ITEMS: { key: StringKey; to: string }[] = [{ key: "navHome", to: "/" }];
+const LANGS: Language[] = ["en", "hi"];
 
 export function Nav() {
-  const lang = useUiStore((s) => s.lang);
-  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
-  const isEmployee = useAuthStore((s) => s.user?.role === "EMPLOYEE");
+  const { theme, lang, toggleTheme, setLang } = useUiStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const isAdmin = user?.role === "ADMIN";
+  const isEmployee = user?.role === "EMPLOYEE";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const t = (k: StringKey) => translate(k, lang);
 
-  // Admin "Services" dropdown (Employee Requests) — click-toggled, closes on outside click.
-  const [servicesOpen, setServicesOpen] = useState(false);
-  const svcRef = useRef<HTMLDivElement>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  // Avatar dropdown (profile/employee-requests/logout) — click-toggled, closes on outside click.
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!servicesOpen) return;
+    if (!accountOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (svcRef.current && !svcRef.current.contains(e.target as Node)) setServicesOpen(false);
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setAccountOpen(false);
     };
     document.addEventListener("click", onDoc);
     return () => document.removeEventListener("click", onDoc);
-  }, [servicesOpen]);
+  }, [accountOpen]);
+
+  const initial = user?.fname?.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <nav className="nav">
@@ -55,25 +64,71 @@ export function Nav() {
             </Link>
           )}
 
-          {isAdmin && (
-            <div className={"nav-dd" + (servicesOpen ? " open" : "")} ref={svcRef}>
-              <a
-                className={pathname === "/employee-requests" ? "active" : ""}
-                onClick={() => setServicesOpen((o) => !o)}
-                aria-expanded={servicesOpen}
-                aria-haspopup="menu"
-              >
-                {t("navServices")} <span className="nav-dd-caret">▾</span>
-              </a>
-              <div className="nav-dd-menu" role="menu">
-                <Link to="/employee-requests" onClick={() => setServicesOpen(false)}>
-                  {t("navEmployeeRequests")}
-                </Link>
-              </div>
+          <div className="nav-controls">
+            <div className="nav-seg" role="group" aria-label="Language">
+              {LANGS.map((l) => (
+                <button
+                  key={l}
+                  className={lang === l ? "on" : ""}
+                  onClick={() => setLang(l)}
+                  aria-pressed={lang === l}
+                >
+                  {l === "en" ? "EN" : "हिं"}
+                </button>
+              ))}
             </div>
-          )}
+            <button className="nav-toggle" onClick={toggleTheme} aria-label="Toggle theme">
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+
+            {user ? (
+              <div className={"nav-dd" + (accountOpen ? " open" : "")} ref={accountRef}>
+                <button
+                  type="button"
+                  className="avatar"
+                  onClick={() => setAccountOpen((o) => !o)}
+                  aria-expanded={accountOpen}
+                  aria-haspopup="menu"
+                  title={`${user.fname} ${user.lname}`.trim()}
+                >
+                  {initial}
+                </button>
+                <div className="nav-dd-menu right" role="menu">
+                  <span className="nav-dd-user">
+                    {user.fname} {user.lname}
+                  </span>
+                  {isEmployee && (
+                    <Link to="/profile" onClick={() => setAccountOpen(false)}>
+                      {t("navProfile")}
+                    </Link>
+                  )}
+                  {isAdmin && (
+                    <Link
+                      to="/employee-requests"
+                      className={pathname === "/employee-requests" ? "active" : ""}
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      {t("navEmployeeRequests")}
+                    </Link>
+                  )}
+                  <a
+                    onClick={() => {
+                      setAccountOpen(false);
+                      logout();
+                    }}
+                  >
+                    {t("authLogout")}
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <a onClick={() => setLoginOpen(true)}>{t("login")}</a>
+            )}
+          </div>
         </div>
       </div>
+
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
     </nav>
   );
 }

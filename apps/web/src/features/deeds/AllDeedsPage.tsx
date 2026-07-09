@@ -6,10 +6,13 @@ import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
 import { useScrollLock } from "../../lib/useScrollLock";
 import { useAllDeeds, useDeedCreators, useSampleDeed } from "./useSampleDeeds";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PAGE_SIZE = 25;
+const ALL = "__all__";
 
-/** Shared height/box-sizing so the type dropdown trigger lines up with the native <select>s beside it. */
+/** Shared height/box-sizing so the type dropdown trigger lines up with the shadcn Selects beside it. */
 const FILTER_CONTROL_STYLE: CSSProperties = {
   height: 36,
   boxSizing: "border-box",
@@ -84,53 +87,15 @@ export function AllDeedsPage() {
           <span className="rule" />
           {t("allDeedsKicker")}
         </div>
-        <h2 className="page-title">{t("allDeedsTitle")}</h2>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 10,
-            margin: "16px 0 8px",
-          }}
-        >
-          <TypeFilter selected={selectedTypes} onChange={setSelectedTypes} t={t} lang={lang} />
-
-          <select
-            className="district-input"
-            style={FILTER_CONTROL_STYLE}
-            value={status}
-            onChange={(e) => setStatus(e.target.value as DeedRecordStatus | "")}
-          >
-            <option value="">{t("allDeedsFilterAllStatuses")}</option>
-            <option value="active">{t("deedStatusActive")}</option>
-            <option value="inactive">{t("deedStatusInactive")}</option>
-          </select>
-
-          <select
-            className="district-input"
-            style={FILTER_CONTROL_STYLE}
-            value={createdById}
-            onChange={(e) => setCreatedById(e.target.value)}
-          >
-            <option value="">{t("allDeedsFilterAllCreators")}</option>
-            {(creators.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
-          {hasFilters && (
-            <button
-              type="button"
-              className="doc-btn"
-              style={{ height: FILTER_CONTROL_STYLE.height, boxSizing: "border-box" }}
-              onClick={clearFilters}
-            >
-              {t("allDeedsFilterClear")}
-            </button>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "4px 0 16px" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{t("allDeedsTitle")}</h2>
+          {deeds.data && (
+            <span style={{ fontSize: 13, opacity: 0.65 }}>
+              {debounced.trim()
+                ? `${t("allDeedsMatches")}: ${filtered.length} / ${rows.length}`
+                : `${t("allDeedsTotal")}: ${rows.length}`}
+            </span>
           )}
         </div>
 
@@ -139,18 +104,11 @@ export function AllDeedsPage() {
             display: "flex",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: 12,
-            margin: "4px 0 12px",
+            gap: 10,
+            margin: "0 0 12px",
           }}
         >
-          {deeds.data && (
-            <span style={{ fontSize: 14, opacity: 0.75 }}>
-              {debounced.trim()
-                ? `${t("allDeedsMatches")}: ${filtered.length} / ${rows.length}`
-                : `${t("allDeedsTotal")}: ${rows.length}`}
-            </span>
-          )}
-          <div style={{ position: "relative", width: 340, maxWidth: "100%", marginLeft: "auto" }}>
+          <div style={{ position: "relative", width: 340, maxWidth: "100%" }}>
             <input
               className="district-input"
               style={{ display: "block", width: "100%", paddingRight: 32, boxSizing: "border-box" }}
@@ -189,6 +147,49 @@ export function AllDeedsPage() {
               </button>
             )}
           </div>
+
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginLeft: "auto" }}>
+            <TypeFilter selected={selectedTypes} onChange={setSelectedTypes} t={t} lang={lang} />
+
+            <Select
+              value={status || ALL}
+              onValueChange={(v) => setStatus(v === ALL ? "" : (v as DeedRecordStatus))}
+            >
+              <SelectTrigger size="sm">
+                <SelectValue placeholder={t("allDeedsFilterAllStatuses")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t("allDeedsFilterAllStatuses")}</SelectItem>
+                <SelectItem value="active">{t("deedStatusActive")}</SelectItem>
+                <SelectItem value="inactive">{t("deedStatusInactive")}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={createdById || ALL} onValueChange={(v) => setCreatedById(v === ALL ? "" : v)}>
+              <SelectTrigger size="sm">
+                <SelectValue placeholder={t("allDeedsFilterAllCreators")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t("allDeedsFilterAllCreators")}</SelectItem>
+                {(creators.data ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {hasFilters && (
+              <button
+                type="button"
+                className="doc-btn"
+                style={{ height: FILTER_CONTROL_STYLE.height, boxSizing: "border-box" }}
+                onClick={clearFilters}
+              >
+                {t("allDeedsFilterClear")}
+              </button>
+            )}
+          </div>
         </div>
 
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}
@@ -208,35 +209,45 @@ export function AllDeedsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((d, i) => (
-                  <tr key={d.id}>
-                    <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
-                    <td>{formatDate(d.createdAt)}</td>
-                    <td>{d.title}</td>
-                    <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
-                    <td>
-                      <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
-                        {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
-                      </span>
-                    </td>
-                    <td>{d.createdByName}</td>
-                    <td>
-                      <select
-                        className="district-input dr-action-select"
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value === "view") setViewId(d.id);
-                        }}
-                      >
-                        <option value="" disabled hidden>
-                          {t("deedsActionPlaceholder")}
-                        </option>
-                        <option value="view">{t("deedsViewDeed")}</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-                {pageRows.length === 0 && (
+                {deeds.isLoading &&
+                  Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <tr key={`skeleton-${i}`}>
+                      <td colSpan={7}>
+                        <Skeleton className="h-5 w-full" />
+                      </td>
+                    </tr>
+                  ))}
+                {!deeds.isLoading &&
+                  pageRows.map((d, i) => (
+                    <tr key={d.id}>
+                      <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
+                      <td>{formatDate(d.createdAt)}</td>
+                      <td>{d.title}</td>
+                      <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
+                      <td>
+                        <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
+                          {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
+                        </span>
+                      </td>
+                      <td>{d.createdByName}</td>
+                      <td>
+                        <Select
+                          value=""
+                          onValueChange={(v) => {
+                            if (v === "view") setViewId(d.id);
+                          }}
+                        >
+                          <SelectTrigger size="sm" className="dr-action-select">
+                            <SelectValue placeholder={t("deedsActionPlaceholder")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="view">{t("deedsViewDeed")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    </tr>
+                  ))}
+                {!deeds.isLoading && pageRows.length === 0 && (
                   <tr>
                     <td colSpan={7} className="doc-empty">
                       {debounced.trim() ? t("deedsSearchEmpty") : t("drEmpty")}
@@ -311,8 +322,9 @@ function TypeFilter({
     <div className={"nav-dd" + (open ? " open" : "")} ref={ref}>
       <button
         type="button"
-        className="district-input"
-        style={{ ...FILTER_CONTROL_STYLE, gap: 6, cursor: "pointer" }}
+        className="flex h-8 items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none data-[state=open]:border-ring"
+        data-state={open ? "open" : "closed"}
+        style={{ cursor: "pointer" }}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"

@@ -15,6 +15,10 @@ export function Footer() {
     <footer className="foot">
       <div className="wrap">
         <span className="name">{t("brandName")}</span>
+        <div className="contact">
+          <span>{t("phone")}</span>
+          <span>{t("email")}</span>
+        </div>
         <div className="links">
           {LINKS.map((l) =>
             l.href ? (

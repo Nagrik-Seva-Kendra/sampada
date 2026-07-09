@@ -5,7 +5,6 @@ import {
   Navigate,
   Outlet,
 } from "@tanstack/react-router";
-import { UtilityBar } from "./features/home/UtilityBar";
 import { Nav } from "./features/home/Nav";
 import { Hero } from "./features/home/Hero";
 import { Services } from "./features/home/Services";
@@ -21,12 +20,13 @@ import { useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
   component: () => (
-    <>
-      <UtilityBar />
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Nav />
-      <Outlet />
+      <div style={{ flex: 1 }}>
+        <Outlet />
+      </div>
       <Footer />
-    </>
+    </div>
   ),
   notFoundComponent: () => <Navigate to="/" />,
 });

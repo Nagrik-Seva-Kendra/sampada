@@ -208,8 +208,6 @@ export const strings = {
     en: "Could not save — email may already be in use.",
     hi: "सहेजा नहीं जा सका — ईमेल पहले से उपयोग में हो सकता है।",
   },
-  navServices: { en: "Services", hi: "सेवाएं" },
-
   footAbout: { en: "About", hi: "परिचय" },
   footMpigr: { en: "MPIGR", hi: "एमपीआईजीआर" },
   copyright: { en: "© 2026 · Gwalior, M.P.", hi: "© 2026 · ग्वालियर, म.प्र." },
