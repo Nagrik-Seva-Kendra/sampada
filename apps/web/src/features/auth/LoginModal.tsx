@@ -9,7 +9,6 @@ import { useEmployeeSignup, useLogin, useSendEmailOtp, useVerifyEmailOtp } from 
 const TABS: { role: StaffRole; key: StringKey }[] = [
   { role: "EMPLOYEE", key: "authEmployeeLogin" },
   { role: "ADMIN", key: "authAdminLogin" },
-  { role: "PARTNER", key: "authPartnerLogin" },
 ];
 
 export function LoginModal({ onClose }: { onClose: () => void }) {

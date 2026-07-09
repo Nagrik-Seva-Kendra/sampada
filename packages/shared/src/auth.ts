@@ -4,22 +4,33 @@ import { Role, StaffRole } from "./enums.js";
 export const LoginInput = z.object({
   /** Which login tab the user picked — the resolved account must match this role. */
   role: StaffRole,
-  /** Partner/Employee: username (or email, kept working as a fallback). Admin: email. */
+  /** Employee: username (or email, kept working as a fallback). Admin: email. */
   login: z.string().trim().min(1),
   password: z.string().min(1),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
-export const RegisterInput = z.object({
-  fname: z.string().trim().min(1).max(100),
-  lname: z.string().trim().min(1).max(100),
-  email: z.string().email(),
-  mobile: z.string().trim().min(7).max(20),
-  address: z.string().trim().max(500).optional(),
-  occupation: z.string().trim().max(100).optional(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-export type RegisterInput = z.infer<typeof RegisterInput>;
+/** Employee self-service profile edit (all fields optional; only send what's changing). */
+export const UpdateProfileInput = z
+  .object({
+    fname: z.string().trim().min(1).max(100).optional(),
+    lname: z.string().trim().min(1).max(100).optional(),
+    email: z.string().email().optional(),
+    username: z
+      .string()
+      .trim()
+      .min(3)
+      .max(50)
+      .regex(/^[a-zA-Z0-9_.-]+$/, "Letters, numbers, dot, underscore, hyphen only")
+      .optional(),
+    currentPassword: z.string().optional(),
+    password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  })
+  .refine((v) => !v.password || !!v.currentPassword, {
+    message: "Current password is required to set a new password.",
+    path: ["currentPassword"],
+  });
+export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;
 
 export const AuthUser = z.object({
   id: z.string(),

@@ -1,153 +1,77 @@
 # Database Setup Guide
 
+Schema: two Prisma models, `User` (partners/employees; role-gated, admin stays
+on env credentials) and `DeedTemplate` (draft/example deeds shown on a
+deed-type's public info page). See `apps/api/prisma/schema.prisma` for the
+authoritative field list.
+
 ## 1. Local Development Database
 
 ### Prerequisites
-- PostgreSQL 16+ installed locally
+- PostgreSQL 16+ installed locally (or `pnpm db:up` — see `infra/README.md`)
 - Node.js + pnpm
 
 ### Setup Steps
-
-#### Windows (PowerShell)
-```powershell
-# Create local database
-$env:PGUSER = "postgres"
-$env:PGPASSWORD = "postgres"
-
-# Create database and user
-psql -h localhost -c "CREATE DATABASE sampada_dev;"
-psql -h localhost -d sampada_dev -c "CREATE USER sampada WITH PASSWORD 'sampada';"
-psql -h localhost -d sampada_dev -c "GRANT ALL PRIVILEGES ON DATABASE sampada_dev TO sampada;"
+```bash
+createdb sampada_dev
 ```
 
-#### .env.local (for local development)
+### .env (apps/api/.env, copied from .env.example)
 ```
 DATABASE_URL="postgresql://sampada:sampada@localhost:5432/sampada_dev?schema=public"
+DIRECT_URL="postgresql://sampada:sampada@localhost:5432/sampada_dev?schema=public"
 ```
+`DIRECT_URL` matters once you point at Neon (below) — locally, with no
+connection pooler, it's just the same value as `DATABASE_URL`.
 
 ### Initialize Schema
 ```bash
 cd apps/api
-pnpm prisma:migrate dev --name init
+pnpm prisma:generate
+pnpm prisma:migrate dev   # applies the committed migrations
 ```
 
 ---
 
 ## 2. Production Database (Neon)
 
-### Neon PostgreSQL Setup
-
-1. **Create Neon Project:**
-   - Go to https://console.neon.tech
-   - Create new project (name: "sampada-prod")
-   - Save the connection string:
-     ```
-     postgresql://[user]:[password]@[host]/[dbname]
-     ```
-
-2. **Environment Variable:**
-   In Render environment settings, add:
+1. **Create a Neon project** at https://console.neon.tech.
+2. Neon gives you two connection strings — a pooled one (PgBouncer) and a
+   direct one. Grab both.
+3. **In Render** (`sampada-api` service → Environment):
    ```
-   DATABASE_URL=postgresql://[user]:[password]@[host]/sampada_prod
+   DATABASE_URL=<neon pooled connection string>
+   DIRECT_URL=<neon direct connection string>
    ```
-
-3. **Initial Schema Migration:**
-   ```bash
-   # Run migrations on Neon production
-   DATABASE_URL="your-neon-url" pnpm prisma:migrate deploy
-   ```
+4. Render's build command already runs `prisma migrate deploy` before
+   bundling (see `render.yaml`), so pushing to `main` keeps Neon's schema in
+   sync automatically. No manual `db push`/`migrate deploy` step needed
+   unless you're testing ahead of a deploy.
 
 ---
 
-## 3. Data Migration
+## 3. Real Data Migration
 
-### Phase 1: Migrate Real Users & Deeds
+The legacy on-disk JSONL/JSON data (`apps/api/uploads/users/users.jsonl` and
+`apps/api/uploads/sample-deeds/records/*.json`) migrates into Postgres via:
 
-**Files to migrate:**
-- `apps/api/uploads/users/users.jsonl` (2 real users)
-- `apps/api/uploads/sample-deeds/sample-deeds.jsonl.bak` (7,282 deed records)
-
-**Migration Script:** `apps/api/scripts/migrate-real-data.mjs`
-
-**What gets migrated:**
-- **Users:** Email, name, password hash (legacy format), role mapped (EMPLOYEE → PARTNER)
-- **Deeds:** All 7,282 records imported with:
-  - Deed ID, type, status (active/inactive → ACTIVE/DRAFT)
-  - Year extracted from createdAt date
-  - Deed metadata stored in `slot` field (legacyId, title, createdByName, deedType)
-  - Legacy timestamps preserved
-
-**Run locally:**
 ```bash
 cd apps/api
-pnpm node scripts/migrate-real-data.mjs
+node scripts/migrate-real-data.mjs          # against whatever DATABASE_URL is set
 ```
 
-**Expected result:** 
-- 2 users in `User` table + 2 `Partner` records
-- 7,282 deeds in `Deed` table
-- All timestamps and IDs preserved for reference
-
----
-
-## 4. Cloudflare R2 Setup (Optional)
-
-### Create R2 Bucket for Future File Storage
-1. Go to Cloudflare Dashboard → R2 Storage
-2. Create bucket: `sampada-assets`
-3. Generate API token:
-   - Permissions: Read + Write on `sampada-assets`
-   - Save credentials
-
-### Environment Variables
-```
-CLOUDFLARE_R2_BUCKET=sampada-assets
-CLOUDFLARE_R2_ACCOUNT_ID=xxx
-CLOUDFLARE_R2_ACCESS_KEY=xxx
-CLOUDFLARE_R2_SECRET_KEY=xxx
-CLOUDFLARE_R2_PUBLIC_URL=https://sampada-assets.your-account.r2.cloudflarestorage.com
-```
-
-**Note:** Currently only used for future file uploads. Guideline PDFs are not required.
-
----
-
-## 5. Verification Checklist
-
-- [ ] Local PostgreSQL running
-- [ ] `.env.local` configured with `DATABASE_URL`
-- [ ] `prisma:migrate dev` successful
-- [ ] Neon project created
-- [ ] `render.yaml` env var pointing to Neon
-- [ ] Users migrated to local DB
-- [ ] Users migrated to Neon prod DB
-- [ ] Guideline rates uploaded
-- [ ] PDFs synced to Cloudflare R2
-- [ ] API tested against both DBs
+It's idempotent — safe to re-run; existing users are backfilled, existing
+deed templates (matched by id) are skipped. Run it once against local
+Postgres to verify, then again with `DATABASE_URL` pointed at Neon for
+production.
 
 ---
 
 ## Quick Commands
 
 ```bash
-# Generate Prisma client
-pnpm prisma:generate
-
-# Run migrations (local)
-pnpm prisma:migrate dev
-
-# Push schema (prod/no migrations)
-DATABASE_URL="..." pnpm prisma db push
-
-# Open Prisma Studio (local)
-pnpm prisma studio
-
-# Seed test data
-pnpm prisma db seed
+pnpm prisma:generate              # regenerate the Prisma client
+pnpm prisma:migrate dev           # create + apply a migration (local)
+pnpm exec prisma migrate deploy   # apply committed migrations (prod/CI)
+pnpm exec prisma studio           # browse the DB at localhost:5555
 ```
-
----
-
-## Next: Detailed Implementation
-
-See `MIGRATION_TASKS.md` for step-by-step implementation tasks.

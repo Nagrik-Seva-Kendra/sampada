@@ -5,7 +5,7 @@ import type { Response } from "express";
 import { UsersService } from "../users/users.service.js";
 import { PHOTO_DIR, mimeFor } from "./profile.controller.js";
 
-/** Public: serve a partner's profile photo. Kept unguarded so <img> tags work without auth. */
+/** Public: serve a user's profile photo. Kept unguarded so <img> tags work without auth. */
 @Controller("profile/photo")
 export class ProfilePhotoController {
   constructor(private readonly users: UsersService) {}

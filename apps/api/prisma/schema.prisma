@@ -1,8 +1,10 @@
 // Nagrik Seva Kendra — new PostgreSQL schema.
 // NOTE: scope is deeds + users only. The guideline/valuation, contact,
-// company-docs and deed-register features were dropped, along with the
-// unused Deed/Buyer/Seller/Partner/AuditLog tables they were designed for.
-// Partners are User rows with role = PARTNER; there is no Partner table.
+// company-docs, deed-register, and partner features were all dropped, along
+// with the unused Deed/Buyer/Seller/Partner/AuditLog tables they were
+// designed for. DeedTemplate.createdByRole historically contains "PARTNER"
+// on legacy-imported rows even though Role no longer has that value — it's a
+// free-form string column, not FK'd to the Role enum, so that's harmless.
 
 generator client {
   provider = "prisma-client-js"
@@ -20,14 +22,13 @@ datasource db {
 
 enum Role {
   PUBLIC
-  PARTNER
   EMPLOYEE
   ADMIN
 }
 
 // PENDING: self-signup awaiting admin approval. INACTIVE: admin discontinued
-// (reversible). Doesn't apply to ADMIN (env-based, never a User row) or
-// PUBLIC (self-registration isn't wired up yet).
+// (reversible). ADMIN accounts are always ACTIVE (created directly, never
+// via signup). Doesn't apply to PUBLIC (self-registration isn't wired up yet).
 enum UserStatus {
   PENDING
   ACTIVE
@@ -60,7 +61,7 @@ model User {
   id            String     @id @default(cuid())
   email         String     @unique
   /**
-   * Login handle the partner/employee sets themselves; null until they do.
+   * Login handle the employee sets themselves; null until they do.
    */
   username      String?    @unique
   passwordHash  String
@@ -73,8 +74,6 @@ model User {
   fname         String
   lname         String
   mobile        String?
-  address       String?
-  occupation    String?
   /**
    * Sequential admin-facing id, e.g. "EMP-0007"; only assigned to EMPLOYEE accounts.
    */

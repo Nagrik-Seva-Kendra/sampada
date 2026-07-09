@@ -25,9 +25,10 @@ pnpm db:down    # stop them
 Connect the API's `.env`:
 ```
 DATABASE_URL="postgresql://sampada:sampada@localhost:5432/sampada?schema=public"
+DIRECT_URL="postgresql://sampada:sampada@localhost:5432/sampada?schema=public"
 LEGACY_DATABASE_URL="mysql://root:root@localhost:3307/codelogi_sampada"
 ```
+`DIRECT_URL` matters once you point at Neon's pooled endpoint in production —
+locally, with no connection pooler, it's just the same value as `DATABASE_URL`.
 
-> ⚠️ We are **not** migrating data yet. This staging MariaDB is only a safe,
-> disposable copy to explore/test against. The real MariaDB→PostgreSQL migration
-> is a later, separate phase.
+See `../DATABASE_SETUP.md` for the full local + Neon + real-data-migration walkthrough.

@@ -6,7 +6,7 @@ import { translate, type StringKey } from "../../i18n/strings";
 import { useUpdateProfile, useUploadProfilePhoto } from "./useProfile";
 import { PasswordInput } from "../../components/PasswordInput";
 
-/** Partner/employee self-service profile: edit own name, email, username, password, and photo. */
+/** Employee self-service profile: edit own name, email, username, password, and photo. */
 export function ProfilePage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);

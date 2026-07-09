@@ -33,9 +33,8 @@ export const PHOTO_DIR =
     : path.resolve(process.cwd(), "uploads", "profile-photos");
 
 /**
- * Partner/employee self-service profile (own name/email/username/password/photo).
- * ADMIN has no stored profile — it stays on env credentials — so the
- * self-edit endpoints are partner/employee-only.
+ * Employee self-service profile (own name/email/username/password/photo).
+ * ADMIN has no self-edit UI, so these endpoints are employee-only.
  */
 @Controller("profile")
 @UseGuards(JwtStaffGuard)
@@ -47,8 +46,8 @@ export class ProfileController {
 
   @Patch()
   async update(@Body() body: unknown, @Req() req: StaffRequest): Promise<AuthResponse> {
-    if (req.user.role !== "PARTNER" && req.user.role !== "EMPLOYEE") {
-      throw new ForbiddenException("Only partner/employee accounts have an editable profile.");
+    if (req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only employee accounts have an editable profile.");
     }
     const updated = await this.users.updateProfile(req.user.id, UpdateProfileInput.parse(body));
     return this.reissue(updated);
@@ -60,8 +59,8 @@ export class ProfileController {
     @Req() req: StaffRequest,
     @UploadedFile() file?: UploadedImage,
   ): Promise<AuthResponse> {
-    if (req.user.role !== "PARTNER" && req.user.role !== "EMPLOYEE") {
-      throw new ForbiddenException("Only partner/employee accounts have an editable profile.");
+    if (req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only employee accounts have an editable profile.");
     }
     if (!file) throw new BadRequestException("Image file is required (field 'file').");
     const isImage = file.mimetype?.startsWith("image/");

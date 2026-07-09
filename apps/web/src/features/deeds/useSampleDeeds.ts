@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSampleDeedInput,
+  DeedCreator,
   DeedType,
+  ListDeedsQuery,
   SampleDeedItem,
   SampleDeedListItem,
   UpdateSampleDeedInput,
@@ -22,34 +24,44 @@ export function useSampleDeeds(type: DeedType) {
   });
 }
 
-/** Admin/Employee: every partner's sample deeds across every type; pass a creatorId to narrow to one partner. */
-export function useAllPartnerSampleDeeds(creatorId: string | null) {
+/** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page. Light rows (no content). */
+export function useAllDeeds(filters: ListDeedsQuery = {}) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.user?.role);
   const canView = role === "ADMIN" || role === "EMPLOYEE";
   return useQuery({
-    queryKey: ["sample-deeds", "partners", creatorId],
+    queryKey: ["sample-deeds", "all", filters],
     enabled: !!token && canView,
     queryFn: () =>
       api
-        .get("sample-deeds/partners", {
+        .get("sample-deeds/all", {
           headers: authHeaders(token),
-          searchParams: creatorId ? { creatorId } : {},
+          searchParams: toSearchParams(filters),
         })
         .json<SampleDeedListItem[]>(),
   });
 }
 
-/** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page. Light rows (no content). */
-export function useAllDeeds() {
+function toSearchParams(filters: ListDeedsQuery): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (filters.types?.length) params.types = filters.types.join(",");
+  if (filters.status) params.status = filters.status;
+  if (filters.createdById) params.createdById = filters.createdById;
+  if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+  if (filters.dateTo) params.dateTo = filters.dateTo;
+  return params;
+}
+
+/** Admin/Employee: distinct creators for the "All Deeds" creator filter dropdown. */
+export function useDeedCreators() {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.user?.role);
   const canView = role === "ADMIN" || role === "EMPLOYEE";
   return useQuery({
-    queryKey: ["sample-deeds", "all"],
+    queryKey: ["sample-deeds", "creators"],
     enabled: !!token && canView,
     queryFn: () =>
-      api.get("sample-deeds/all", { headers: authHeaders(token) }).json<SampleDeedListItem[]>(),
+      api.get("sample-deeds/creators", { headers: authHeaders(token) }).json<DeedCreator[]>(),
   });
 }
 

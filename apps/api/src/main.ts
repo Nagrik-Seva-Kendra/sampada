@@ -35,7 +35,7 @@ async function bootstrap() {
   if (hasSpa) {
     app.useStaticAssets(webDist);
     // SPA client-side routing fallback: a GET for a non-API, extension-less
-    // path (e.g. /partner-deeds) returns index.html. Registered as global
+    // path (e.g. /all-deed-details) returns index.html. Registered as global
     // middleware so it runs before Nest's router (and its terminal 404); real
     // files (they contain a ".") and /api/* fall through to static/Nest.
     const indexHtml = join(webDist, "index.html");

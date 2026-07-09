@@ -3,13 +3,15 @@ import { randomUUID } from "node:crypto";
 import { DeedType } from "@sampada/shared";
 import type {
   CreateSampleDeedInput,
+  DeedCreator,
+  ListDeedsQuery,
   SampleDeedItem,
   SampleDeedListItem,
   UpdateSampleDeedInput,
 } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import type { DeedTemplate } from "@prisma/client";
+import type { DeedTemplate, Prisma } from "@prisma/client";
 
 function toItem(row: DeedTemplate): SampleDeedItem {
   return {
@@ -56,41 +58,27 @@ function toListItem(row: ListRow): SampleDeedListItem {
   };
 }
 
+/** Inclusive end-of-day: a `dateTo` of "2026-07-09" should include everything that day. */
+function endOfDay(isoDate: string): Date {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d;
+}
+
 /**
- * Example deeds shown on a deed-type's public info page. Each staff member
- * (admin or partner) can draft their own; ADMIN additionally sees everyone's.
+ * Example deeds shown on a deed-type's public info page. Any staff member
+ * (admin or employee) can draft their own; ADMIN additionally sees everyone's.
  * Backed by the DeedTemplate table.
  */
 @Injectable()
 export class SampleDeedsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * ADMIN and EMPLOYEE see every ADMIN/EMPLOYEE deed of this type combined
-   * (partners' own drafts are excluded here — those surface only in the
-   * partner's own register / the admin's "All Partner Deeds" page). PARTNER
-   * sees only their own. Newest first.
-   */
+  /** ADMIN and EMPLOYEE see every deed of this type; either may draft their own. Newest first. */
   async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedListItem[]> {
     const canViewAll = user.role === "ADMIN" || user.role === "EMPLOYEE";
     const rows = await this.prisma.deedTemplate.findMany({
-      where: canViewAll
-        ? { type, OR: [{ createdByRole: { not: "PARTNER" } }, { createdByRole: null }] }
-        : { type, createdById: user.id },
-      orderBy: { createdAt: "desc" },
-      select: LIST_SELECT,
-    });
-    return rows.map(toListItem);
-  }
-
-  /**
-   * ADMIN/EMPLOYEE: every partner's sample deeds across every deed type,
-   * combined, newest first — powers the admin's "All Partner Deeds" page.
-   * Pass creatorId to narrow it down to one partner.
-   */
-  async listPartners(creatorId?: string): Promise<SampleDeedListItem[]> {
-    const rows = await this.prisma.deedTemplate.findMany({
-      where: { createdByRole: "PARTNER", ...(creatorId ? { createdById: creatorId } : {}) },
+      where: canViewAll ? { type } : { type, createdById: user.id },
       orderBy: { createdAt: "desc" },
       select: LIST_SELECT,
     });
@@ -99,24 +87,39 @@ export class SampleDeedsService {
 
   /**
    * ADMIN/EMPLOYEE: every sample deed across every type (all creators),
-   * combined, newest first — powers the "All Deeds" management page. Drops the
-   * heavy content body to keep the list light.
+   * newest first — powers the "All Deeds" management page. Filters combine
+   * (AND); all are optional. Drops the heavy content body to keep it light.
    */
-  async listAll(): Promise<SampleDeedListItem[]> {
+  async listAll(query: ListDeedsQuery): Promise<SampleDeedListItem[]> {
+    const where: Prisma.DeedTemplateWhereInput = {
+      ...(query.types?.length ? { type: { in: query.types } } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.createdById ? { createdById: query.createdById } : {}),
+      ...(query.dateFrom || query.dateTo
+        ? {
+            createdAt: {
+              ...(query.dateFrom ? { gte: new Date(`${query.dateFrom}T00:00:00.000Z`) } : {}),
+              ...(query.dateTo ? { lt: endOfDay(query.dateTo) } : {}),
+            },
+          }
+        : {}),
+    };
     const rows = await this.prisma.deedTemplate.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       select: LIST_SELECT,
     });
     return rows.map(toListItem);
   }
 
-  /** Deed counts per creator id (for the admin's partner list). */
-  async countsByCreator(): Promise<Record<string, number>> {
-    const rows = await this.prisma.deedTemplate.groupBy({
-      by: ["createdById"],
-      _count: { _all: true },
+  /** Distinct creators with at least one deed, for the "All Deeds" creator filter dropdown. */
+  async listCreators(): Promise<DeedCreator[]> {
+    const rows = await this.prisma.deedTemplate.findMany({
+      distinct: ["createdById"],
+      select: { createdById: true, createdByName: true },
+      orderBy: { createdByName: "asc" },
     });
-    return Object.fromEntries(rows.map((row) => [row.createdById, row._count._all]));
+    return rows.map((r) => ({ id: r.createdById, name: r.createdByName }));
   }
 
   /** Fetch one sample deed (with its full content) by id, or null if absent. */

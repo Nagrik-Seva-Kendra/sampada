@@ -20,17 +20,13 @@ export function Hero() {
           <h1>{t("heroTitle")}</h1>
           <p>{t("heroSub")}</p>
 
-          <div className="hero-cta">
-            {isStaff ? (
+          {isStaff && (
+            <div className="hero-cta">
               <button className="btn-partner" onClick={() => navigate({ to: "/deeds" })}>
                 {t("navDeeds")}
               </button>
-            ) : (
-              <button className="btn-partner" onClick={() => navigate({ to: "/partner" })}>
-                {t("partnerWithUs")}
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div>

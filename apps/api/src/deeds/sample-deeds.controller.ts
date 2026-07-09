@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { CreateSampleDeedInput, DeedType, UpdateSampleDeedInput } from "@sampada/shared";
+import { CreateSampleDeedInput, DeedType, ListDeedsQuery, UpdateSampleDeedInput } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { SampleDeedsService } from "./sample-deeds.service.js";
 
@@ -24,34 +24,34 @@ type StaffRequest = Request & { user: StaffUser };
 export class SampleDeedsController {
   constructor(private readonly service: SampleDeedsService) {}
 
-  /** Own deeds for one deed type (ADMIN: everyone's). */
+  /** Own deeds for one deed type (ADMIN/EMPLOYEE: everyone's). */
   @Get()
   list(@Query("type") typeRaw: unknown, @Req() req: StaffRequest) {
     return this.service.listByType(DeedType.parse(typeRaw), req.user);
   }
 
-  /** Admin/Employee: every partner's sample deeds across every type; ?creatorId narrows to one partner. */
-  @Get("partners")
-  partners(@Query("creatorId") creatorId: string | undefined, @Req() req: StaffRequest) {
-    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
-      throw new ForbiddenException("Only admin/employee can view the partner list.");
-    }
-    return this.service.listPartners(creatorId);
-  }
-
-  /** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page. */
+  /** Admin/Employee: every sample deed across every type (all creators) — the "All Deeds" page, with optional filters. */
   @Get("all")
-  all(@Req() req: StaffRequest) {
+  all(@Query() query: unknown, @Req() req: StaffRequest) {
     if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
       throw new ForbiddenException("Only admin/employee can view all deeds.");
     }
-    return this.service.listAll();
+    return this.service.listAll(ListDeedsQuery.parse(query));
+  }
+
+  /** Admin/Employee: distinct creators for the "All Deeds" creator filter dropdown. */
+  @Get("creators")
+  creators(@Req() req: StaffRequest) {
+    if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+      throw new ForbiddenException("Only admin/employee can view creators.");
+    }
+    return this.service.listCreators();
   }
 
   /**
    * One sample deed with its full content (for view/print/edit). Lists omit the
    * body, so this is the only way to read it. ADMIN/EMPLOYEE may read any deed;
-   * a PARTNER may read only their own.
+   * anyone else may read only their own.
    */
   @Get(":id")
   async getOne(@Param("id") id: string, @Req() req: StaffRequest) {

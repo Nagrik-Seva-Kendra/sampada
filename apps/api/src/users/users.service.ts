@@ -8,20 +8,13 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import type { User } from "@prisma/client";
-import type {
-  CreateEmployeeInput,
-  CreatePartnerInput,
-  EmployeeSignupInput,
-  PartnerSignupInput,
-  Role,
-  UpdateProfileInput,
-} from "@sampada/shared";
+import type { CreateEmployeeInput, EmployeeSignupInput, Role, UpdateProfileInput } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 export interface StoredUser {
   id: string;
   email: string;
-  /** Login handle the partner sets themselves; null until they do. */
+  /** Login handle the employee sets themselves; null until they do. */
   username: string | null;
   /** scrypt: `<salt-hex>:<hash-hex>` */
   passwordHash: string;
@@ -59,12 +52,14 @@ function toStoredUser(row: User): StoredUser {
   };
 }
 
-const STAFF_ROLES: Role[] = ["PARTNER", "EMPLOYEE"];
+const STAFF_ROLES: Role[] = ["EMPLOYEE"];
+// Login must also find the ADMIN row; management/listing methods stay
+// scoped to STAFF_ROLES so admin never shows up in an employee list.
+const LOGIN_ROLES: Role[] = ["EMPLOYEE", "ADMIN"];
 
 /**
- * Partner/employee account store, backed by the Prisma User table. Holds
- * partner/employee accounts (admin-created or self-signed-up); the admin
- * itself stays on env credentials.
+ * Employee/admin account store, backed by the Prisma User table.
+ * Both roles authenticate identically (scrypt password hash).
  */
 @Injectable()
 export class UsersService {
@@ -78,7 +73,7 @@ export class UsersService {
     return rows.map(toStoredUser);
   }
 
-  /** Admin: decrypt the password an employee/partner set at signup (for support/recovery use). */
+  /** Admin: decrypt the password an employee set at signup (for support/recovery use). */
   async getPassword(id: string): Promise<string> {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException("User not found.");
@@ -104,12 +99,12 @@ export class UsersService {
   async findByLogin(login: string): Promise<StoredUser | undefined> {
     const needle = login.trim().toLowerCase();
     const row = await this.prisma.user.findFirst({
-      where: { role: { in: STAFF_ROLES }, OR: [{ username: needle }, { email: needle }] },
+      where: { role: { in: LOGIN_ROLES }, OR: [{ username: needle }, { email: needle }] },
     });
     return row ? toStoredUser(row) : undefined;
   }
 
-  /** Partner/employee self-edit: own name/email/username/password (current password required to change password). */
+  /** Employee self-edit: own name/email/username/password (current password required to change password). */
   async updateProfile(id: string, input: UpdateProfileInput): Promise<StoredUser> {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("User not found.");
@@ -156,114 +151,62 @@ export class UsersService {
   }
 
   /** Admin-created: immediately active. */
-  async createPartner(input: CreatePartnerInput): Promise<StoredUser> {
-    return this.createStaff("PARTNER", input, "ACTIVE");
-  }
-
-  /** Admin-created: immediately active. */
   async createEmployee(input: CreateEmployeeInput): Promise<StoredUser> {
-    return this.createStaff("EMPLOYEE", input, "ACTIVE");
-  }
-
-  /** Public self-signup: stays PENDING until the admin approves it. */
-  async signupPartner(input: PartnerSignupInput): Promise<StoredUser> {
-    return this.createStaff("PARTNER", input, "PENDING");
+    return this.createStaff(input, "ACTIVE");
   }
 
   /** Public self-signup: stays PENDING until the admin approves it. */
   async signupEmployee(input: EmployeeSignupInput): Promise<StoredUser> {
-    return this.createStaff("EMPLOYEE", input, "PENDING");
-  }
-
-  /** Admin: list partner signups awaiting approval. */
-  async listPendingPartners(): Promise<StoredUser[]> {
-    return this.listPending("PARTNER");
+    return this.createStaff(input, "PENDING");
   }
 
   /** Admin: list employee signups awaiting approval. */
   async listPendingEmployees(): Promise<StoredUser[]> {
-    return this.listPending("EMPLOYEE");
-  }
-
-  /** Admin: activate a pending partner signup. */
-  async approvePartner(id: string): Promise<StoredUser> {
-    return this.approveStaff(id, "PARTNER");
+    const rows = await this.prisma.user.findMany({
+      where: { role: "EMPLOYEE", status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toStoredUser);
   }
 
   /** Admin: activate a pending employee signup. */
   async approveEmployee(id: string): Promise<StoredUser> {
-    return this.approveStaff(id, "EMPLOYEE");
-  }
-
-  /** Admin: reject (delete) a pending partner signup. */
-  async rejectPartner(id: string): Promise<void> {
-    return this.rejectStaff(id, "PARTNER");
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== "EMPLOYEE") throw new NotFoundException("Request not found.");
+    const row = await this.prisma.user.update({ where: { id }, data: { status: "ACTIVE" } });
+    return toStoredUser(row);
   }
 
   /** Admin: reject (delete) a pending employee signup. */
   async rejectEmployee(id: string): Promise<void> {
-    return this.rejectStaff(id, "EMPLOYEE");
-  }
-
-  /** Admin: discontinue a partner's services — blocks login, keeps the record (reversible). */
-  async deactivatePartner(id: string): Promise<StoredUser> {
-    return this.setStaffStatus(id, "PARTNER", "INACTIVE");
-  }
-
-  /** Admin: restore a discontinued partner's access. */
-  async reactivatePartner(id: string): Promise<StoredUser> {
-    return this.setStaffStatus(id, "PARTNER", "ACTIVE");
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== "EMPLOYEE" || existing.status !== "PENDING") {
+      throw new NotFoundException("Request not found.");
+    }
+    await this.prisma.user.delete({ where: { id } });
   }
 
   /** Admin: discontinue an employee's services — blocks login, keeps the record (reversible). */
   async deactivateEmployee(id: string): Promise<StoredUser> {
-    return this.setStaffStatus(id, "EMPLOYEE", "INACTIVE");
+    return this.setEmployeeStatus(id, "INACTIVE");
   }
 
   /** Admin: restore a discontinued employee's access. */
   async reactivateEmployee(id: string): Promise<StoredUser> {
-    return this.setStaffStatus(id, "EMPLOYEE", "ACTIVE");
+    return this.setEmployeeStatus(id, "ACTIVE");
   }
 
-  private async setStaffStatus(
-    id: string,
-    role: "PARTNER" | "EMPLOYEE",
-    status: "ACTIVE" | "INACTIVE",
-  ): Promise<StoredUser> {
+  private async setEmployeeStatus(id: string, status: "ACTIVE" | "INACTIVE"): Promise<StoredUser> {
     const existing = await this.prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.role !== role || existing.status === "PENDING") {
+    if (!existing || existing.role !== "EMPLOYEE" || existing.status === "PENDING") {
       throw new NotFoundException("Account not found.");
     }
     const row = await this.prisma.user.update({ where: { id }, data: { status } });
     return toStoredUser(row);
   }
 
-  private async listPending(role: "PARTNER" | "EMPLOYEE"): Promise<StoredUser[]> {
-    const rows = await this.prisma.user.findMany({
-      where: { role, status: "PENDING" },
-      orderBy: { createdAt: "asc" },
-    });
-    return rows.map(toStoredUser);
-  }
-
-  private async approveStaff(id: string, role: "PARTNER" | "EMPLOYEE"): Promise<StoredUser> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.role !== role) throw new NotFoundException("Request not found.");
-    const row = await this.prisma.user.update({ where: { id }, data: { status: "ACTIVE" } });
-    return toStoredUser(row);
-  }
-
-  private async rejectStaff(id: string, role: "PARTNER" | "EMPLOYEE"): Promise<void> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.role !== role || existing.status !== "PENDING") {
-      throw new NotFoundException("Request not found.");
-    }
-    await this.prisma.user.delete({ where: { id } });
-  }
-
   private async createStaff(
-    role: "PARTNER" | "EMPLOYEE",
-    input: CreatePartnerInput | CreateEmployeeInput | PartnerSignupInput | EmployeeSignupInput,
+    input: CreateEmployeeInput | EmployeeSignupInput,
     status: "PENDING" | "ACTIVE",
   ): Promise<StoredUser> {
     const email = input.email.trim().toLowerCase();
@@ -281,7 +224,7 @@ export class UsersService {
       if (usernameClash) throw new ConflictException("That username is already taken.");
     }
 
-    const employeeCode = role === "EMPLOYEE" ? await this.nextEmployeeCode() : null;
+    const employeeCode = await this.nextEmployeeCode();
 
     const row = await this.prisma.user.create({
       data: {
@@ -289,7 +232,7 @@ export class UsersService {
         username,
         passwordHash: hashPassword(input.password),
         passwordEnc: encryptPassword(input.password),
-        role,
+        role: "EMPLOYEE",
         fname: input.fname,
         lname: input.lname,
         status,
@@ -330,9 +273,8 @@ export function verifyPassword(password: string, stored: string): boolean {
 /**
  * Reversible AES-256-GCM copy of the password so the admin can look it up.
  * Interim only — a real deployment shouldn't keep recoverable passwords at
- * all; this exists because the admin asked to be able to view what
- * employees/partners set. Key is derived from JWT_SECRET so no extra env var
- * is needed.
+ * all; this exists because the admin asked to be able to view what employees
+ * set. Key is derived from JWT_SECRET so no extra env var is needed.
  */
 function encKey(): Buffer {
   const secret = process.env.JWT_SECRET ?? "";

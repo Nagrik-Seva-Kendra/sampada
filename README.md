@@ -20,21 +20,26 @@ infra/
 - **Shared:** one set of Zod schemas validates both API DTOs and frontend forms
 
 ## Features
-- **Home / About / Contact / Partner** — public, bilingual (EN/हिं), light + dark
-- **Guideline Rates** — admin uploads district-wise PDFs per year (2015→latest); everyone views/downloads
+- **Home / About / Partner** — public, bilingual (EN/हिं), light + dark
+- **Deeds & instruments** — public info pages per deed type, backed by admin/partner-drafted
+  example deeds (`DeedTemplate`); an admin "All Deeds" management view
 - **e-Registry** — informational process page
-- **Admin auth** — login → JWT (no expiry; stays logged in until logout); gates uploads & contact inbox
-- Current features are **DB-free** (PDFs + contact messages stored on disk), so the app runs
-  without Postgres/Docker. The DB phase adds a users table, legacy migration, and R2 storage.
+- **Auth** — admin, partner, and employee accounts all Postgres-backed (JWT), with
+  self-signup → admin approval flow and email-OTP verification
+- Users and deed templates are Postgres-backed via Prisma (see `DATABASE_SETUP.md`). Profile
+  photos still live on local disk pending a Cloudflare R2 migration.
 
 ## Getting started
 ```bash
 pnpm install
-cp apps/api/.env.example apps/api/.env   # set ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET
+cp apps/api/.env.example apps/api/.env   # set JWT_SECRET, DATABASE_URL
+pnpm db:up                                # start local Postgres (see infra/README.md)
+pnpm --filter @sampada/api prisma:migrate # create tables
 pnpm dev                                  # runs api (:3001) + web (:5173) together
 ```
 Open http://localhost:5173.
 
-## ⚠️ Data
-No real data is migrated yet. `infra/legacy-db/` holds a **copy** of the legacy dump for a
-disposable staging MariaDB. The original download is untouched.
+## Data
+See `DATABASE_SETUP.md` for local/Neon setup and the real-data migration script.
+`infra/legacy-db/` holds a **copy** of the legacy MariaDB dump for a disposable staging
+container — see `infra/README.md`.

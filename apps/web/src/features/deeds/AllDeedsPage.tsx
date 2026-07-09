@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import type { SampleDeedListItem } from "@sampada/shared";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DeedRecordStatus, DeedType, type ListDeedsQuery } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
 import { useScrollLock } from "../../lib/useScrollLock";
-import { useAllDeeds, useSampleDeed } from "./useSampleDeeds";
+import { useAllDeeds, useDeedCreators, useSampleDeed } from "./useSampleDeeds";
 
 const PAGE_SIZE = 25;
 
@@ -17,11 +17,31 @@ function formatDate(iso: string): string {
   return `${dd}-${mm}-${yy}`;
 }
 
-/** Admin/Employee: every deed across all users/types in one searchable table. */
+/** Admin/Employee: every deed across all users/types in one searchable, filterable table. */
 export function AllDeedsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
-  const deeds = useAllDeeds();
+
+  const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
+  const [status, setStatus] = useState<DeedRecordStatus | "">("");
+  const [createdById, setCreatedById] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filters: ListDeedsQuery = useMemo(
+    () => ({
+      ...(selectedTypes.size ? { types: [...selectedTypes] } : {}),
+      ...(status ? { status } : {}),
+      ...(createdById ? { createdById } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    }),
+    [selectedTypes, status, createdById, dateFrom, dateTo],
+  );
+  const hasFilters = Object.keys(filters).length > 0;
+
+  const deeds = useAllDeeds(filters);
+  const creators = useDeedCreators();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
@@ -31,7 +51,7 @@ export function AllDeedsPage() {
     const id = setTimeout(() => setDebounced(search), 250);
     return () => clearTimeout(id);
   }, [search]);
-  useEffect(() => setPage(1), [debounced]);
+  useEffect(() => setPage(1), [debounced, filters]);
 
   const rows = deeds.data ?? [];
   const filtered = useMemo(() => {
@@ -45,6 +65,14 @@ export function AllDeedsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, totalPages);
   const pageRows = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
+  function clearFilters() {
+    setSelectedTypes(new Set());
+    setStatus("");
+    setCreatedById("");
+    setDateFrom("");
+    setDateTo("");
+  }
 
   return (
     <section className="page">
@@ -61,7 +89,76 @@ export function AllDeedsPage() {
             alignItems: "center",
             flexWrap: "wrap",
             gap: 12,
-            margin: "12px 0 4px",
+            margin: "12px 0",
+          }}
+        >
+          <TypeFilter
+            selected={selectedTypes}
+            onChange={setSelectedTypes}
+            t={t}
+            lang={lang}
+          />
+
+          <select
+            className="district-input"
+            style={{ width: "auto" }}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as DeedRecordStatus | "")}
+          >
+            <option value="">{t("allDeedsFilterAllStatuses")}</option>
+            <option value="active">{t("deedStatusActive")}</option>
+            <option value="inactive">{t("deedStatusInactive")}</option>
+          </select>
+
+          <select
+            className="district-input"
+            style={{ width: "auto" }}
+            value={createdById}
+            onChange={(e) => setCreatedById(e.target.value)}
+          >
+            <option value="">{t("allDeedsFilterAllCreators")}</option>
+            {(creators.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>
+            {t("allDeedsFilterDateFrom")}
+            <input
+              type="date"
+              className="district-input"
+              style={{ width: "auto" }}
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>
+            {t("allDeedsFilterDateTo")}
+            <input
+              type="date"
+              className="district-input"
+              style={{ width: "auto" }}
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </label>
+
+          {hasFilters && (
+            <button type="button" className="doc-btn" onClick={clearFilters}>
+              {t("allDeedsFilterClear")}
+            </button>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+            margin: "4px 0",
           }}
         >
           {deeds.data && (
@@ -122,6 +219,7 @@ export function AllDeedsPage() {
                   <th>{t("deedsColId")}</th>
                   <th>{t("deedsColDate")}</th>
                   <th>{t("deedsColName")}</th>
+                  <th>{t("deedsColCategory")}</th>
                   <th>{t("deedsColStatus")}</th>
                   <th>{t("deedsColUser")}</th>
                   <th>{t("deedsAction")}</th>
@@ -133,6 +231,7 @@ export function AllDeedsPage() {
                     <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
                     <td>{formatDate(d.createdAt)}</td>
                     <td>{d.title}</td>
+                    <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
                     <td>
                       <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
                         {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
@@ -157,7 +256,7 @@ export function AllDeedsPage() {
                 ))}
                 {pageRows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="doc-empty">
+                    <td colSpan={7} className="doc-empty">
                       {debounced.trim() ? t("deedsSearchEmpty") : t("drEmpty")}
                     </td>
                   </tr>
@@ -188,6 +287,70 @@ export function AllDeedsPage() {
 
       {viewId && <DeedViewModal id={viewId} onClose={() => setViewId(null)} t={t} lang={lang} />}
     </section>
+  );
+}
+
+/** Multi-select checkbox dropdown for deed type, backed by a real server-side filter. */
+function TypeFilter({
+  selected,
+  onChange,
+  t,
+  lang,
+}: {
+  selected: Set<DeedType>;
+  onChange: (next: Set<DeedType>) => void;
+  t: (k: StringKey) => string;
+  lang: "en" | "hi";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [open]);
+
+  function toggle(type: DeedType) {
+    const next = new Set(selected);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    onChange(next);
+  }
+
+  const label = selected.size
+    ? `${t("allDeedsFilterType")} (${selected.size})`
+    : t("allDeedsFilterAllTypes");
+
+  return (
+    <div className={"nav-dd" + (open ? " open" : "")} ref={ref}>
+      <a
+        className="district-input"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        {label} <span className="nav-dd-caret">▾</span>
+      </a>
+      <div className="nav-dd-menu" role="menu" style={{ left: 0, transform: "none" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {DeedType.options.map((type) => (
+            <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={selected.has(type)}
+                onChange={() => toggle(type)}
+              />
+              {findDeed(type)?.name[lang] ?? type}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

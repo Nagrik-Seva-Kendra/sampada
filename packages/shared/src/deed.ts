@@ -53,3 +53,25 @@ export type SampleDeedItem = z.infer<typeof SampleDeedItem>;
 /** Lightweight row for the "All Deeds" listing (drops the heavy content body). */
 export const SampleDeedListItem = SampleDeedItem.omit({ content: true });
 export type SampleDeedListItem = z.infer<typeof SampleDeedListItem>;
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+
+/** Server-side filters for the "All Deeds" management page. All fields optional/combinable. */
+export const ListDeedsQuery = z.object({
+  types: z
+    .preprocess((v) => (typeof v === "string" ? v.split(",").filter(Boolean) : v), z.array(DeedType))
+    .optional(),
+  status: DeedRecordStatus.optional(),
+  createdById: z.string().trim().min(1).optional(),
+  /** Inclusive, by createdAt date (not time). */
+  dateFrom: isoDate.optional(),
+  dateTo: isoDate.optional(),
+});
+export type ListDeedsQuery = z.infer<typeof ListDeedsQuery>;
+
+/** One entry in the "All Deeds" creator filter dropdown. */
+export const DeedCreator = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type DeedCreator = z.infer<typeof DeedCreator>;

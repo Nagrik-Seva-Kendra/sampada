@@ -3,7 +3,7 @@ import type { AuthResponse, UpdateProfileInput } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
-/** Partner/employee self-edit: name/email/username/password. Reissues the session on success. */
+/** Employee self-edit: name/email/username/password. Reissues the session on success. */
 export function useUpdateProfile() {
   const token = useAuthStore((s) => s.token);
   const setSession = useAuthStore((s) => s.setSession);
@@ -16,7 +16,7 @@ export function useUpdateProfile() {
   });
 }
 
-/** Partner/employee self-edit: replace profile photo. Reissues the session on success. */
+/** Employee self-edit: replace profile photo. Reissues the session on success. */
 export function useUploadProfilePhoto() {
   const token = useAuthStore((s) => s.token);
   const setSession = useAuthStore((s) => s.setSession);

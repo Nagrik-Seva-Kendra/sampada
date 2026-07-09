@@ -37,14 +37,14 @@ export function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/** True when signed in as PARTNER, EMPLOYEE, or ADMIN — gates the Deeds section. */
+/** True when signed in as EMPLOYEE or ADMIN — gates the Deeds section. */
 export function useIsStaff(): boolean {
   const user = useAuthStore((s) => s.user);
-  return !!user && (user.role === "ADMIN" || user.role === "PARTNER" || user.role === "EMPLOYEE");
+  return !!user && (user.role === "ADMIN" || user.role === "EMPLOYEE");
 }
 
 /** EMPLOYEE can view/edit/create/print every deed but never delete one. */
 export function useCanDeleteDeeds(): boolean {
   const role = useAuthStore((s) => s.user?.role);
-  return role === "ADMIN" || role === "PARTNER";
+  return role === "ADMIN";
 }
