@@ -47,12 +47,10 @@ function toSearchParams(filters: ListDeedsQuery): Record<string, string> {
   if (filters.types?.length) params.types = filters.types.join(",");
   if (filters.status) params.status = filters.status;
   if (filters.createdById) params.createdById = filters.createdById;
-  if (filters.dateFrom) params.dateFrom = filters.dateFrom;
-  if (filters.dateTo) params.dateTo = filters.dateTo;
   return params;
 }
 
-/** Admin/Employee: distinct creators for the "All Deeds" creator filter dropdown. */
+/** Every admin/employee account, for the "All Deeds" creator filter dropdown. */
 export function useDeedCreators() {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.user?.role);

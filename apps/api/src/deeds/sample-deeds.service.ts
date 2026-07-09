@@ -58,13 +58,6 @@ function toListItem(row: ListRow): SampleDeedListItem {
   };
 }
 
-/** Inclusive end-of-day: a `dateTo` of "2026-07-09" should include everything that day. */
-function endOfDay(isoDate: string): Date {
-  const d = new Date(`${isoDate}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d;
-}
-
 /**
  * Example deeds shown on a deed-type's public info page. Any staff member
  * (admin or employee) can draft their own; ADMIN additionally sees everyone's.
@@ -95,14 +88,6 @@ export class SampleDeedsService {
       ...(query.types?.length ? { type: { in: query.types } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.createdById ? { createdById: query.createdById } : {}),
-      ...(query.dateFrom || query.dateTo
-        ? {
-            createdAt: {
-              ...(query.dateFrom ? { gte: new Date(`${query.dateFrom}T00:00:00.000Z`) } : {}),
-              ...(query.dateTo ? { lt: endOfDay(query.dateTo) } : {}),
-            },
-          }
-        : {}),
     };
     const rows = await this.prisma.deedTemplate.findMany({
       where,
@@ -112,14 +97,14 @@ export class SampleDeedsService {
     return rows.map(toListItem);
   }
 
-  /** Distinct creators with at least one deed, for the "All Deeds" creator filter dropdown. */
+  /** Every admin/employee account, for the "All Deeds" creator filter dropdown (regardless of whether they've drafted anything yet). */
   async listCreators(): Promise<DeedCreator[]> {
-    const rows = await this.prisma.deedTemplate.findMany({
-      distinct: ["createdById"],
-      select: { createdById: true, createdByName: true },
-      orderBy: { createdByName: "asc" },
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "EMPLOYEE"] } },
+      select: { id: true, fname: true, lname: true },
+      orderBy: { fname: "asc" },
     });
-    return rows.map((r) => ({ id: r.createdById, name: r.createdByName }));
+    return rows.map((r) => ({ id: r.id, name: `${r.fname} ${r.lname}`.trim() }));
   }
 
   /** Fetch one sample deed (with its full content) by id, or null if absent. */

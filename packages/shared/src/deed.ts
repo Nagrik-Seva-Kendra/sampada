@@ -54,8 +54,6 @@ export type SampleDeedItem = z.infer<typeof SampleDeedItem>;
 export const SampleDeedListItem = SampleDeedItem.omit({ content: true });
 export type SampleDeedListItem = z.infer<typeof SampleDeedListItem>;
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
-
 /** Server-side filters for the "All Deeds" management page. All fields optional/combinable. */
 export const ListDeedsQuery = z.object({
   types: z
@@ -63,9 +61,6 @@ export const ListDeedsQuery = z.object({
     .optional(),
   status: DeedRecordStatus.optional(),
   createdById: z.string().trim().min(1).optional(),
-  /** Inclusive, by createdAt date (not time). */
-  dateFrom: isoDate.optional(),
-  dateTo: isoDate.optional(),
 });
 export type ListDeedsQuery = z.infer<typeof ListDeedsQuery>;
 

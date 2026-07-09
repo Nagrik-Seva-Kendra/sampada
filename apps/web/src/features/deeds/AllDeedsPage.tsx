@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { DeedRecordStatus, DeedType, type ListDeedsQuery } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -8,6 +8,15 @@ import { useScrollLock } from "../../lib/useScrollLock";
 import { useAllDeeds, useDeedCreators, useSampleDeed } from "./useSampleDeeds";
 
 const PAGE_SIZE = 25;
+
+/** Shared height/box-sizing so the type dropdown trigger lines up with the native <select>s beside it. */
+const FILTER_CONTROL_STYLE: CSSProperties = {
+  height: 36,
+  boxSizing: "border-box",
+  display: "inline-flex",
+  alignItems: "center",
+  width: "auto",
+};
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -25,18 +34,14 @@ export function AllDeedsPage() {
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [status, setStatus] = useState<DeedRecordStatus | "">("");
   const [createdById, setCreatedById] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
 
   const filters: ListDeedsQuery = useMemo(
     () => ({
       ...(selectedTypes.size ? { types: [...selectedTypes] } : {}),
       ...(status ? { status } : {}),
       ...(createdById ? { createdById } : {}),
-      ...(dateFrom ? { dateFrom } : {}),
-      ...(dateTo ? { dateTo } : {}),
     }),
-    [selectedTypes, status, createdById, dateFrom, dateTo],
+    [selectedTypes, status, createdById],
   );
   const hasFilters = Object.keys(filters).length > 0;
 
@@ -70,8 +75,6 @@ export function AllDeedsPage() {
     setSelectedTypes(new Set());
     setStatus("");
     setCreatedById("");
-    setDateFrom("");
-    setDateTo("");
   }
 
   return (
@@ -88,20 +91,15 @@ export function AllDeedsPage() {
             display: "flex",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: 12,
-            margin: "12px 0",
+            gap: 10,
+            margin: "16px 0 8px",
           }}
         >
-          <TypeFilter
-            selected={selectedTypes}
-            onChange={setSelectedTypes}
-            t={t}
-            lang={lang}
-          />
+          <TypeFilter selected={selectedTypes} onChange={setSelectedTypes} t={t} lang={lang} />
 
           <select
             className="district-input"
-            style={{ width: "auto" }}
+            style={FILTER_CONTROL_STYLE}
             value={status}
             onChange={(e) => setStatus(e.target.value as DeedRecordStatus | "")}
           >
@@ -112,7 +110,7 @@ export function AllDeedsPage() {
 
           <select
             className="district-input"
-            style={{ width: "auto" }}
+            style={FILTER_CONTROL_STYLE}
             value={createdById}
             onChange={(e) => setCreatedById(e.target.value)}
           >
@@ -124,29 +122,13 @@ export function AllDeedsPage() {
             ))}
           </select>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>
-            {t("allDeedsFilterDateFrom")}
-            <input
-              type="date"
-              className="district-input"
-              style={{ width: "auto" }}
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>
-            {t("allDeedsFilterDateTo")}
-            <input
-              type="date"
-              className="district-input"
-              style={{ width: "auto" }}
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </label>
-
           {hasFilters && (
-            <button type="button" className="doc-btn" onClick={clearFilters}>
+            <button
+              type="button"
+              className="doc-btn"
+              style={{ height: FILTER_CONTROL_STYLE.height, boxSizing: "border-box" }}
+              onClick={clearFilters}
+            >
               {t("allDeedsFilterClear")}
             </button>
           )}
@@ -158,7 +140,7 @@ export function AllDeedsPage() {
             alignItems: "center",
             flexWrap: "wrap",
             gap: 12,
-            margin: "4px 0",
+            margin: "4px 0 12px",
           }}
         >
           {deeds.data && (
@@ -171,7 +153,7 @@ export function AllDeedsPage() {
           <div style={{ position: "relative", width: 340, maxWidth: "100%", marginLeft: "auto" }}>
             <input
               className="district-input"
-              style={{ display: "block", width: "100%", paddingRight: 32 }}
+              style={{ display: "block", width: "100%", paddingRight: 32, boxSizing: "border-box" }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("allDeedsSearch")}
@@ -211,7 +193,7 @@ export function AllDeedsPage() {
 
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}
 
-        <div className="dr-records" style={{ marginTop: 12 }}>
+        <div className="dr-records">
           <div className="dr-table-wrap">
             <table className="dr-table">
               <thead>
@@ -327,24 +309,21 @@ function TypeFilter({
 
   return (
     <div className={"nav-dd" + (open ? " open" : "")} ref={ref}>
-      <a
+      <button
+        type="button"
         className="district-input"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+        style={{ ...FILTER_CONTROL_STYLE, gap: 6, cursor: "pointer" }}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
       >
         {label} <span className="nav-dd-caret">▾</span>
-      </a>
+      </button>
       <div className="nav-dd-menu" role="menu" style={{ left: 0, transform: "none" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {DeedType.options.map((type) => (
             <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={selected.has(type)}
-                onChange={() => toggle(type)}
-              />
+              <input type="checkbox" checked={selected.has(type)} onChange={() => toggle(type)} />
               {findDeed(type)?.name[lang] ?? type}
             </label>
           ))}
