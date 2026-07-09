@@ -14,8 +14,14 @@ async function bootstrap() {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.useGlobalFilters(new ZodExceptionFilter(app.getHttpAdapter()));
   app.setGlobalPrefix("api/v1");
+  // Comma-separated allowlist. Surrounding spaces and trailing slashes are
+  // stripped because a browser's Origin header carries neither, so an entry
+  // like " https://app.example.com/" would never match.
   app.enableCors({
-    origin: (process.env.CORS_ORIGIN ?? "http://localhost:5173").split(","),
+    origin: (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+      .split(",")
+      .map((o) => o.trim().replace(/\/+$/, ""))
+      .filter(Boolean),
     credentials: true,
   });
 

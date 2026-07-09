@@ -9,7 +9,7 @@ import {
   usePendingPartners,
   useReactivatePartner,
   useRejectPartner,
-} from "../deeds/useDeedRegister";
+} from "./usePartners";
 
 /** Admin only: approve or reject pending partner self-signups; browse/discontinue already-approved partners. */
 export function PartnerRequestsPage() {

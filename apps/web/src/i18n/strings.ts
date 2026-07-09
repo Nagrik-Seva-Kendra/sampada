@@ -170,6 +170,8 @@ export const strings = {
   allDeedsTitle: { en: "All User's Deed Details", hi: "सभी उपयोगकर्ताओं के विलेख विवरण" },
   allDeedsSearch: { en: "Search by name or user…", hi: "नाम या उपयोगकर्ता से खोजें…" },
   allDeedsSearchClear: { en: "Clear search", hi: "खोज साफ़ करें" },
+  allDeedsTotal: { en: "Total deeds", hi: "कुल विलेख" },
+  allDeedsMatches: { en: "Matches", hi: "मिलान" },
   deedStatusActive: { en: "Active", hi: "सक्रिय" },
   deedStatusInactive: { en: "Inactive", hi: "निष्क्रिय" },
   deedsAction: { en: "Action", hi: "कार्रवाई" },

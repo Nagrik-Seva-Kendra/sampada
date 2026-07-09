@@ -14,7 +14,7 @@ import { CreatePartnerInput, PartnerSignupInput, type PartnerItem } from "@sampa
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { UsersService, type StoredUser } from "../users/users.service.js";
-import { DeedsService } from "../deeds/deeds.service.js";
+import { SampleDeedsService } from "../deeds/sample-deeds.service.js";
 import { OtpService } from "../otp/otp.service.js";
 
 type StaffRequest = Request & { user: StaffUser };
@@ -37,7 +37,7 @@ function toItem(user: StoredUser, deedCount: number): PartnerItem {
 export class PartnersController {
   constructor(
     private readonly users: UsersService,
-    private readonly deeds: DeedsService,
+    private readonly deeds: SampleDeedsService,
     private readonly otp: OtpService,
   ) {}
 

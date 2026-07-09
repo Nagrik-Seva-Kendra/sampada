@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { usePartnerSignup } from "../deeds/useDeedRegister";
+import { usePartnerSignup } from "./usePartners";
 import { useSendEmailOtp, useVerifyEmailOtp } from "../auth/useAuth";
 import { PasswordInput } from "../../components/PasswordInput";
 

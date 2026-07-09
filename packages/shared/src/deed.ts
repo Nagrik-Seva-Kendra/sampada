@@ -17,23 +17,6 @@ export const DeedType = z.enum([
 ]);
 export type DeedType = z.infer<typeof DeedType>;
 
-export const CreateDeedInput = z.object({
-  type: DeedType,
-  /** Short label, e.g. parties or property: "Ram Kumar → Shyam Lal, Morar plot". */
-  title: z.string().trim().min(1).max(200),
-  district: z.string().trim().max(80).optional().default(""),
-  notes: z.string().trim().max(2000).optional().default(""),
-});
-export type CreateDeedInput = z.infer<typeof CreateDeedInput>;
-
-export const UpdateDeedInput = z.object({
-  type: DeedType.optional(),
-  title: z.string().trim().min(1).max(200).optional(),
-  district: z.string().trim().max(80).optional(),
-  notes: z.string().trim().max(2000).optional(),
-});
-export type UpdateDeedInput = z.infer<typeof UpdateDeedInput>;
-
 /** Admin-drafted deed shown on the public deed-type info page (view/print only). */
 export const DeedRecordStatus = z.enum(["active", "inactive"]);
 export type DeedRecordStatus = z.infer<typeof DeedRecordStatus>;
@@ -70,17 +53,3 @@ export type SampleDeedItem = z.infer<typeof SampleDeedItem>;
 /** Lightweight row for the "All Deeds" listing (drops the heavy content body). */
 export const SampleDeedListItem = SampleDeedItem.omit({ content: true });
 export type SampleDeedListItem = z.infer<typeof SampleDeedListItem>;
-
-/** A deed record. Visibility: creator always; ADMIN sees partners' deeds too. */
-export const DeedRecordItem = z.object({
-  id: z.string(),
-  type: DeedType,
-  title: z.string(),
-  district: z.string(),
-  notes: z.string(),
-  createdById: z.string(),
-  createdByName: z.string(),
-  createdByRole: Role,
-  createdAt: z.string(), // ISO timestamp
-});
-export type DeedRecordItem = z.infer<typeof DeedRecordItem>;

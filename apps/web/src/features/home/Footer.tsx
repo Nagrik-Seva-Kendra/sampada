@@ -5,7 +5,6 @@ import { translate, type StringKey } from "../../i18n/strings";
 const LINKS: { key: StringKey; to?: string; href?: string }[] = [
   { key: "footAbout", to: "/about" },
   { key: "footPartner", to: "/partner" },
-  { key: "footContact", to: "/contact" },
   { key: "footMpigr", href: "https://www.mpigr.gov.in/" },
 ];
 

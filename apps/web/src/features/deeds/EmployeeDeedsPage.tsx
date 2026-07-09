@@ -3,7 +3,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { PartnerSampleDeedList } from "./PartnerSampleDeedList";
 import { useAllPartnerSampleDeeds } from "./useSampleDeeds";
-import { usePartners } from "./useDeedRegister";
+import { usePartners } from "../partner/usePartners";
 
 /** Employee view: every partner's sample deeds across every category. View/print, never create or delete. */
 export function EmployeeDeedsPage() {

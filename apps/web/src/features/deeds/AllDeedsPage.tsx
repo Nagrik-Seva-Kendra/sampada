@@ -55,44 +55,61 @@ export function AllDeedsPage() {
         </div>
         <h2 className="page-title">{t("allDeedsTitle")}</h2>
 
-        <div style={{ position: "relative", maxWidth: 340, margin: "12px 0 4px auto" }}>
-          <input
-            className="district-input"
-            style={{ display: "block", width: "100%", paddingRight: 32 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("allDeedsSearch")}
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              aria-label={t("allDeedsSearchClear")}
-              title={t("allDeedsSearchClear")}
-              style={{
-                position: "absolute",
-                top: "50%",
-                right: 8,
-                transform: "translateY(-50%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 22,
-                height: 22,
-                padding: 0,
-                border: "none",
-                borderRadius: "50%",
-                background: "transparent",
-                color: "inherit",
-                cursor: "pointer",
-                fontSize: 16,
-                lineHeight: 1,
-                opacity: 0.6,
-              }}
-            >
-              ✕
-            </button>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+            margin: "12px 0 4px",
+          }}
+        >
+          {deeds.data && (
+            <span style={{ fontSize: 14, opacity: 0.75 }}>
+              {debounced.trim()
+                ? `${t("allDeedsMatches")}: ${filtered.length} / ${rows.length}`
+                : `${t("allDeedsTotal")}: ${rows.length}`}
+            </span>
           )}
+          <div style={{ position: "relative", width: 340, maxWidth: "100%", marginLeft: "auto" }}>
+            <input
+              className="district-input"
+              style={{ display: "block", width: "100%", paddingRight: 32 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("allDeedsSearch")}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label={t("allDeedsSearchClear")}
+                title={t("allDeedsSearchClear")}
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  right: 8,
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 22,
+                  height: 22,
+                  padding: 0,
+                  border: "none",
+                  borderRadius: "50%",
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                  fontSize: 16,
+                  lineHeight: 1,
+                  opacity: 0.6,
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}

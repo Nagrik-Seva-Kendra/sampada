@@ -1,7 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { DeedType } from "@sampada/shared";
 import type {
   CreateSampleDeedInput,
@@ -10,103 +8,31 @@ import type {
   UpdateSampleDeedInput,
 } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
+import { PrismaService } from "../prisma/prisma.service.js";
+import type { DeedTemplate } from "@prisma/client";
+
+function toItem(row: DeedTemplate): SampleDeedItem {
+  return {
+    id: row.id,
+    type: row.type as DeedType,
+    title: row.title,
+    content: row.content,
+    status: row.status as SampleDeedItem["status"],
+    createdById: row.createdById,
+    createdByName: row.createdByName,
+    createdByRole: (row.createdByRole ?? undefined) as SampleDeedItem["createdByRole"],
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 /**
  * Example deeds shown on a deed-type's public info page. Each staff member
  * (admin or partner) can draft their own; ADMIN additionally sees everyone's.
- * Interim on-disk storage (DB-free): one JSON file per record, named
- * `<type>__<id>.json` in `records/`. Each type's records are cached in
- * memory after first use (a type like sale-deed has 4000+ legacy records,
- * so reading them is real I/O, not overhead) — but every access re-checks
- * the directory listing (cheap: just filenames) and only reads content for
- * files the cache doesn't have yet, so a file that appears or disappears
- * outside our own create/update/remove calls is never silently stale.
+ * Backed by the DeedTemplate table.
  */
 @Injectable()
 export class SampleDeedsService {
-  private readonly baseDir =
-    process.env.UPLOAD_DIR
-      ? path.join(process.env.UPLOAD_DIR, "..", "sample-deeds", "records")
-      : path.resolve(process.cwd(), "uploads", "sample-deeds", "records");
-
-  /** type -> (id -> item), populated lazily per type on first access. */
-  private readonly cache = new Map<DeedType, Map<string, SampleDeedItem>>();
-  /** id -> type, so update/remove can find an item's cache bucket without knowing its type upfront. */
-  private readonly typeById = new Map<string, DeedType>();
-  /** In-flight loads/syncs, so concurrent requests for a type share one directory scan. */
-  private readonly loading = new Map<DeedType, Promise<Map<string, SampleDeedItem>>>();
-
-  private fileFor(type: DeedType, id: string): string {
-    return path.join(this.baseDir, `${type}__${id}.json`);
-  }
-
-  /** Return a type's cache, reconciled against the live directory listing. */
-  private async loadType(type: DeedType): Promise<Map<string, SampleDeedItem>> {
-    const inFlight = this.loading.get(type);
-    if (inFlight) return inFlight;
-
-    const promise = (async () => {
-      const bucket = this.cache.get(type) ?? new Map<string, SampleDeedItem>();
-      this.cache.set(type, bucket);
-
-      let names: string[];
-      try {
-        names = await fs.readdir(this.baseDir);
-      } catch {
-        names = [];
-      }
-      const prefix = `${type}__`;
-      const suffix = ".json";
-      const onDisk = new Map<string, string>(); // id -> filename
-      for (const n of names) {
-        if (n.startsWith(prefix) && n.endsWith(suffix)) {
-          onDisk.set(n.slice(prefix.length, n.length - suffix.length), n);
-        }
-      }
-      // Evict cache entries whose file is gone.
-      for (const id of bucket.keys()) {
-        if (!onDisk.has(id)) {
-          bucket.delete(id);
-          this.typeById.delete(id);
-        }
-      }
-      // Read content only for files the cache doesn't already have.
-      const toRead = [...onDisk].filter(([id]) => !bucket.has(id));
-      const items = await Promise.all(
-        toRead.map(([, n]) =>
-          fs.readFile(path.join(this.baseDir, n), "utf8").then((t) => JSON.parse(t) as SampleDeedItem),
-        ),
-      );
-      for (const item of items) {
-        bucket.set(item.id, item);
-        this.typeById.set(item.id, item.type);
-      }
-      return bucket;
-    })();
-    this.loading.set(type, promise);
-    try {
-      return await promise;
-    } finally {
-      this.loading.delete(type);
-    }
-  }
-
-  /** Locate an item by id alone, loading its type's cache bucket first if needed. */
-  private async findById(id: string): Promise<SampleDeedItem | null> {
-    const knownType = this.typeById.get(id);
-    if (knownType) return (await this.loadType(knownType)).get(id) ?? null;
-    // Not indexed yet: check disk for the file's type prefix, then load (and cache) that type.
-    let names: string[];
-    try {
-      names = await fs.readdir(this.baseDir);
-    } catch {
-      return null;
-    }
-    const match = names.find((n) => n.endsWith(`__${id}.json`));
-    if (!match) return null;
-    const type = match.slice(0, match.indexOf("__")) as DeedType;
-    return (await this.loadType(type)).get(id) ?? null;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * ADMIN and EMPLOYEE see every ADMIN/EMPLOYEE deed of this type combined
@@ -115,12 +41,14 @@ export class SampleDeedsService {
    * sees only their own. Newest first.
    */
   async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedItem[]> {
-    const items = [...(await this.loadType(type)).values()];
     const canViewAll = user.role === "ADMIN" || user.role === "EMPLOYEE";
-    const visible = canViewAll
-      ? items.filter((i) => i.createdByRole !== "PARTNER")
-      : items.filter((i) => i.createdById === user.id);
-    return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const rows = await this.prisma.deedTemplate.findMany({
+      where: canViewAll
+        ? { type, OR: [{ createdByRole: { not: "PARTNER" } }, { createdByRole: null }] }
+        : { type, createdById: user.id },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toItem);
   }
 
   /**
@@ -129,61 +57,86 @@ export class SampleDeedsService {
    * Pass creatorId to narrow it down to one partner.
    */
   async listPartners(creatorId?: string): Promise<SampleDeedItem[]> {
-    const buckets = await Promise.all(DeedType.options.map((t) => this.loadType(t)));
-    const all = buckets.flatMap((bucket) => [...bucket.values()]);
-    const visible = all.filter(
-      (i) => i.createdByRole === "PARTNER" && (!creatorId || i.createdById === creatorId),
-    );
-    return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const rows = await this.prisma.deedTemplate.findMany({
+      where: { createdByRole: "PARTNER", ...(creatorId ? { createdById: creatorId } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toItem);
   }
 
   /**
    * ADMIN/EMPLOYEE: every sample deed across every type (all creators),
    * combined, newest first — powers the "All Deeds" management page. Drops the
-   * heavy content body (fetched on demand via findById) to keep the list light.
+   * heavy content body to keep the list light.
    */
   async listAll(): Promise<SampleDeedListItem[]> {
-    const buckets = await Promise.all(DeedType.options.map((t) => this.loadType(t)));
-    const all = buckets.flatMap((bucket) => [...bucket.values()]);
-    return all
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(({ content: _content, ...rest }) => rest);
+    const rows = await this.prisma.deedTemplate.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        status: true,
+        createdById: true,
+        createdByName: true,
+        createdByRole: true,
+        createdAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type as DeedType,
+      title: row.title,
+      status: row.status as SampleDeedListItem["status"],
+      createdById: row.createdById,
+      createdByName: row.createdByName,
+      createdByRole: (row.createdByRole ?? undefined) as SampleDeedListItem["createdByRole"],
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /** Deed counts per creator id (for the admin's partner list). */
+  async countsByCreator(): Promise<Record<string, number>> {
+    const rows = await this.prisma.deedTemplate.groupBy({
+      by: ["createdById"],
+      _count: { _all: true },
+    });
+    return Object.fromEntries(rows.map((row) => [row.createdById, row._count._all]));
   }
 
   /** Fetch one sample deed (with its full content) by id, or null if absent. */
   async getOne(id: string): Promise<SampleDeedItem | null> {
-    return this.findById(id);
+    const row = await this.prisma.deedTemplate.findUnique({ where: { id } });
+    return row ? toItem(row) : null;
   }
 
   /** Draft a new deed for a type, owned by the caller. */
   async create(input: CreateSampleDeedInput, user: StaffUser): Promise<SampleDeedItem> {
-    const item: SampleDeedItem = {
-      ...input,
-      id: randomUUID(),
-      status: "active",
-      createdById: user.id,
-      createdByName: user.name,
-      createdByRole: user.role,
-      createdAt: new Date().toISOString(),
-    };
-    await fs.mkdir(this.baseDir, { recursive: true });
-    await fs.writeFile(this.fileFor(item.type, item.id), JSON.stringify(item), "utf8");
-    (await this.loadType(item.type)).set(item.id, item);
-    this.typeById.set(item.id, item.type);
-    return item;
+    const row = await this.prisma.deedTemplate.create({
+      data: {
+        id: randomUUID(),
+        type: input.type,
+        title: input.title,
+        content: input.content,
+        status: "active",
+        createdById: user.id,
+        createdByName: user.name,
+        createdByRole: user.role,
+        createdAt: new Date(),
+      },
+    });
+    return toItem(row);
   }
 
   /** Edit own deed (ADMIN and EMPLOYEE: any deed). */
   async update(id: string, input: UpdateSampleDeedInput, user: StaffUser): Promise<SampleDeedItem> {
     const canEditAny = user.role === "ADMIN" || user.role === "EMPLOYEE";
-    const item = await this.findById(id);
-    if (!item || (!canEditAny && item.createdById !== user.id)) {
+    const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+    if (!existing || (!canEditAny && existing.createdById !== user.id)) {
       throw new NotFoundException("Deed not found.");
     }
-    const updated = { ...item, ...input };
-    await fs.writeFile(this.fileFor(updated.type, id), JSON.stringify(updated), "utf8");
-    (await this.loadType(updated.type)).set(id, updated);
-    return updated;
+    const row = await this.prisma.deedTemplate.update({ where: { id }, data: input });
+    return toItem(row);
   }
 
   /** Delete own deed (ADMIN: any deed). EMPLOYEE can never delete. */
@@ -191,12 +144,10 @@ export class SampleDeedsService {
     if (user.role === "EMPLOYEE") {
       throw new ForbiddenException("Employees cannot delete deeds.");
     }
-    const item = await this.findById(id);
-    if (!item || (user.role !== "ADMIN" && item.createdById !== user.id)) {
+    const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+    if (!existing || (user.role !== "ADMIN" && existing.createdById !== user.id)) {
       throw new NotFoundException("Sample deed not found.");
     }
-    await fs.unlink(this.fileFor(item.type, id));
-    this.cache.get(item.type)?.delete(id);
-    this.typeById.delete(id);
+    await this.prisma.deedTemplate.delete({ where: { id } });
   }
 }

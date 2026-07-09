@@ -7,10 +7,7 @@ import { BrandMark } from "../../components/icons";
 import { DEEDS } from "../deeds/deedData";
 
 // Buy/Sell intentionally omitted — feature dropped from scope.
-const NAV_ITEMS: { key: StringKey; to: string }[] = [
-  { key: "navHome", to: "/" },
-  { key: "navGuideline", to: "/guideline" },
-];
+const NAV_ITEMS: { key: StringKey; to: string }[] = [{ key: "navHome", to: "/" }];
 
 export function Nav() {
   const lang = useUiStore((s) => s.lang);
@@ -107,12 +104,6 @@ export function Nav() {
           {isEmployee && (
             <Link to="/all-deeds" activeProps={{ className: "active" }}>
               {t("navAllDeeds")}
-            </Link>
-          )}
-
-          {isAdmin && (
-            <Link to="/company-docs" activeProps={{ className: "active" }}>
-              {t("navCompanyDocs")}
             </Link>
           )}
 

@@ -4,12 +4,19 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npx --yes pnpm@11.9.0 install --frozen-lockfile && npx --yes pnpm@11.9.0 --filter @sampada/shared build && npx --yes pnpm@11.9.0 --filter @sampada/api bundle
+    buildCommand: npx --yes pnpm@11.9.0 install --frozen-lockfile && npx --yes pnpm@11.9.0 --filter @sampada/shared build && npx --yes pnpm@11.9.0 --filter @sampada/api exec prisma generate && npx --yes pnpm@11.9.0 --filter @sampada/api exec prisma migrate deploy && npx --yes pnpm@11.9.0 --filter @sampada/api bundle
     startCommand: node apps/api/deploy/server.cjs
     healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_VERSION
         value: 22.16.0
+      # Neon pooled endpoint (hostname contains "-pooler") — used by the app.
+      - key: DATABASE_URL
+        sync: false
+      # Neon direct endpoint (no "-pooler") — used by `prisma migrate deploy`
+      # during build; migrations need a non-pooled connection.
+      - key: DIRECT_URL
+        sync: false
       - key: CORS_ORIGIN
         sync: false
       - key: ADMIN_EMAIL

@@ -76,6 +76,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
                   autoFocus
                   value={loginValue}
                   onChange={(e) => setLoginValue(e.target.value)}
+                  autoComplete="off"
                   required
                 />
               </label>
@@ -84,6 +85,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
                 <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="off"
                   required
                 />
               </label>

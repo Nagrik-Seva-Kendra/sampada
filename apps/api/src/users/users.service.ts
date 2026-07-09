@@ -4,12 +4,10 @@ import {
   createDecipheriv,
   createHash,
   randomBytes,
-  randomUUID,
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import type { User } from "@prisma/client";
 import type {
   CreateEmployeeInput,
   CreatePartnerInput,
@@ -18,6 +16,7 @@ import type {
   Role,
   UpdateProfileInput,
 } from "@sampada/shared";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 export interface StoredUser {
   id: string;
@@ -42,37 +41,41 @@ export interface StoredUser {
   employeeCode: string | null;
 }
 
+function toStoredUser(row: User): StoredUser {
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    passwordHash: row.passwordHash,
+    passwordEnc: row.passwordEnc ?? "",
+    role: row.role as Role,
+    fname: row.fname,
+    lname: row.lname,
+    createdAt: row.createdAt.toISOString(),
+    photoFileName: row.photoFileName,
+    status: row.status,
+    phone: row.mobile,
+    employeeCode: row.employeeCode,
+  };
+}
+
+const STAFF_ROLES: Role[] = ["PARTNER", "EMPLOYEE"];
+
 /**
- * Interim user store: JSONL on disk (DB-free), same pattern as ContactService.
- * Holds partner accounts created by the admin; the admin itself stays on env
- * credentials. Swap for the Prisma User table in the DB phase.
+ * Partner/employee account store, backed by the Prisma User table. Holds
+ * partner/employee accounts (admin-created or self-signed-up); the admin
+ * itself stays on env credentials.
  */
 @Injectable()
 export class UsersService {
-  private readonly baseDir =
-    process.env.UPLOAD_DIR
-      ? path.join(process.env.UPLOAD_DIR, "..", "users")
-      : path.resolve(process.cwd(), "uploads", "users");
-  private readonly file = path.join(this.baseDir, "users.jsonl");
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(): Promise<StoredUser[]> {
-    let text: string;
-    try {
-      text = await fs.readFile(this.file, "utf8");
-    } catch {
-      return [];
-    }
-    return text
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as StoredUser)
-      .map((u) => ({
-        ...u,
-        status: u.status ?? "ACTIVE",
-        phone: u.phone ?? null,
-        employeeCode: u.employeeCode ?? null,
-        passwordEnc: u.passwordEnc ?? "",
-      }));
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: STAFF_ROLES } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toStoredUser);
   }
 
   /** Admin: decrypt the password an employee/partner set at signup (for support/recovery use). */
@@ -86,77 +89,70 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<StoredUser | undefined> {
-    const needle = email.trim().toLowerCase();
-    return (await this.list()).find((u) => u.email.toLowerCase() === needle);
+    const row = await this.prisma.user.findFirst({
+      where: { email: email.trim().toLowerCase(), role: { in: STAFF_ROLES } },
+    });
+    return row ? toStoredUser(row) : undefined;
   }
 
   async findById(id: string): Promise<StoredUser | undefined> {
-    return (await this.list()).find((u) => u.id === id);
+    const row = await this.prisma.user.findUnique({ where: { id } });
+    return row ? toStoredUser(row) : undefined;
   }
 
   /** Login by username if set, else email (keeps accounts without a username usable). */
   async findByLogin(login: string): Promise<StoredUser | undefined> {
     const needle = login.trim().toLowerCase();
-    return (await this.list()).find(
-      (u) => u.username?.toLowerCase() === needle || u.email.toLowerCase() === needle,
-    );
+    const row = await this.prisma.user.findFirst({
+      where: { role: { in: STAFF_ROLES }, OR: [{ username: needle }, { email: needle }] },
+    });
+    return row ? toStoredUser(row) : undefined;
   }
 
   /** Partner/employee self-edit: own name/email/username/password (current password required to change password). */
   async updateProfile(id: string, input: UpdateProfileInput): Promise<StoredUser> {
-    const users = await this.list();
-    const index = users.findIndex((u) => u.id === id);
-    if (index === -1) throw new NotFoundException("User not found.");
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("User not found.");
 
-    if (input.password && !verifyPassword(input.currentPassword ?? "", users[index]!.passwordHash)) {
+    if (input.password && !verifyPassword(input.currentPassword ?? "", existing.passwordHash)) {
       throw new ForbiddenException("Current password is incorrect.");
     }
 
     const email = input.email?.trim().toLowerCase();
-    if (email && users.some((u) => u.id !== id && u.email.toLowerCase() === email)) {
-      throw new ConflictException("A user with this email already exists.");
+    if (email) {
+      const clash = await this.prisma.user.findFirst({ where: { email, NOT: { id } } });
+      if (clash) throw new ConflictException("A user with this email already exists.");
     }
     const username = input.username?.trim().toLowerCase();
-    if (
-      username &&
-      users.some(
-        (u) =>
-          u.id !== id &&
-          (u.username?.toLowerCase() === username || u.email.toLowerCase() === username),
-      )
-    ) {
-      throw new ConflictException("That username is already taken.");
+    if (username) {
+      const clash = await this.prisma.user.findFirst({
+        where: { NOT: { id }, OR: [{ username }, { email: username }] },
+      });
+      if (clash) throw new ConflictException("That username is already taken.");
     }
 
-    const updated: StoredUser = {
-      ...users[index]!,
-      ...(input.fname !== undefined ? { fname: input.fname } : {}),
-      ...(input.lname !== undefined ? { lname: input.lname } : {}),
-      ...(email !== undefined ? { email } : {}),
-      ...(username !== undefined ? { username } : {}),
-      ...(input.password !== undefined
-        ? { passwordHash: hashPassword(input.password), passwordEnc: encryptPassword(input.password) }
-        : {}),
-    };
-    users[index] = updated;
-    await this.writeAll(users);
-    return updated;
+    const row = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(input.fname !== undefined ? { fname: input.fname } : {}),
+        ...(input.lname !== undefined ? { lname: input.lname } : {}),
+        ...(email !== undefined ? { email } : {}),
+        ...(username !== undefined ? { username } : {}),
+        ...(input.password !== undefined
+          ? { passwordHash: hashPassword(input.password), passwordEnc: encryptPassword(input.password) }
+          : {}),
+      },
+    });
+    return toStoredUser(row);
   }
 
   /** Replace the stored profile-photo filename for a user (null clears it). */
   async setPhoto(id: string, photoFileName: string | null): Promise<StoredUser> {
-    const users = await this.list();
-    const index = users.findIndex((u) => u.id === id);
-    if (index === -1) throw new NotFoundException("User not found.");
-    users[index] = { ...users[index]!, photoFileName };
-    await this.writeAll(users);
-    return users[index]!;
-  }
-
-  private async writeAll(users: StoredUser[]): Promise<void> {
-    await fs.mkdir(this.baseDir, { recursive: true });
-    const body = users.map((u) => JSON.stringify(u)).join("\n");
-    await fs.writeFile(this.file, body ? body + "\n" : "", "utf8");
+    const row = await this.prisma.user
+      .update({ where: { id }, data: { photoFileName } })
+      .catch(() => null);
+    if (!row) throw new NotFoundException("User not found.");
+    return toStoredUser(row);
   }
 
   /** Admin-created: immediately active. */
@@ -234,34 +230,35 @@ export class UsersService {
     role: "PARTNER" | "EMPLOYEE",
     status: "ACTIVE" | "INACTIVE",
   ): Promise<StoredUser> {
-    const users = await this.list();
-    const index = users.findIndex((u) => u.id === id && u.role === role);
-    if (index === -1 || users[index]!.status === "PENDING") {
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== role || existing.status === "PENDING") {
       throw new NotFoundException("Account not found.");
     }
-    users[index] = { ...users[index]!, status };
-    await this.writeAll(users);
-    return users[index]!;
+    const row = await this.prisma.user.update({ where: { id }, data: { status } });
+    return toStoredUser(row);
   }
 
   private async listPending(role: "PARTNER" | "EMPLOYEE"): Promise<StoredUser[]> {
-    return (await this.list()).filter((u) => u.role === role && u.status === "PENDING");
+    const rows = await this.prisma.user.findMany({
+      where: { role, status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toStoredUser);
   }
 
   private async approveStaff(id: string, role: "PARTNER" | "EMPLOYEE"): Promise<StoredUser> {
-    const users = await this.list();
-    const index = users.findIndex((u) => u.id === id && u.role === role);
-    if (index === -1) throw new NotFoundException("Request not found.");
-    users[index] = { ...users[index]!, status: "ACTIVE" };
-    await this.writeAll(users);
-    return users[index]!;
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== role) throw new NotFoundException("Request not found.");
+    const row = await this.prisma.user.update({ where: { id }, data: { status: "ACTIVE" } });
+    return toStoredUser(row);
   }
 
   private async rejectStaff(id: string, role: "PARTNER" | "EMPLOYEE"): Promise<void> {
-    const users = await this.list();
-    const target = users.find((u) => u.id === id && u.role === role && u.status === "PENDING");
-    if (!target) throw new NotFoundException("Request not found.");
-    await this.writeAll(users.filter((u) => u.id !== id));
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== role || existing.status !== "PENDING") {
+      throw new NotFoundException("Request not found.");
+    }
+    await this.prisma.user.delete({ where: { id } });
   }
 
   private async createStaff(
@@ -269,45 +266,52 @@ export class UsersService {
     input: CreatePartnerInput | CreateEmployeeInput | PartnerSignupInput | EmployeeSignupInput,
     status: "PENDING" | "ACTIVE",
   ): Promise<StoredUser> {
-    const users = await this.list();
-    if (users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) {
-      throw new ConflictException("A user with this email already exists.");
-    }
+    const email = input.email.trim().toLowerCase();
     const username = "username" in input ? input.username.trim().toLowerCase() : null;
-    if (
-      username &&
-      users.some((u) => u.username?.toLowerCase() === username || u.email.toLowerCase() === username)
-    ) {
-      throw new ConflictException("That username is already taken.");
-    }
-    const user: StoredUser = {
-      id: randomUUID(),
-      email: input.email.trim().toLowerCase(),
-      username,
-      passwordHash: hashPassword(input.password),
-      passwordEnc: encryptPassword(input.password),
-      role,
-      fname: input.fname,
-      lname: input.lname,
-      createdAt: new Date().toISOString(),
-      photoFileName: null,
-      status,
-      phone: "phone" in input ? input.phone : null,
-      employeeCode: role === "EMPLOYEE" ? nextEmployeeCode(users) : null,
-    };
-    await this.writeAll([...users, user]);
-    return user;
-  }
-}
 
-/** Sequential "EMP-0007"-style code; based on the highest existing employee code so gaps from deletions aren't reused. */
-function nextEmployeeCode(existing: StoredUser[]): string {
-  const max = existing
-    .filter((u) => u.role === "EMPLOYEE" && u.employeeCode)
-    .map((u) => Number(u.employeeCode!.replace("EMP-", "")))
-    .filter((n) => Number.isFinite(n))
-    .reduce((a, b) => Math.max(a, b), 0);
-  return `EMP-${String(max + 1).padStart(4, "0")}`;
+    const emailClash = await this.prisma.user.findFirst({
+      where: { email, role: { in: STAFF_ROLES } },
+    });
+    if (emailClash) throw new ConflictException("A user with this email already exists.");
+
+    if (username) {
+      const usernameClash = await this.prisma.user.findFirst({
+        where: { role: { in: STAFF_ROLES }, OR: [{ username }, { email: username }] },
+      });
+      if (usernameClash) throw new ConflictException("That username is already taken.");
+    }
+
+    const employeeCode = role === "EMPLOYEE" ? await this.nextEmployeeCode() : null;
+
+    const row = await this.prisma.user.create({
+      data: {
+        email,
+        username,
+        passwordHash: hashPassword(input.password),
+        passwordEnc: encryptPassword(input.password),
+        role,
+        fname: input.fname,
+        lname: input.lname,
+        status,
+        mobile: "phone" in input ? input.phone : null,
+        employeeCode,
+      },
+    });
+    return toStoredUser(row);
+  }
+
+  /** Sequential "EMP-0007"-style code; based on the highest existing employee code so gaps from deletions aren't reused. */
+  private async nextEmployeeCode(): Promise<string> {
+    const rows = await this.prisma.user.findMany({
+      where: { role: "EMPLOYEE", employeeCode: { not: null } },
+      select: { employeeCode: true },
+    });
+    const max = rows
+      .map((r) => Number(r.employeeCode!.replace("EMP-", "")))
+      .filter((n) => Number.isFinite(n))
+      .reduce((a, b) => Math.max(a, b), 0);
+    return `EMP-${String(max + 1).padStart(4, "0")}`;
+  }
 }
 
 function hashPassword(password: string): string {
@@ -325,10 +329,10 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 /**
  * Reversible AES-256-GCM copy of the password so the admin can look it up.
- * Interim only, same as the rest of this file — a real deployment shouldn't
- * keep recoverable passwords at all; this exists because the admin asked to
- * be able to view what employees/partners set. Key is derived from JWT_SECRET
- * so no extra env var is needed.
+ * Interim only — a real deployment shouldn't keep recoverable passwords at
+ * all; this exists because the admin asked to be able to view what
+ * employees/partners set. Key is derived from JWT_SECRET so no extra env var
+ * is needed.
  */
 function encKey(): Buffer {
   const secret = process.env.JWT_SECRET ?? "";
