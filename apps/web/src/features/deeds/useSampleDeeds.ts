@@ -97,8 +97,10 @@ export function useCreateSampleDeed() {
       api
         .post("sample-deeds", { headers: authHeaders(token), json: input })
         .json<SampleDeedItem>(),
-    onSuccess: (_, input) =>
-      qc.invalidateQueries({ queryKey: ["sample-deeds", input.type] }),
+    onSuccess: (_, input) => {
+      qc.invalidateQueries({ queryKey: ["sample-deeds", input.type] });
+      qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });
+    },
   });
 }
 
@@ -127,6 +129,21 @@ export function useDeleteSampleDeed(type: DeedType) {
       api.delete(`sample-deeds/${id}`, { headers: authHeaders(token) }).json(),
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
+      qc.removeQueries({ queryKey: ["sample-deeds", "one", id] });
+    },
+  });
+}
+
+/** Delete variant for the "All Deeds" table, where each row can be a different type. */
+export function useDeleteAnyDeed() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<unknown, Error, { id: string; type: DeedType }>({
+    mutationFn: ({ id }) =>
+      api.delete(`sample-deeds/${id}`, { headers: authHeaders(token) }).json(),
+    onSuccess: (_, { id, type }) => {
+      qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
+      qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });
       qc.removeQueries({ queryKey: ["sample-deeds", "one", id] });
     },
   });

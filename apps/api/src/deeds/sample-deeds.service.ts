@@ -101,10 +101,15 @@ export class SampleDeedsService {
   async listCreators(): Promise<DeedCreator[]> {
     const rows = await this.prisma.user.findMany({
       where: { role: { in: ["ADMIN", "EMPLOYEE"] } },
-      select: { id: true, fname: true, lname: true },
+      select: { id: true, username: true, fname: true, lname: true },
       orderBy: { fname: "asc" },
     });
-    return rows.map((r) => ({ id: r.id, name: `${r.fname} ${r.lname}`.trim() }));
+    // Label by username (e.g. "admin") so the dropdown matches what the deed's
+    // User column shows; fall back to the full name for accounts without one.
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.username ?? `${r.fname} ${r.lname}`.trim(),
+    }));
   }
 
   /** Fetch one sample deed (with its full content) by id, or null if absent. */

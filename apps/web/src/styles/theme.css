@@ -131,6 +131,11 @@ h3 {
   box-shadow: var(--shadow);
   padding: 22px;
 }
+.modal-card--deed {
+  max-width: 760px;
+  max-height: 86vh;
+  padding: 28px 32px;
+}
 .modal-head {
   display: flex;
   justify-content: space-between;
@@ -246,7 +251,7 @@ h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 32px;
+  padding: 18px 0;
 }
 .brand {
   display: flex;

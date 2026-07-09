@@ -28,7 +28,12 @@ export function DeedViewModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-card modal-card--deed"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h3>{d ? d.title : "…"}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Close">

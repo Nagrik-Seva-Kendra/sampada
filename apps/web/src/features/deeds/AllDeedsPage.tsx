@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { DeedType, type ListDeedsQuery } from "@sampada/shared";
+import { ChevronDownIcon, MoreVertical } from "lucide-react";
+import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
+import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
-import { useScrollLock } from "../../lib/useScrollLock";
-import { useAllDeeds, useDeedCreators, useSampleDeed } from "./useSampleDeeds";
+import {
+  useAllDeeds,
+  useCreateSampleDeed,
+  useDeedCreators,
+  useDeleteAnyDeed,
+  useFetchSampleDeed,
+} from "./useSampleDeeds";
+import { DeedViewModal } from "./DeedViewModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const PAGE_SIZE = 25;
 const ALL = "__all__";
@@ -33,6 +49,8 @@ function formatDate(iso: string): string {
 export function AllDeedsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
+  const isStaff = useIsStaff();
+  const canDelete = useCanDeleteDeeds();
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [createdById, setCreatedById] = useState("");
@@ -52,6 +70,11 @@ export function AllDeedsPage() {
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [viewId, setViewId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const create = useCreateSampleDeed();
+  const del = useDeleteAnyDeed();
+  const fetchDeed = useFetchSampleDeed();
 
   useEffect(() => {
     const id = setTimeout(() => setDebounced(search), 250);
@@ -77,6 +100,50 @@ export function AllDeedsPage() {
     setCreatedById("");
   }
 
+  function onCreate(type: DeedType) {
+    const name = window.prompt(t("deedsCreateNamePrompt"));
+    if (!name || !name.trim()) return;
+    create.mutate(
+      { type, title: name.trim(), content: "" },
+      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
+    );
+  }
+
+  function openEdit(d: SampleDeedListItem) {
+    window.open(`/deeds/${d.type}/edit/${d.id}`, "_blank");
+  }
+
+  async function onDuplicate(d: SampleDeedListItem) {
+    const name = window.prompt(t("deedsCreateNamePrompt"));
+    if (!name || !name.trim()) return;
+    setBusy(true);
+    try {
+      const full = await fetchDeed(d.id);
+      create.mutate(
+        { type: d.type, title: name.trim(), content: full.content },
+        { onSuccess: (item) => window.open(`/deeds/${d.type}/edit/${item.id}`, "_blank") },
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPrint(d: SampleDeedListItem) {
+    setBusy(true);
+    try {
+      const full = await fetchDeed(d.id);
+      printDeed(full.title, full.content);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onDelete(d: SampleDeedListItem) {
+    if (window.confirm(t("deedsDeleteConfirm"))) {
+      del.mutate({ id: d.id, type: d.type });
+    }
+  }
+
   return (
     <section className="page">
       <div className="wrap">
@@ -93,6 +160,24 @@ export function AllDeedsPage() {
                 ? `${t("allDeedsMatches")}: ${filtered.length} / ${rows.length}`
                 : `${t("allDeedsTotal")}: ${rows.length}`}
             </span>
+          )}
+          {isStaff && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="btn-calc" style={{ marginLeft: "auto" }}>
+                  {t("deedsCreateBtn")}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{t("deedsCreateChooseType")}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {DeedType.options.map((type) => (
+                  <DropdownMenuItem key={type} onSelect={() => onCreate(type)}>
+                    {findDeed(type)?.name[lang] ?? type}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 
@@ -214,19 +299,51 @@ export function AllDeedsPage() {
                       </td>
                       <td>{d.createdByName}</td>
                       <td>
-                        <Select
-                          value=""
-                          onValueChange={(v) => {
-                            if (v === "view") setViewId(d.id);
-                          }}
-                        >
-                          <SelectTrigger size="sm" className="dr-action-select">
-                            <SelectValue placeholder={t("deedsActionPlaceholder")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="view">{t("deedsViewDeed")}</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-label={t("deedsActionPlaceholder")}
+                              className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none disabled:opacity-50"
+                            >
+                              <MoreVertical className="size-4 opacity-70" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>{t("deedsActionGroupView")}</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => setViewId(d.id)}>
+                              {t("deedsViewDeed")}
+                            </DropdownMenuItem>
+
+                            {isStaff && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>{t("deedsActionGroupManage")}</DropdownMenuLabel>
+                                <DropdownMenuItem onSelect={() => openEdit(d)}>
+                                  {t("deedsEditDeed")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => void onDuplicate(d)}>
+                                  {t("deedsCreateDeedOption")}
+                                </DropdownMenuItem>
+                                {canDelete && (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onSelect={() => onDelete(d)}
+                                  >
+                                    {t("deedsDeleteDeed")}
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            )}
+
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>{t("deedsActionGroupPrint")}</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => void onPrint(d)}>
+                              {t("deedsPrintDeed")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))}
@@ -261,7 +378,9 @@ export function AllDeedsPage() {
         </div>
       </div>
 
-      {viewId && <DeedViewModal id={viewId} onClose={() => setViewId(null)} t={t} lang={lang} />}
+      {viewId && (
+        <DeedViewModal id={viewId} onClose={() => setViewId(null)} showCategory showCreator />
+      )}
     </section>
   );
 }
@@ -305,14 +424,15 @@ function TypeFilter({
     <div className={"nav-dd" + (open ? " open" : "")} ref={ref}>
       <button
         type="button"
-        className="flex h-8 items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none data-[state=open]:border-ring"
+        className="flex h-8 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none data-[state=open]:border-ring"
         data-state={open ? "open" : "closed"}
         style={{ cursor: "pointer" }}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        {label} <span className="nav-dd-caret">▾</span>
+        {label}
+        <ChevronDownIcon className="size-4 opacity-50" />
       </button>
       <div className="nav-dd-menu" role="menu" style={{ left: 0, transform: "none" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -323,52 +443,6 @@ function TypeFilter({
             </label>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function DeedViewModal({
-  id,
-  onClose,
-  t,
-  lang,
-}: {
-  id: string;
-  onClose: () => void;
-  t: (k: StringKey) => string;
-  lang: "en" | "hi";
-}) {
-  const deed = useSampleDeed(id);
-  useScrollLock(true);
-  const d = deed.data;
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h3>{d ? d.title : "…"}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        {deed.isError && <p className="modal-error">{t("drError")}</p>}
-        {d && (
-          <>
-            <p>
-              <strong>{findDeed(d.type)?.name[lang] ?? d.type}</strong> · {t("drBy")}{" "}
-              <strong>{d.createdByName}</strong>
-            </p>
-            <p style={{ whiteSpace: "pre-wrap" }}>{d.content}</p>
-            <button
-              className="btn-calc"
-              style={{ marginTop: 12 }}
-              onClick={() => printDeed(d.title, d.content)}
-            >
-              {t("deedsPrintDeed")}
-            </button>
-          </>
-        )}
       </div>
     </div>
   );
