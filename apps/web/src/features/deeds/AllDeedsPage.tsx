@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { DeedRecordStatus, DeedType, type ListDeedsQuery } from "@sampada/shared";
+import { DeedType, type ListDeedsQuery } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
@@ -35,16 +35,14 @@ export function AllDeedsPage() {
   const t = (k: StringKey) => translate(k, lang);
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
-  const [status, setStatus] = useState<DeedRecordStatus | "">("");
   const [createdById, setCreatedById] = useState("");
 
   const filters: ListDeedsQuery = useMemo(
     () => ({
       ...(selectedTypes.size ? { types: [...selectedTypes] } : {}),
-      ...(status ? { status } : {}),
       ...(createdById ? { createdById } : {}),
     }),
-    [selectedTypes, status, createdById],
+    [selectedTypes, createdById],
   );
   const hasFilters = Object.keys(filters).length > 0;
 
@@ -76,7 +74,6 @@ export function AllDeedsPage() {
 
   function clearFilters() {
     setSelectedTypes(new Set());
-    setStatus("");
     setCreatedById("");
   }
 
@@ -150,20 +147,6 @@ export function AllDeedsPage() {
 
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginLeft: "auto" }}>
             <TypeFilter selected={selectedTypes} onChange={setSelectedTypes} t={t} lang={lang} />
-
-            <Select
-              value={status || ALL}
-              onValueChange={(v) => setStatus(v === ALL ? "" : (v as DeedRecordStatus))}
-            >
-              <SelectTrigger size="sm">
-                <SelectValue placeholder={t("allDeedsFilterAllStatuses")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t("allDeedsFilterAllStatuses")}</SelectItem>
-                <SelectItem value="active">{t("deedStatusActive")}</SelectItem>
-                <SelectItem value="inactive">{t("deedStatusInactive")}</SelectItem>
-              </SelectContent>
-            </Select>
 
             <Select value={createdById || ALL} onValueChange={(v) => setCreatedById(v === ALL ? "" : v)}>
               <SelectTrigger size="sm">
