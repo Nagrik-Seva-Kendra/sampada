@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronDownIcon, MoreVertical } from "lucide-react";
+import { ChevronDownIcon, MoreVertical, Plus } from "lucide-react";
 import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
@@ -14,6 +14,7 @@ import {
   useFetchSampleDeed,
 } from "./useSampleDeeds";
 import { DeedViewModal } from "./DeedViewModal";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -70,6 +71,7 @@ export function AllDeedsPage() {
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [viewId, setViewId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
   const [busy, setBusy] = useState(false);
 
   const create = useCreateSampleDeed();
@@ -135,22 +137,29 @@ export function AllDeedsPage() {
     }
   }
 
-  function onDelete(d: SampleDeedListItem) {
-    if (window.confirm(t("deedsDeleteConfirm"))) {
-      del.mutate({ id: d.id, type: d.type });
-    }
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    del.mutate(
+      { id: pendingDelete.id, type: pendingDelete.type },
+      { onSuccess: () => setPendingDelete(null) },
+    );
   }
 
   return (
     <section className="page">
       <div className="wrap">
-        <div className="kicker">
-          <span className="rule" />
-          {t("allDeedsKicker")}
-        </div>
-
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "4px 0 16px" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{t("allDeedsTitle")}</h2>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "0 0 28px" }}>
+          <h2
+            style={{
+              fontSize: 24,
+              fontWeight: 800,
+              margin: 0,
+              color: "var(--accent)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {t("allDeedsTitle")}
+          </h2>
           {deeds.data && (
             <span style={{ fontSize: 13, opacity: 0.65 }}>
               {debounced.trim()
@@ -161,7 +170,17 @@ export function AllDeedsPage() {
           {isStaff && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="btn-calc" style={{ marginLeft: "auto" }}>
+                <button
+                  type="button"
+                  className="btn-calc"
+                  style={{
+                    marginLeft: "auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 7,
+                  }}
+                >
+                  <Plus size={17} strokeWidth={2.5} />
                   {t("deedsCreateBtn")}
                 </button>
               </DropdownMenuTrigger>
@@ -323,7 +342,7 @@ export function AllDeedsPage() {
                                 {canDelete && (
                                   <DropdownMenuItem
                                     variant="destructive"
-                                    onSelect={() => onDelete(d)}
+                                    onSelect={() => setPendingDelete(d)}
                                   >
                                     {t("deedsDeleteDeed")}
                                   </DropdownMenuItem>
@@ -372,6 +391,21 @@ export function AllDeedsPage() {
 
       {viewId && (
         <DeedViewModal id={viewId} onClose={() => setViewId(null)} showCategory showCreator />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          title={t("deedsDeleteTitle")}
+          message={t("deedsDeleteConfirm")}
+          itemName={pendingDelete.title}
+          confirmLabel={t("deedsDeleteDeed")}
+          pendingLabel={t("deedsDeleting")}
+          cancelLabel={t("cancel")}
+          pending={del.isPending}
+          error={del.isError ? t("deedsDeleteFailed") : null}
+          onConfirm={confirmDelete}
+          onClose={() => setPendingDelete(null)}
+        />
       )}
     </section>
   );

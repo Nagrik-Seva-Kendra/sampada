@@ -11,6 +11,7 @@ import {
 } from "./useSampleDeeds";
 import { printDeed } from "./printDeed";
 import { DeedViewModal } from "./DeedViewModal";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -36,6 +37,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
   const fetchDeed = useFetchSampleDeed();
 
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -80,10 +82,9 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
     }
   }
 
-  function onDelete(item: SampleDeedListItem) {
-    if (window.confirm(t("deedsDeleteConfirm"))) {
-      del.mutate(item.id);
-    }
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    del.mutate(pendingDelete.id, { onSuccess: () => setPendingDelete(null) });
   }
 
   const PAGE_SIZE = 25;
@@ -149,7 +150,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                       else if (action === "edit") openEdit(r);
                       else if (action === "create") void onDuplicate(r);
                       else if (action === "print") void onPrint(r);
-                      else if (action === "delete") onDelete(r);
+                      else if (action === "delete") setPendingDelete(r);
                     }}
                   >
                     <option value="" disabled hidden>
@@ -202,6 +203,21 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
           id={viewingId}
           onClose={() => setViewingId(null)}
           showCreator={showCreator}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          title={t("deedsDeleteTitle")}
+          message={t("deedsDeleteConfirm")}
+          itemName={pendingDelete.title}
+          confirmLabel={t("deedsDeleteDeed")}
+          pendingLabel={t("deedsDeleting")}
+          cancelLabel={t("cancel")}
+          pending={del.isPending}
+          error={del.isError ? t("deedsDeleteFailed") : null}
+          onConfirm={confirmDelete}
+          onClose={() => setPendingDelete(null)}
         />
       )}
     </div>
