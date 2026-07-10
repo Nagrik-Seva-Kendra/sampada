@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
-import type { StaffRole } from "@sampada/shared";
+import type { EmployeeItem, StaffRole, UpdateUserInput } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -17,6 +17,7 @@ import {
   useReactivateEmployee,
   useRejectEmployee,
   useStaffList,
+  useUpdateUser,
 } from "./useEmployees";
 
 type Tab = "requests" | "users";
@@ -164,6 +165,7 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
   const selfId = useAuthStore((s) => s.user?.id);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<EmployeeItem | null>(null);
 
   function onDeactivate(id: string) {
     if (window.confirm(t("reqDiscontinueConfirm"))) deactivate.mutate(id);
@@ -233,6 +235,9 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
                   >
                     {expandedId === u.id ? t("empHideDetails") : t("empViewDetails")}
                   </button>
+                  <button className="doc-btn" onClick={() => setEditing(u)}>
+                    {t("editUserEdit")}
+                  </button>
                   {/* Only employee services can be discontinued; admins stay active, and you can't discontinue yourself. */}
                   {isEmployee && !isSelf && u.status === "ACTIVE" && (
                     <button className="doc-btn danger" onClick={() => onDeactivate(u.id)} disabled={deactivate.isPending}>
@@ -253,6 +258,7 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
       </div>
 
       {addOpen && <AddUserModal t={t} onClose={() => setAddOpen(false)} />}
+      {editing && <EditUserModal t={t} user={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -427,6 +433,140 @@ function AddUserModal({
             </button>
           </form>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Admin edits an existing staff account: details, role, and an optional password reset. */
+function EditUserModal({
+  t,
+  user,
+  onClose,
+}: {
+  t: (k: StringKey) => string;
+  user: EmployeeItem;
+  onClose: () => void;
+}) {
+  const update = useUpdateUser();
+  const [fname, setFname] = useState(user.fname);
+  const [lname, setLname] = useState(user.lname);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [username, setUsername] = useState(user.username ?? "");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<StaffRole>(user.role);
+  const [error, setError] = useState<string | null>(null);
+
+  useScrollLock(true);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const input: UpdateUserInput = {
+      fname: fname.trim(),
+      lname: lname.trim(),
+      email: email.trim(),
+      role,
+      ...(phone.trim() ? { phone: phone.trim() } : {}),
+      ...(username.trim() ? { username: username.trim() } : {}),
+      ...(password ? { password } : {}),
+    };
+    update.mutate(
+      { id: user.id, input },
+      {
+        onSuccess: onClose,
+        onError: async (err) => setError(await apiErrorMessage(err, t("reqActionFailed"))),
+      },
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card modal-card--form"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h3>{t("editUserTitle")}</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="modal-form">
+          <div className="form-grid">
+            <label className="modal-field">
+              {t("profileFname")}
+              <input value={fname} onChange={(e) => setFname(e.target.value)} required maxLength={100} autoFocus />
+            </label>
+            <label className="modal-field">
+              {t("profileLname")}
+              <input value={lname} onChange={(e) => setLname(e.target.value)} required maxLength={100} />
+            </label>
+            <label className="modal-field">
+              {t("profileEmail")}
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
+                required
+              />
+            </label>
+            <label className="modal-field">
+              {t("authPhone")}
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                pattern="[0-9]{10}"
+                maxLength={10}
+                autoComplete="off"
+              />
+            </label>
+            <label className="modal-field">
+              {t("addUserUsername")}
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                minLength={3}
+                maxLength={50}
+                placeholder={t("addUserUsernamePlaceholder")}
+                autoComplete="off"
+              />
+            </label>
+            <label className="modal-field">
+              {t("addUserRole")}
+              <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+                <option value="EMPLOYEE">{t("teamRoleEmployee")}</option>
+                <option value="ADMIN">{t("teamRoleAdmin")}</option>
+              </select>
+            </label>
+            <label className="modal-field form-field--full">
+              {t("editUserNewPassword")}
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                placeholder={t("editUserNewPasswordHint")}
+                autoComplete="new-password"
+              />
+            </label>
+          </div>
+          {error && <p className="modal-error">{error}</p>}
+          <button className="btn-calc modal-submit" type="submit" disabled={update.isPending}>
+            {update.isPending ? "…" : t("editUserSubmit")}
+          </button>
+        </form>
       </div>
     </div>
   );

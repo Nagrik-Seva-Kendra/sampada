@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
-import { CreateUserInput, type EmployeeItem, type StaffRole } from "@sampada/shared";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { CreateUserInput, UpdateUserInput, type EmployeeItem, type StaffRole } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { UsersService, type StoredUser } from "./users.service.js";
 
@@ -36,6 +36,13 @@ export class UsersController {
   @Post()
   async create(@Body() body: unknown): Promise<EmployeeItem> {
     const user = await this.users.createUser(CreateUserInput.parse(body));
+    return toItem(user);
+  }
+
+  /** Edit a staff account's details, role, and/or reset its password. */
+  @Patch(":id")
+  async update(@Param("id") id: string, @Body() body: unknown): Promise<EmployeeItem> {
+    const user = await this.users.adminUpdateUser(id, UpdateUserInput.parse(body));
     return toItem(user);
   }
 }

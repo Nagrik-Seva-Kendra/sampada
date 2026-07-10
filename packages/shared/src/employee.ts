@@ -46,6 +46,28 @@ export const CreateUserInput = z.object({
 });
 export type CreateUserInput = z.infer<typeof CreateUserInput>;
 
+/**
+ * Admin edits an existing staff account from User Management. Every field is
+ * optional — only what the admin changes is sent. A non-empty `password`
+ * resets the login password (no current-password check; admin authority).
+ */
+export const UpdateUserInput = z.object({
+  fname: z.string().trim().min(1).max(100).optional(),
+  lname: z.string().trim().min(1).max(100).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().trim().regex(/^[0-9]{10}$/, "Enter a valid 10-digit mobile number").optional(),
+  username: z
+    .string()
+    .trim()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Letters, numbers, dot, underscore, hyphen only")
+    .optional(),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  role: StaffRole.optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
+
 /** Employee as listed to the admin (never exposes the password itself — see the separate reveal endpoint). */
 export const EmployeeItem = z.object({
   id: z.string(),

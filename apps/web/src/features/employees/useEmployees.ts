@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateUserInput, EmployeeItem } from "@sampada/shared";
+import type { CreateUserInput, EmployeeItem, UpdateUserInput } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -32,6 +32,20 @@ export function useCreateUser() {
   return useMutation<EmployeeItem, Error, CreateUserInput>({
     mutationFn: (input) =>
       api.post("users", { headers: authHeaders(token), json: input }).json<EmployeeItem>(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["staff"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+/** Admin: edit a staff account's details / role / password. */
+export function useUpdateUser() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<EmployeeItem, Error, { id: string; input: UpdateUserInput }>({
+    mutationFn: ({ id, input }) =>
+      api.patch(`users/${id}`, { headers: authHeaders(token), json: input }).json<EmployeeItem>(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["staff"] });
       qc.invalidateQueries({ queryKey: ["employees"] });

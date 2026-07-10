@@ -112,7 +112,7 @@ export const strings = {
   navManageTeam: { en: "Manage Team", hi: "टीम प्रबंधन" },
   teamTabRequests: { en: "Requests", hi: "अनुरोध" },
   teamTabUsers: { en: "User Management", hi: "उपयोगकर्ता प्रबंधन" },
-  teamCreateUser: { en: "+ Add User", hi: "+ उपयोगकर्ता जोड़ें" },
+  teamCreateUser: { en: "Add User", hi: "+ उपयोगकर्ता जोड़ें" },
   teamUsersCount: { en: "team members", hi: "टीम सदस्य" },
   teamUsersEmpty: { en: "No team members yet.", hi: "अभी कोई टीम सदस्य नहीं।" },
   teamRoleEmployee: { en: "Employee", hi: "कर्मचारी" },
@@ -130,6 +130,14 @@ export const strings = {
     hi: "उपयोगकर्ता बन गया। वे अपने ईमेल/यूज़रनेम और पासवर्ड से लॉगिन कर सकते हैं।",
   },
   addUserDone: { en: "Done", hi: "हो गया" },
+  editUserEdit: { en: "Edit", hi: "संपादित करें" },
+  editUserTitle: { en: "Edit User", hi: "उपयोगकर्ता संपादित करें" },
+  editUserNewPassword: { en: "New password", hi: "नया पासवर्ड" },
+  editUserNewPasswordHint: {
+    en: "Leave blank to keep current password",
+    hi: "वर्तमान पासवर्ड रखने के लिए खाली छोड़ें",
+  },
+  editUserSubmit: { en: "Save changes", hi: "परिवर्तन सहेजें" },
 
   // Deeds
   deedsTitle: { en: "Deeds & instruments", hi: "विलेख व दस्तावेज़" },

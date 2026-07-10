@@ -14,6 +14,7 @@ import type {
   EmployeeSignupInput,
   Role,
   UpdateProfileInput,
+  UpdateUserInput,
 } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -177,6 +178,59 @@ export class UsersService {
   /** Admin "Add User": create an employee or another admin, immediately active. */
   async createUser(input: CreateUserInput): Promise<StoredUser> {
     return this.createStaff(input, "ACTIVE", input.role);
+  }
+
+  /**
+   * Admin edits a staff account from User Management: name/email/phone/username,
+   * role, and an optional password reset. Only the fields present in `input`
+   * change. Email/username uniqueness is checked across all staff (excluding
+   * this account). Promoting to EMPLOYEE assigns an employee code if missing.
+   */
+  async adminUpdateUser(id: string, input: UpdateUserInput): Promise<StoredUser> {
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || (existing.role !== "EMPLOYEE" && existing.role !== "ADMIN")) {
+      throw new NotFoundException("User not found.");
+    }
+
+    const data: Record<string, unknown> = {};
+
+    if (input.email !== undefined) {
+      const email = input.email.trim().toLowerCase();
+      const clash = await this.prisma.user.findFirst({
+        where: { email, role: { in: LOGIN_ROLES }, NOT: { id } },
+      });
+      if (clash) throw new ConflictException("A user with this email already exists.");
+      data.email = email;
+    }
+
+    if (input.username !== undefined) {
+      const username = input.username.trim().toLowerCase();
+      const clash = await this.prisma.user.findFirst({
+        where: { role: { in: LOGIN_ROLES }, NOT: { id }, OR: [{ username }, { email: username }] },
+      });
+      if (clash) throw new ConflictException("That username is already taken.");
+      data.username = username;
+    }
+
+    if (input.fname !== undefined) data.fname = input.fname;
+    if (input.lname !== undefined) data.lname = input.lname;
+    if (input.phone !== undefined) data.mobile = input.phone;
+
+    if (input.role !== undefined && input.role !== existing.role) {
+      data.role = input.role;
+      // Employees carry a sequential code; assign one if promoting an admin who lacks it.
+      if (input.role === "EMPLOYEE" && !existing.employeeCode) {
+        data.employeeCode = await this.nextEmployeeCode();
+      }
+    }
+
+    if (input.password !== undefined) {
+      data.passwordHash = hashPassword(input.password);
+      data.passwordEnc = encryptPassword(input.password);
+    }
+
+    const row = await this.prisma.user.update({ where: { id }, data });
+    return toStoredUser(row);
   }
 
   /** Public self-signup: stays PENDING until the admin approves it. */
