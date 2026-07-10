@@ -67,7 +67,7 @@ export function DeedEditPage() {
 
   return (
     <section className="page">
-      <div className="wrap" style={{ maxWidth: 780 }}>
+      <div className="wrap" style={{ maxWidth: 1000 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 className="page-title" style={{ margin: 0 }}>
             {isNew ? t("deedsNewDeedTitle") : t("deedsEditDeed")}
@@ -90,7 +90,8 @@ export function DeedEditPage() {
           <label className="modal-field">
             {t("deedsContentLabel")}
             <textarea
-              rows={22}
+              rows={34}
+              style={{ fontSize: "1.05rem", lineHeight: 1.8, minHeight: "65vh" }}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               required
