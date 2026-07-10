@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EmployeeItem } from "@sampada/shared";
+import type { CreateUserInput, EmployeeItem } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -11,6 +11,31 @@ export function useEmployeesList() {
     queryKey: ["employees"],
     enabled: !!token && isAdmin,
     queryFn: () => api.get("employees", { headers: authHeaders(token) }).json<EmployeeItem[]>(),
+  });
+}
+
+/** Admin: every approved staff account (employees + admins) — the "User Management" directory. */
+export function useStaffList() {
+  const token = useAuthStore((s) => s.token);
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  return useQuery({
+    queryKey: ["staff"],
+    enabled: !!token && isAdmin,
+    queryFn: () => api.get("users", { headers: authHeaders(token) }).json<EmployeeItem[]>(),
+  });
+}
+
+/** Admin: create a new employee or admin account (immediately active). */
+export function useCreateUser() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<EmployeeItem, Error, CreateUserInput>({
+    mutationFn: (input) =>
+      api.post("users", { headers: authHeaders(token), json: input }).json<EmployeeItem>(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["staff"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
   });
 }
 
@@ -32,7 +57,10 @@ export function useApproveEmployee() {
   return useMutation<EmployeeItem, Error, string>({
     mutationFn: (id) =>
       api.post(`employees/${id}/approve`, { headers: authHeaders(token) }).json<EmployeeItem>(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["staff"] });
+    },
   });
 }
 
@@ -41,7 +69,10 @@ export function useRejectEmployee() {
   const qc = useQueryClient();
   return useMutation<unknown, Error, string>({
     mutationFn: (id) => api.delete(`employees/${id}`, { headers: authHeaders(token) }).json(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["staff"] });
+    },
   });
 }
 
@@ -52,7 +83,10 @@ export function useDeactivateEmployee() {
   return useMutation<EmployeeItem, Error, string>({
     mutationFn: (id) =>
       api.post(`employees/${id}/deactivate`, { headers: authHeaders(token) }).json<EmployeeItem>(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["staff"] });
+    },
   });
 }
 
@@ -63,7 +97,10 @@ export function useReactivateEmployee() {
   return useMutation<EmployeeItem, Error, string>({
     mutationFn: (id) =>
       api.post(`employees/${id}/reactivate`, { headers: authHeaders(token) }).json<EmployeeItem>(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["staff"] });
+    },
   });
 }
 

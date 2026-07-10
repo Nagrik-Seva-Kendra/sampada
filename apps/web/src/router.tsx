@@ -15,7 +15,7 @@ import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { AboutPage } from "./features/about/AboutPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
-import { EmployeeRequestsPage } from "./features/employees/EmployeeRequestsPage";
+import { TeamPage } from "./features/employees/TeamPage";
 import { useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
@@ -56,10 +56,10 @@ function GuardedProfilePage() {
   const role = useAuthStore((s) => s.user?.role);
   return role === "EMPLOYEE" ? <ProfilePage /> : <Navigate to="/" />;
 }
-// Employee signup approval queue is admin-only.
-function GuardedEmployeeRequestsPage() {
+// Team management (signup requests + user directory + add-user) is admin-only.
+function GuardedTeamPage() {
   const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
-  return isAdmin ? <EmployeeRequestsPage /> : <Navigate to="/" />;
+  return isAdmin ? <TeamPage /> : <Navigate to="/" />;
 }
 // "All Deeds" management table (every user's deeds) is admin + employee only.
 function GuardedAllDeedsPage() {
@@ -69,7 +69,13 @@ function GuardedAllDeedsPage() {
 
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/employee-requests", component: GuardedEmployeeRequestsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
+  // Old route — superseded by the tabbed /team page.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/employee-requests",
+    component: () => <Navigate to="/team" />,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/all-deed-details", component: GuardedAllDeedsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/profile", component: GuardedProfilePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: GuardedDeedsPage }),

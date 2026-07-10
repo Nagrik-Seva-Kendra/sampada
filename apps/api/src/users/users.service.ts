@@ -8,7 +8,13 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import type { User } from "@prisma/client";
-import type { CreateEmployeeInput, EmployeeSignupInput, Role, UpdateProfileInput } from "@sampada/shared";
+import type {
+  CreateEmployeeInput,
+  CreateUserInput,
+  EmployeeSignupInput,
+  Role,
+  UpdateProfileInput,
+} from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 export interface StoredUser {
@@ -68,6 +74,19 @@ export class UsersService {
   async list(): Promise<StoredUser[]> {
     const rows = await this.prisma.user.findMany({
       where: { role: { in: STAFF_ROLES } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toStoredUser);
+  }
+
+  /**
+   * Admin "User Management" tab: every approved staff account — employees AND
+   * admins — so admin-created admin logins show up too. Excludes PENDING
+   * self-signups (those live in the Requests tab via listPendingEmployees).
+   */
+  async listStaff(): Promise<StoredUser[]> {
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: LOGIN_ROLES }, status: { in: ["ACTIVE", "INACTIVE"] } },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toStoredUser);
@@ -155,6 +174,11 @@ export class UsersService {
     return this.createStaff(input, "ACTIVE");
   }
 
+  /** Admin "Add User": create an employee or another admin, immediately active. */
+  async createUser(input: CreateUserInput): Promise<StoredUser> {
+    return this.createStaff(input, "ACTIVE", input.role);
+  }
+
   /** Public self-signup: stays PENDING until the admin approves it. */
   async signupEmployee(input: EmployeeSignupInput): Promise<StoredUser> {
     return this.createStaff(input, "PENDING");
@@ -206,25 +230,30 @@ export class UsersService {
   }
 
   private async createStaff(
-    input: CreateEmployeeInput | EmployeeSignupInput,
+    input: CreateEmployeeInput | EmployeeSignupInput | CreateUserInput,
     status: "PENDING" | "ACTIVE",
+    role: Extract<Role, "EMPLOYEE" | "ADMIN"> = "EMPLOYEE",
   ): Promise<StoredUser> {
     const email = input.email.trim().toLowerCase();
-    const username = "username" in input ? input.username.trim().toLowerCase() : null;
+    const username =
+      "username" in input && input.username ? input.username.trim().toLowerCase() : null;
 
+    // Clash checks span every staff account (employees + admins) so an
+    // admin-created login can never collide with an existing one.
     const emailClash = await this.prisma.user.findFirst({
-      where: { email, role: { in: STAFF_ROLES } },
+      where: { email, role: { in: LOGIN_ROLES } },
     });
     if (emailClash) throw new ConflictException("A user with this email already exists.");
 
     if (username) {
       const usernameClash = await this.prisma.user.findFirst({
-        where: { role: { in: STAFF_ROLES }, OR: [{ username }, { email: username }] },
+        where: { role: { in: LOGIN_ROLES }, OR: [{ username }, { email: username }] },
       });
       if (usernameClash) throw new ConflictException("That username is already taken.");
     }
 
-    const employeeCode = await this.nextEmployeeCode();
+    // Sequential EMP-code identifies employees only; admins don't get one.
+    const employeeCode = role === "EMPLOYEE" ? await this.nextEmployeeCode() : null;
 
     const row = await this.prisma.user.create({
       data: {
@@ -232,7 +261,7 @@ export class UsersService {
         username,
         passwordHash: hashPassword(input.password),
         passwordEnc: encryptPassword(input.password),
-        role: "EMPLOYEE",
+        role,
         fname: input.fname,
         lname: input.lname,
         status,

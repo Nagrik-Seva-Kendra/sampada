@@ -1,5 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { CreateEmployeeInput, EmployeeSignupInput, type EmployeeItem } from "@sampada/shared";
+import {
+  CreateEmployeeInput,
+  EmployeeSignupInput,
+  type EmployeeItem,
+  type StaffRole,
+} from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { UsersService, type StoredUser } from "../users/users.service.js";
 import { OtpService } from "../otp/otp.service.js";
@@ -15,6 +20,7 @@ function toItem(user: StoredUser): EmployeeItem {
     username: user.username,
     createdAt: user.createdAt,
     status: user.status,
+    role: user.role as StaffRole,
   };
 }
 

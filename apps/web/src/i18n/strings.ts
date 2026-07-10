@@ -108,6 +108,29 @@ export const strings = {
   reqStatusActive: { en: "Active", hi: "सक्रिय" },
   reqStatusInactive: { en: "Discontinued", hi: "सेवा बंद" },
 
+  // Manage Team (admin)
+  navManageTeam: { en: "Manage Team", hi: "टीम प्रबंधन" },
+  teamTabRequests: { en: "Requests", hi: "अनुरोध" },
+  teamTabUsers: { en: "User Management", hi: "उपयोगकर्ता प्रबंधन" },
+  teamCreateUser: { en: "+ Add User", hi: "+ उपयोगकर्ता जोड़ें" },
+  teamUsersCount: { en: "team members", hi: "टीम सदस्य" },
+  teamUsersEmpty: { en: "No team members yet.", hi: "अभी कोई टीम सदस्य नहीं।" },
+  teamRoleEmployee: { en: "Employee", hi: "कर्मचारी" },
+  teamRoleAdmin: { en: "Admin", hi: "एडमिन" },
+  addUserTitle: { en: "Add New User", hi: "नया उपयोगकर्ता जोड़ें" },
+  addUserRole: { en: "Role", hi: "भूमिका" },
+  addUserUsername: { en: "Username (optional)", hi: "यूज़रनेम (वैकल्पिक)" },
+  addUserUsernamePlaceholder: {
+    en: "Login username — they can set their own later",
+    hi: "लॉगिन यूज़रनेम — वे बाद में स्वयं सेट कर सकते हैं",
+  },
+  addUserSubmit: { en: "Create user", hi: "उपयोगकर्ता बनाएं" },
+  addUserSuccess: {
+    en: "User created. They can log in with their email/username and password.",
+    hi: "उपयोगकर्ता बन गया। वे अपने ईमेल/यूज़रनेम और पासवर्ड से लॉगिन कर सकते हैं।",
+  },
+  addUserDone: { en: "Done", hi: "हो गया" },
+
   // Deeds
   deedsTitle: { en: "Deeds & instruments", hi: "विलेख व दस्तावेज़" },
   deedsSubtitle: {

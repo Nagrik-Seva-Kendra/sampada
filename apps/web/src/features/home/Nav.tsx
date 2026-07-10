@@ -104,11 +104,11 @@ export function Nav() {
                   )}
                   {isAdmin && (
                     <Link
-                      to="/employee-requests"
-                      className={pathname === "/employee-requests" ? "active" : ""}
+                      to="/team"
+                      className={pathname === "/team" ? "active" : ""}
                       onClick={() => setAccountOpen(false)}
                     >
-                      {t("navEmployeeRequests")}
+                      {t("navManageTeam")}
                     </Link>
                   )}
                   <a

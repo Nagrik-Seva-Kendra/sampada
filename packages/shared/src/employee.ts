@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { StaffRole } from "./enums.js";
 
 /** Admin creates employee accounts; employees can also self-signup (see EmployeesController). */
 export const CreateEmployeeInput = z.object({
@@ -22,6 +23,29 @@ export const EmployeeSignupInput = CreateEmployeeInput.extend({
 });
 export type EmployeeSignupInput = z.infer<typeof EmployeeSignupInput>;
 
+/**
+ * Admin creates a staff account from the "Manage Team → User Management" tab.
+ * Unlike self-signup there's no OTP; the admin picks the role (employee or
+ * another admin) and may assign a login username up front (optional — the
+ * account stays usable via email until one is set). Immediately ACTIVE.
+ */
+export const CreateUserInput = z.object({
+  fname: z.string().trim().min(1).max(100),
+  lname: z.string().trim().min(1).max(100),
+  email: z.string().email(),
+  phone: z.string().trim().regex(/^[0-9]{10}$/, "Enter a valid 10-digit mobile number"),
+  username: z
+    .string()
+    .trim()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Letters, numbers, dot, underscore, hyphen only")
+    .optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: StaffRole,
+});
+export type CreateUserInput = z.infer<typeof CreateUserInput>;
+
 /** Employee as listed to the admin (never exposes the password itself — see the separate reveal endpoint). */
 export const EmployeeItem = z.object({
   id: z.string(),
@@ -33,5 +57,7 @@ export const EmployeeItem = z.object({
   username: z.string().nullable(),
   createdAt: z.string(),
   status: z.enum(["PENDING", "ACTIVE", "INACTIVE"]),
+  /** EMPLOYEE or ADMIN — lets the User Management list badge admin accounts. */
+  role: StaffRole,
 });
 export type EmployeeItem = z.infer<typeof EmployeeItem>;
