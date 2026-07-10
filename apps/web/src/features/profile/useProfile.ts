@@ -16,6 +16,19 @@ export function useUpdateProfile() {
   });
 }
 
+/** Self-service password change for ANY logged-in account (admin + employee). Reissues the session. */
+export function useChangePassword() {
+  const token = useAuthStore((s) => s.token);
+  const setSession = useAuthStore((s) => s.setSession);
+  return useMutation<AuthResponse, Error, { currentPassword: string; password: string }>({
+    mutationFn: (input) =>
+      api
+        .patch("profile/password", { headers: authHeaders(token), json: input })
+        .json<AuthResponse>(),
+    onSuccess: (res) => setSession(res.accessToken, res.user),
+  });
+}
+
 /** Employee self-edit: replace profile photo. Reissues the session on success. */
 export function useUploadProfilePhoto() {
   const token = useAuthStore((s) => s.token);
