@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronDownIcon, MoreVertical, Plus } from "lucide-react";
+import { ChevronDownIcon, FilePlus2, MoreVertical } from "lucide-react";
 import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
@@ -180,7 +180,7 @@ export function AllDeedsPage() {
                     gap: 7,
                   }}
                 >
-                  <Plus size={17} strokeWidth={2.5} />
+                  <FilePlus2 size={17} strokeWidth={2.2} />
                   {t("deedsCreateBtn")}
                 </button>
               </DropdownMenuTrigger>

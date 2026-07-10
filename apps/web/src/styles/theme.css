@@ -317,6 +317,24 @@ h3 {
   color: var(--primary);
 }
 
+/* Wider dialog for multi-field forms (e.g. Add User) so fields sit two-up. */
+.modal-card--form {
+  max-width: 560px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+.form-field--full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 520px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .modal-form {
   display: grid;
   gap: 14px;

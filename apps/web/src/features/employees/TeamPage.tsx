@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UserPlus } from "lucide-react";
 import type { StaffRole } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -6,6 +7,7 @@ import { translate, type StringKey } from "../../i18n/strings";
 import { PasswordInput } from "../../components/PasswordInput";
 import { useScrollLock } from "../../lib/useScrollLock";
 import { apiErrorMessage } from "../../lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useApproveEmployee,
   useCreateUser,
@@ -64,6 +66,30 @@ export function TeamPage() {
   );
 }
 
+/** Placeholder rows shown while a tab's list is loading. */
+function SkeletonRows({ count = 4 }: { count?: number }) {
+  return (
+    <div className="doc-list" style={{ marginTop: 16 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          className="doc"
+          key={i}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        >
+          <div className="doc-meta" style={{ flex: 1 }}>
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-3 w-64" style={{ marginTop: 10 }} />
+          </div>
+          <div className="doc-actions">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Pending employee self-signups awaiting approval. */
 function RequestsTab({ t }: { t: (k: StringKey) => string }) {
   const pending = usePendingEmployees();
@@ -79,7 +105,9 @@ function RequestsTab({ t }: { t: (k: StringKey) => string }) {
     <>
       {(approve.isError || reject.isError) && <p className="modal-error">{t("reqActionFailed")}</p>}
 
-      {(pending.data ?? []).length === 0 && !pending.isLoading && (
+      {pending.isLoading && <SkeletonRows />}
+
+      {!pending.isLoading && (pending.data ?? []).length === 0 && (
         <p className="doc-empty">{t("empReqEmpty")}</p>
       )}
 
@@ -144,17 +172,28 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
   return (
     <>
       <div className="team-toolbar">
-        <p className="doc-sub" style={{ margin: 0 }}>
-          {(staff.data ?? []).length} {t("teamUsersCount")}
-        </p>
-        <button className="btn-calc" onClick={() => setAddOpen(true)}>
+        {staff.isLoading ? (
+          <Skeleton className="h-4 w-28" />
+        ) : (
+          <p className="doc-sub" style={{ margin: 0 }}>
+            {(staff.data ?? []).length} {t("teamUsersCount")}
+          </p>
+        )}
+        <button
+          className="btn-calc"
+          onClick={() => setAddOpen(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+        >
+          <UserPlus size={17} strokeWidth={2.2} />
           {t("teamCreateUser")}
         </button>
       </div>
 
       {(deactivate.isError || reactivate.isError) && <p className="modal-error">{t("reqActionFailed")}</p>}
 
-      {(staff.data ?? []).length === 0 && !staff.isLoading && (
+      {staff.isLoading && <SkeletonRows />}
+
+      {!staff.isLoading && (staff.data ?? []).length === 0 && (
         <p className="doc-empty">{t("teamUsersEmpty")}</p>
       )}
 
@@ -299,7 +338,12 @@ function AddUserModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-card modal-card--form"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h3>{t("addUserTitle")}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Close">
@@ -316,65 +360,67 @@ function AddUserModal({
           </div>
         ) : (
           <form onSubmit={onSubmit} className="modal-form">
-            <label className="modal-field">
-              {t("addUserRole")}
-              <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
-                <option value="EMPLOYEE">{t("teamRoleEmployee")}</option>
-                <option value="ADMIN">{t("teamRoleAdmin")}</option>
-              </select>
-            </label>
-            <label className="modal-field">
-              {t("profileFname")}
-              <input value={fname} onChange={(e) => setFname(e.target.value)} required maxLength={100} autoFocus />
-            </label>
-            <label className="modal-field">
-              {t("profileLname")}
-              <input value={lname} onChange={(e) => setLname(e.target.value)} required maxLength={100} />
-            </label>
-            <label className="modal-field">
-              {t("profileEmail")}
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="off"
-                required
-              />
-            </label>
-            <label className="modal-field">
-              {t("authPhone")}
-              <input
-                type="tel"
-                inputMode="numeric"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                pattern="[0-9]{10}"
-                maxLength={10}
-                autoComplete="off"
-                required
-              />
-            </label>
-            <label className="modal-field">
-              {t("addUserUsername")}
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                minLength={3}
-                maxLength={50}
-                placeholder={t("addUserUsernamePlaceholder")}
-                autoComplete="off"
-              />
-            </label>
-            <label className="modal-field">
-              {t("authPassword")}
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                autoComplete="new-password"
-                required
-              />
-            </label>
+            <div className="form-grid">
+              <label className="modal-field">
+                {t("profileFname")}
+                <input value={fname} onChange={(e) => setFname(e.target.value)} required maxLength={100} autoFocus />
+              </label>
+              <label className="modal-field">
+                {t("profileLname")}
+                <input value={lname} onChange={(e) => setLname(e.target.value)} required maxLength={100} />
+              </label>
+              <label className="modal-field">
+                {t("profileEmail")}
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="off"
+                  required
+                />
+              </label>
+              <label className="modal-field">
+                {t("authPhone")}
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  autoComplete="off"
+                  required
+                />
+              </label>
+              <label className="modal-field">
+                {t("addUserUsername")}
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  minLength={3}
+                  maxLength={50}
+                  placeholder={t("addUserUsernamePlaceholder")}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="modal-field">
+                {t("addUserRole")}
+                <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+                  <option value="EMPLOYEE">{t("teamRoleEmployee")}</option>
+                  <option value="ADMIN">{t("teamRoleAdmin")}</option>
+                </select>
+              </label>
+              <label className="modal-field form-field--full">
+                {t("authPassword")}
+                <PasswordInput
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={8}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+            </div>
             {error && <p className="modal-error">{error}</p>}
             <button className="btn-calc modal-submit" type="submit" disabled={create.isPending}>
               {create.isPending ? "…" : t("addUserSubmit")}
