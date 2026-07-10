@@ -15,6 +15,11 @@ export function DeedEditPage() {
   const type = slug as DeedType;
   const deed = findDeed(slug);
 
+  // Opened with ?new=1 straight after creating a blank/duplicated draft — start
+  // with an empty title (placeholder prompts the user to name it) but keep any
+  // seeded content (empty for a fresh deed, the source body for a duplicate).
+  const isNew = new URLSearchParams(window.location.search).get("new") === "1";
+
   const record = useSampleDeed(id);
   const update = useUpdateSampleDeed(type);
   const item = record.data;
@@ -25,10 +30,10 @@ export function DeedEditPage() {
 
   useEffect(() => {
     if (item) {
-      setTitle(item.title);
+      setTitle(isNew ? "" : item.title);
       setContent(item.content);
     }
-  }, [item]);
+  }, [item, isNew]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,7 +48,9 @@ export function DeedEditPage() {
   if (record.isLoading) {
     return (
       <section className="page">
-        <div className="wrap">…</div>
+        <div className="wrap" style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
+          <span className="spinner" aria-hidden />
+        </div>
       </section>
     );
   }
@@ -61,10 +68,12 @@ export function DeedEditPage() {
   return (
     <section className="page">
       <div className="wrap" style={{ maxWidth: 780 }}>
-        <h2 className="page-title">
-          {t("deedsEditDeed")}
-          {deed ? ` — ${deed.name[lang]}` : ""}
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <h2 className="page-title" style={{ margin: 0 }}>
+            {isNew ? t("deedsNewDeedTitle") : t("deedsEditDeed")}
+          </h2>
+          <span className="deed-type-tag">{deed ? deed.name[lang] : type}</span>
+        </div>
 
         <form className="modal-form" onSubmit={onSubmit} style={{ marginTop: 20 }}>
           <label className="modal-field">
@@ -72,6 +81,8 @@ export function DeedEditPage() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("deedsTitlePlaceholder")}
+              autoFocus={isNew}
               required
               maxLength={200}
             />

@@ -100,12 +100,11 @@ export function AllDeedsPage() {
     setCreatedById("");
   }
 
+  // No name prompt — create a blank draft and open the editor, where the user types the title.
   function onCreate(type: DeedType) {
-    const name = window.prompt(t("deedsCreateNamePrompt"));
-    if (!name || !name.trim()) return;
     create.mutate(
-      { type, title: name.trim(), content: "" },
-      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
+      { type, title: t("deedsUntitledTitle"), content: "" },
+      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}?new=1`, "_blank") },
     );
   }
 
@@ -114,14 +113,12 @@ export function AllDeedsPage() {
   }
 
   async function onDuplicate(d: SampleDeedListItem) {
-    const name = window.prompt(t("deedsCreateNamePrompt"));
-    if (!name || !name.trim()) return;
     setBusy(true);
     try {
       const full = await fetchDeed(d.id);
       create.mutate(
-        { type: d.type, title: name.trim(), content: full.content },
-        { onSuccess: (item) => window.open(`/deeds/${d.type}/edit/${item.id}`, "_blank") },
+        { type: d.type, title: t("deedsUntitledTitle"), content: full.content },
+        { onSuccess: (item) => window.open(`/deeds/${d.type}/edit/${item.id}?new=1`, "_blank") },
       );
     } finally {
       setBusy(false);
@@ -311,15 +308,12 @@ export function AllDeedsPage() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>{t("deedsActionGroupView")}</DropdownMenuLabel>
                             <DropdownMenuItem onSelect={() => setViewId(d.id)}>
                               {t("deedsViewDeed")}
                             </DropdownMenuItem>
 
                             {isStaff && (
                               <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>{t("deedsActionGroupManage")}</DropdownMenuLabel>
                                 <DropdownMenuItem onSelect={() => openEdit(d)}>
                                   {t("deedsEditDeed")}
                                 </DropdownMenuItem>
@@ -337,8 +331,6 @@ export function AllDeedsPage() {
                               </>
                             )}
 
-                            <DropdownMenuSeparator />
-                            <DropdownMenuLabel>{t("deedsActionGroupPrint")}</DropdownMenuLabel>
                             <DropdownMenuItem onSelect={() => void onPrint(d)}>
                               {t("deedsPrintDeed")}
                             </DropdownMenuItem>

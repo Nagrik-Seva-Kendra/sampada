@@ -142,6 +142,9 @@ export const strings = {
   deedsActionPlaceholder: { en: "Action", hi: "कार्रवाई" },
   deedsViewDeed: { en: "View Deed", hi: "विलेख देखें" },
   deedsEditDeed: { en: "Edit Deed", hi: "विलेख संपादित करें" },
+  deedsNewDeedTitle: { en: "New Deed", hi: "नया विलेख" },
+  deedsUntitledTitle: { en: "Untitled deed", hi: "बिना शीर्षक विलेख" },
+  deedsTitlePlaceholder: { en: "Enter a title for this deed", hi: "इस विलेख का शीर्षक दर्ज करें" },
   deedsPrintDeed: { en: "Print Deed", hi: "विलेख प्रिंट करें" },
   deedsDeleteDeed: { en: "Delete Deed", hi: "विलेख हटाएं" },
   deedsDeleteConfirm: {
@@ -190,6 +193,7 @@ export const strings = {
   // Deed register (create/list deeds; role-scoped)
   drEmpty: { en: "No deeds yet.", hi: "अभी कोई विलेख नहीं।" },
   drError: { en: "Could not load deeds.", hi: "विलेख लोड नहीं हो सके।" },
+  drLoading: { en: "Loading deed…", hi: "विलेख लोड हो रहा है…" },
   drSaveFailed: { en: "Could not save — try again.", hi: "सहेजा नहीं जा सका — पुनः प्रयास करें।" },
   drBy: { en: "By", hi: "द्वारा" },
 

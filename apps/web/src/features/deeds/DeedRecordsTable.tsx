@@ -44,25 +44,22 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
     return () => clearTimeout(id);
   }, [search]);
 
+  // No name prompt — create a blank draft and open the editor, where the user types the title.
   function onCreate() {
-    const name = window.prompt(t("deedsCreateNamePrompt"));
-    if (!name || !name.trim()) return;
     create.mutate(
-      { type, title: name.trim(), content: "" },
-      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
+      { type, title: t("deedsUntitledTitle"), content: "" },
+      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}?new=1`, "_blank") },
     );
   }
 
-  /** Duplicate an existing deed's content into a new deed under a new name. */
+  /** Duplicate an existing deed's content into a new draft; the user retitles it in the editor. */
   async function onDuplicate(source: SampleDeedListItem) {
-    const name = window.prompt(t("deedsCreateNamePrompt"));
-    if (!name || !name.trim()) return;
     setBusy(true);
     try {
       const full = await fetchDeed(source.id);
       create.mutate(
-        { type, title: name.trim(), content: full.content },
-        { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}`, "_blank") },
+        { type, title: t("deedsUntitledTitle"), content: full.content },
+        { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}?new=1`, "_blank") },
       );
     } finally {
       setBusy(false);

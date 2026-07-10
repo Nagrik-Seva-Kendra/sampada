@@ -35,33 +35,45 @@ export function DeedViewModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h3>{d ? d.title : "…"}</h3>
+          <h3>{d ? d.title : t("drLoading")}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
-        {deed.isError && <p className="modal-error">{t("drError")}</p>}
+
+        <div className="deed-modal-body">
+          {deed.isLoading && (
+            <div className="deed-modal-loader">
+              <span className="spinner" aria-hidden />
+              <p>{t("drLoading")}</p>
+            </div>
+          )}
+          {deed.isError && <p className="modal-error">{t("drError")}</p>}
+          {d && (
+            <>
+              {(showCategory || showCreator) && (
+                <div className="deed-modal-meta">
+                  {showCategory && (
+                    <span className="deed-type-tag">{findDeed(d.type)?.name[lang] ?? d.type}</span>
+                  )}
+                  {showCreator && (
+                    <span className="doc-sub">
+                      {t("drBy")} <strong>{d.createdByName}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
+              <p style={{ whiteSpace: "pre-wrap" }}>{d.content}</p>
+            </>
+          )}
+        </div>
+
         {d && (
-          <>
-            {showCategory && (
-              <p>
-                <strong>{findDeed(d.type)?.name[lang] ?? d.type}</strong>
-              </p>
-            )}
-            {showCreator && (
-              <p>
-                {t("drBy")} <strong>{d.createdByName}</strong>
-              </p>
-            )}
-            <p style={{ whiteSpace: "pre-wrap" }}>{d.content}</p>
-            <button
-              className="btn-calc"
-              style={{ marginTop: 12 }}
-              onClick={() => printDeed(d.title, d.content)}
-            >
+          <div className="deed-modal-foot">
+            <button className="btn-calc" onClick={() => printDeed(d.title, d.content)}>
               {t("deedsPrintDeed")}
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>
