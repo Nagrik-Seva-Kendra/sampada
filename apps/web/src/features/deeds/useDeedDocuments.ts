@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
+import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
 export type PartyRole = "buyer" | "seller";
@@ -49,16 +49,20 @@ export function useAddDeedParty(deedId: string) {
     Error,
     { role: PartyRole; partyId?: string; name?: string; aadhaarNumber?: string; file?: File }
   >({
-    mutationFn: (input) => {
+    mutationFn: async (input) => {
       const fd = new FormData();
       fd.set("role", input.role);
       if (input.partyId) fd.set("partyId", input.partyId);
       if (input.name) fd.set("name", input.name);
       if (input.aadhaarNumber) fd.set("aadhaarNumber", input.aadhaarNumber);
       if (input.file) fd.set("file", input.file);
-      return api
-        .post(`deeds/${deedId}/parties`, { headers: authHeaders(token), body: fd })
-        .json<DeedPartyItem>();
+      try {
+        return await api
+          .post(`deeds/${deedId}/parties`, { headers: authHeaders(token), body: fd })
+          .json<DeedPartyItem>();
+      } catch (e) {
+        throw new Error(await apiErrorMessage(e, "Could not add this person."));
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["deed-parties", deedId] }),
   });
@@ -101,12 +105,16 @@ export function useAddNaxa(deedId: string) {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<NaxaMeta, Error, File>({
-    mutationFn: (file) => {
+    mutationFn: async (file) => {
       const fd = new FormData();
       fd.set("file", file);
-      return api
-        .post(`deeds/${deedId}/naxa`, { headers: authHeaders(token), body: fd })
-        .json<NaxaMeta>();
+      try {
+        return await api
+          .post(`deeds/${deedId}/naxa`, { headers: authHeaders(token), body: fd })
+          .json<NaxaMeta>();
+      } catch (e) {
+        throw new Error(await apiErrorMessage(e, "Could not upload the map."));
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["deed-naxa", deedId] }),
   });
