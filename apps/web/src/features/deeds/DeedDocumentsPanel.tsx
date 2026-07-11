@@ -23,7 +23,7 @@ type T = (en: string, hi: string) => string;
 const NAXA_ACCEPT =
   "image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-function maskAadhaar(a: string): string {
+function maskAadhaar(a: string | null): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
   return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);}
