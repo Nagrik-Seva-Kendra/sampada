@@ -69,6 +69,11 @@ function normalizeAadhaar(raw: string): string {
   return (raw ?? "").replace(/[^0-9]/g, "");
 }
 
+/** Prisma's Bytes column expects a Uint8Array; a Node Buffer isn't assignable under the new @types/node, so copy it. */
+function toBytes(buffer: Buffer): Uint8Array {
+  return new Uint8Array(buffer);
+}
+
 /**
  * Aadhaar cards (reusable "people", deduped by Aadhaar number) and per-deed
  * property maps (naxa). All bytes live in Postgres because the API host has no
@@ -171,7 +176,7 @@ export class DeedDocumentsService {
             fileName: input.file.originalname ?? "aadhaar",
             mimeType: input.file.mimetype ?? "application/octet-stream",
             size: input.file.buffer.length,
-            data: input.file.buffer,
+            data: toBytes(input.file.buffer),
           },
           select: { id: true },
         });
@@ -225,7 +230,7 @@ export class DeedDocumentsService {
         fileName: input.file.originalname ?? "naxa",
         mimeType: input.file.mimetype ?? "application/octet-stream",
         size: input.file.buffer.length,
-        data: input.file.buffer,
+        data: toBytes(input.file.buffer),
       },
       select: { id: true, deedId: true, fileName: true, mimeType: true, size: true, createdAt: true },
     });
