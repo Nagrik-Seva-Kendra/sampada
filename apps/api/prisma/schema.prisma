@@ -93,12 +93,18 @@ model User {
 /// API host has no persistent disk.
 model Party {
   id            String      @id @default(cuid())
-  name          String
-  aadhaarNumber String      @unique
-  fileName      String
-  mimeType      String
-  size          Int
-  data          Bytes
+name          String
+  partyType     String   @default("individual")
+  aadhaarNumber String?  @unique
+  fileName      String?
+  mimeType      String?
+  size          Int?
+  data          Bytes?
+  panNumber     String?  @unique
+  panFileName   String?
+  panMimeType   String?
+  panSize       Int?
+  panData       Bytes?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   deedLinks     DeedParty[]
