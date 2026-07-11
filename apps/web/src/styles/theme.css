@@ -160,9 +160,40 @@ h3 {
 }
 .deed-modal-foot {
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   padding-top: 16px;
   margin-top: 12px;
   border-top: 1px solid var(--border);
+}
+/* Push a footer status message (e.g. PDF error) onto its own line above the buttons. */
+.deed-modal-foot .modal-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+/* One uniform button size across the deed action rows (view dialog footer and
+   the editor) — the primary (btn-calc) and secondary (doc-btn) actions differ in
+   padding/border, so normalise the box. The transparent border keeps btn-calc's
+   width matching the bordered buttons. */
+.deed-modal-foot button,
+.deed-edit-actions button {
+  padding: 9px 16px;
+  font-size: 13px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: transparent;
+}
+.deed-modal-foot .doc-btn,
+.deed-edit-actions .doc-btn {
+  border-color: var(--border);
+}
+.deed-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 .deed-modal-loader {
   height: 100%;

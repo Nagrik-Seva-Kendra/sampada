@@ -4,5 +4,7 @@ packages:
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
+  # Pulled in by jspdf. Its postinstall only prints a funding notice — nothing to build.
+  core-js: false
   esbuild: true
   prisma: true

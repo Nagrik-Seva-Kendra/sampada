@@ -104,7 +104,15 @@ export function useCreateSampleDeed() {
   });
 }
 
-export function useUpdateSampleDeed(type: DeedType) {
+/**
+ * Save one deed's edits. The editor auto-saves while the author types, so the
+ * saved deed is written straight into its cache entry rather than invalidating
+ * it: invalidating would refetch mid-keystroke and the editor would snap back
+ * to the server's copy, eating whatever was typed during the request. Lists
+ * carry the title, so they're staled — they're inactive while the editor is
+ * open, so this costs no request until one is next viewed.
+ */
+export function useSaveSampleDeed(type: DeedType) {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<SampleDeedItem, Error, { id: string; input: UpdateSampleDeedInput }>({
@@ -112,13 +120,35 @@ export function useUpdateSampleDeed(type: DeedType) {
       api
         .patch(`sample-deeds/${id}`, { headers: authHeaders(token), json: input })
         .json<SampleDeedItem>(),
-    // The body lives in its own cache entry now — stale it too, or view/print
-    // would keep serving the pre-edit content.
-    onSuccess: (_, { id }) => {
+    // Auto-save drives its own retry loop (see useAutoSaveDeed) — don't let
+    // react-query retry underneath it too.
+    retry: false,
+    onSuccess: (item) => {
+      qc.setQueryData(["sample-deeds", "one", item.id], item);
       qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
-      qc.invalidateQueries({ queryKey: ["sample-deeds", "one", id] });
+      qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });
     },
   });
+}
+
+/**
+ * Drop a deleted deed from every cached list right now, without waiting for a
+ * refetch. The delete dialog closes the instant the mutation resolves, so if we
+ * only invalidated, the row would linger in the table until the network refetch
+ * came back. This removes it synchronously; the invalidate that follows just
+ * reconciles. Only the list caches ([type] and ["all", …]) are arrays of rows —
+ * "one" and "creators" are skipped so we never mistake them for a list.
+ */
+function dropDeedFromLists(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.setQueriesData<SampleDeedListItem[]>(
+    {
+      predicate: (q) =>
+        q.queryKey[0] === "sample-deeds" &&
+        q.queryKey[1] !== "one" &&
+        q.queryKey[1] !== "creators",
+    },
+    (old) => (Array.isArray(old) ? old.filter((d) => d.id !== id) : old),
+  );
 }
 
 export function useDeleteSampleDeed(type: DeedType) {
@@ -128,6 +158,7 @@ export function useDeleteSampleDeed(type: DeedType) {
     mutationFn: (id) =>
       api.delete(`sample-deeds/${id}`, { headers: authHeaders(token) }).json(),
     onSuccess: (_, id) => {
+      dropDeedFromLists(qc, id);
       qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
       qc.removeQueries({ queryKey: ["sample-deeds", "one", id] });
     },
@@ -142,6 +173,7 @@ export function useDeleteAnyDeed() {
     mutationFn: ({ id }) =>
       api.delete(`sample-deeds/${id}`, { headers: authHeaders(token) }).json(),
     onSuccess: (_, { id, type }) => {
+      dropDeedFromLists(qc, id);
       qc.invalidateQueries({ queryKey: ["sample-deeds", type] });
       qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });
       qc.removeQueries({ queryKey: ["sample-deeds", "one", id] });

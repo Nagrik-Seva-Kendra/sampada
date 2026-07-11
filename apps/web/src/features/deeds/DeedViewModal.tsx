@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
+import { downloadDeedPdf } from "./deedPdf";
 import { useSampleDeed } from "./useSampleDeeds";
 import { useScrollLock } from "../../lib/useScrollLock";
 
@@ -25,6 +27,22 @@ export function DeedViewModal({
   const deed = useSampleDeed(id);
   useScrollLock(true);
   const d = deed.data;
+
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfFailed, setPdfFailed] = useState(false);
+
+  async function onDownloadPdf() {
+    if (!d) return;
+    setPdfBusy(true);
+    setPdfFailed(false);
+    try {
+      await downloadDeedPdf(d.title, d.content);
+    } catch {
+      setPdfFailed(true);
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -70,8 +88,12 @@ export function DeedViewModal({
 
         {d && (
           <div className="deed-modal-foot">
+            {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
             <button className="btn-calc" onClick={() => printDeed(d.title, d.content)}>
               {t("deedsPrintDeed")}
+            </button>
+            <button className="doc-btn" onClick={() => void onDownloadPdf()} disabled={pdfBusy}>
+              {pdfBusy ? "…" : t("deedsDownloadPdf")}
             </button>
           </div>
         )}

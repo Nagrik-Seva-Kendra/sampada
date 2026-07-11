@@ -6,6 +6,7 @@ import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
 import { printDeed } from "./printDeed";
+import { downloadDeedPdf } from "./deedPdf";
 import {
   useAllDeeds,
   useCreateSampleDeed,
@@ -73,6 +74,7 @@ export function AllDeedsPage() {
   const [viewId, setViewId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pdfFailed, setPdfFailed] = useState(false);
 
   const create = useCreateSampleDeed();
   const del = useDeleteAnyDeed();
@@ -136,6 +138,21 @@ export function AllDeedsPage() {
       setBusy(false);
     }
   }
+
+  /** Rows carry no body (LIST_SELECT drops it), so fetch the deed before rendering it. */
+  async function onDownloadPdf(d: SampleDeedListItem) {
+    setBusy(true);
+    setPdfFailed(false);
+    try {
+      const full = await fetchDeed(d.id);
+      await downloadDeedPdf(full.title, full.content);
+    } catch {
+      setPdfFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
 
   function confirmDelete() {
     if (!pendingDelete) return;
@@ -277,6 +294,7 @@ export function AllDeedsPage() {
         </div>
 
         {deeds.isError && <p className="modal-error">{t("drError")}</p>}
+        {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
 
         <div className="dr-records">
           <div className="dr-table-wrap">
@@ -352,6 +370,9 @@ export function AllDeedsPage() {
 
                             <DropdownMenuItem onSelect={() => void onPrint(d)}>
                               {t("deedsPrintDeed")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => void onDownloadPdf(d)}>
+                              {t("deedsDownloadPdf")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

@@ -10,6 +10,7 @@ import {
   useSampleDeeds,
 } from "./useSampleDeeds";
 import { printDeed } from "./printDeed";
+import { downloadDeedPdf } from "./deedPdf";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
@@ -39,6 +40,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pdfFailed, setPdfFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -82,6 +84,21 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
     }
   }
 
+  /** Rows carry no body (LIST_SELECT drops it), so fetch the deed before rendering it. */
+  async function onDownloadPdf(item: SampleDeedListItem) {
+    setBusy(true);
+    setPdfFailed(false);
+    try {
+      const full = await fetchDeed(item.id);
+      await downloadDeedPdf(full.title, full.content);
+    } catch {
+      setPdfFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
   function confirmDelete() {
     if (!pendingDelete) return;
     del.mutate(pendingDelete.id, { onSuccess: () => setPendingDelete(null) });
@@ -112,6 +129,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
         </button>
       )}
       {create.isError && <p className="modal-error">{t("drSaveFailed")}</p>}
+      {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
 
       <input
         className="district-input"
@@ -150,6 +168,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                       else if (action === "edit") openEdit(r);
                       else if (action === "create") void onDuplicate(r);
                       else if (action === "print") void onPrint(r);
+                      else if (action === "pdf") void onDownloadPdf(r);
                       else if (action === "delete") setPendingDelete(r);
                     }}
                   >
@@ -160,6 +179,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
                     {isStaff && <option value="edit">{t("deedsEditDeed")}</option>}
                     {isStaff && <option value="create">{t("deedsCreateDeedOption")}</option>}
                     <option value="print">{t("deedsPrintDeed")}</option>
+                    <option value="pdf">{t("deedsDownloadPdf")}</option>
                     {canDelete && <option value="delete">{t("deedsDeleteDeed")}</option>}
                   </select>
                 </td>
@@ -199,11 +219,7 @@ export function DeedRecordsTable({ type }: { type: DeedType }) {
       )}
 
       {viewingId && (
-        <DeedViewModal
-          id={viewingId}
-          onClose={() => setViewingId(null)}
-          showCreator={showCreator}
-        />
+        <DeedViewModal id={viewingId} onClose={() => setViewingId(null)} showCreator={showCreator} />
       )}
 
       {pendingDelete && (

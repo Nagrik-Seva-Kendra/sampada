@@ -31,7 +31,10 @@ export type CreateSampleDeedInput = z.infer<typeof CreateSampleDeedInput>;
 
 export const UpdateSampleDeedInput = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  content: z.string().trim().min(1).max(40000).optional(),
+  // Empty is allowed: the editor auto-saves drafts as they're typed, and a deed
+  // whose body the author has just cleared must still round-trip. The editor's
+  // explicit Save is what enforces a non-empty body.
+  content: z.string().trim().max(40000).optional(),
   status: DeedRecordStatus.optional(),
 });
 export type UpdateSampleDeedInput = z.infer<typeof UpdateSampleDeedInput>;

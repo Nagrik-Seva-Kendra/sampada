@@ -205,6 +205,21 @@ export const strings = {
   deedsSave: { en: "Save", hi: "सहेजें" },
   deedsBackAll: { en: "← All deeds", hi: "← सभी विलेख" },
 
+  // Auto-save status (deed editor)
+  deedsAutoSaving: { en: "Saving…", hi: "सहेजा जा रहा है…" },
+  deedsAutoSaved: { en: "Saved ✓", hi: "सहेज लिया गया ✓" },
+  deedsAutoSaveRetrying: {
+    en: "Not saved — retrying",
+    hi: "सहेजा नहीं गया — पुनः प्रयास जारी",
+  },
+
+  // PDF export
+  deedsDownloadPdf: { en: "Download PDF", hi: "PDF डाउनलोड करें" },
+  deedsPdfFailed: {
+    en: "Could not create the PDF — please retry.",
+    hi: "PDF नहीं बन सका — पुनः प्रयास करें।",
+  },
+
   // Deed register (create/list deeds; role-scoped)
   drEmpty: { en: "No deeds yet.", hi: "अभी कोई विलेख नहीं।" },
   drError: { en: "Could not load deeds.", hi: "विलेख लोड नहीं हो सके।" },
