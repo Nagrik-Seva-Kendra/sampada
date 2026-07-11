@@ -209,9 +209,10 @@ async listDeedParties(deedId: string): Promise<DeedPartyItem[]> {
 /**
      * Attach a buyer/seller to a deed. Either reuse an existing person/company (by
      * partyId, or by an Aadhaar/PAN number that already exists) or create a new
-     * one from an uploaded card. Creating requires a name plus the card matching
-     * whichever number (Aadhaar and/or PAN) was given; reuse does not. The Aadhaar
-     * back-side image is optional even when the front is given.
+     * one from just a name — the Aadhaar/PAN number and the card image(s) are all
+     * optional at this point. This lets a name (and number, if the deed's text
+     * gave one) get saved immediately; the physical card scan can be attached
+     * later, person by person, via updatePartyFiles.
      * A person can appear on a deed only once — not as both buyer and seller.
      */
 async addDeedParty(input: {
@@ -246,9 +247,6 @@ async addDeedParty(input: {
           if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
                   throw new BadRequestException("A valid 10-character PAN number is required.");
           }
-          if (!aadhaar && !pan) {
-                  throw new BadRequestException("Aadhaar number or PAN number is required.");
-          }
 
     const existing = await this.prisma.party.findFirst({
           where: {
@@ -265,12 +263,6 @@ async addDeedParty(input: {
     } else {
           const name = (input.name ?? "").trim();
           if (!name) throw new BadRequestException("Name is required for a new person.");
-          if (aadhaar && !input.file) {
-                  throw new BadRequestException("Aadhaar card image is required for a new person.");
-          }
-          if (pan && !input.panFile) {
-                  throw new BadRequestException("PAN card image is required for a new person.");
-          }
           const created = await this.prisma.party.create({
                   data: {
                             name,
@@ -315,6 +307,44 @@ async addDeedParty(input: {
           select: { id: true, role: true, party: { select: PARTY_META } },
     });
     return { linkId: link.id, role: link.role as PartyRole, party: toPartyMeta(link.party) };
+}
+
+/**
+     * Attach/replace the Aadhaar (front/back) and/or PAN card image(s) for an
+     * already-saved person/company. Used when a party was saved from just the
+     * deed's name/number (see addDeedParty) and staff scans the physical card
+     * in afterwards. Only the fields for which a new file is given are
+     * touched — anything already on file for the other fields is left as is.
+     */
+async updatePartyFiles(id: string, input: {
+    file?: UploadedDoc;
+    aadhaarBackFile?: UploadedDoc;
+    panFile?: UploadedDoc;
+}): Promise<PartyMeta> {
+    const found = await this.prisma.party.findUnique({ where: { id }, select: { id: true } });
+    if (!found) throw new NotFoundException("Person not found.");
+    if (!input.file && !input.aadhaarBackFile && !input.panFile) {
+          throw new BadRequestException("At least one file is required.");
+    }
+    const updated = await this.prisma.party.update({
+          where: { id },
+          data: {
+                  fileName: input.file ? (input.file.originalname ?? "aadhaar") : undefined,
+                  mimeType: input.file ? (input.file.mimetype ?? "application/octet-stream") : undefined,
+                  size: input.file ? input.file.buffer.length : undefined,
+                  data: input.file ? (input.file.buffer as unknown as PartyBytes) : undefined,
+                  aadhaarBackFileName: input.aadhaarBackFile ? (input.aadhaarBackFile.originalname ?? "aadhaar-back") : undefined,
+                  aadhaarBackMimeType: input.aadhaarBackFile ? (input.aadhaarBackFile.mimetype ?? "application/octet-stream") : undefined,
+                  aadhaarBackSize: input.aadhaarBackFile ? input.aadhaarBackFile.buffer.length : undefined,
+                  aadhaarBackData: input.aadhaarBackFile ? (input.aadhaarBackFile.buffer as unknown as PartyBytes) : undefined,
+                  panFileName: input.panFile ? (input.panFile.originalname ?? "pan") : undefined,
+                  panMimeType: input.panFile ? (input.panFile.mimetype ?? "application/octet-stream") : undefined,
+                  panSize: input.panFile ? input.panFile.buffer.length : undefined,
+                  panData: input.panFile ? (input.panFile.buffer as unknown as PartyBytes) : undefined,
+          },
+          select: PARTY_META,
+    });
+    return toPartyMeta(updated);
 }
 
 /** Remove a person from a deed (keeps them on file for other deeds). */
