@@ -3,14 +3,20 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
 export type PartyRole = "buyer" | "seller";
+export type PartyType = "individual" | "company";
 
 export interface PartyMeta {
   id: string;
   name: string;
-  aadhaarNumber: string;
-  fileName: string;
-  mimeType: string;
-  size: number;
+  partyType: string;
+  aadhaarNumber: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  size: number | null;
+  panNumber: string | null;
+  panFileName: string | null;
+  panMimeType: string | null;
+  panSize: number | null;
   createdAt: string;
 }
 
@@ -29,7 +35,7 @@ export interface NaxaMeta {
   createdAt: string;
 }
 
-/** People (buyers/sellers) attached to a deed, each with their reused Aadhaar card. */
+/** People (buyers/sellers) attached to a deed, each with their reused Aadhaar/PAN card. */
 export function useDeedParties(deedId: string | null) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
@@ -40,26 +46,38 @@ export function useDeedParties(deedId: string | null) {
   });
 }
 
-/** Attach a buyer/seller: reuse an existing person (partyId) or add a new one (name + aadhaar + file). */
+/** Attach a buyer/seller: reuse an existing person (partyId) or add a new one (name + aadhaar/PAN + file). */
 export function useAddDeedParty(deedId: string) {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<
     DeedPartyItem,
     Error,
-    { role: PartyRole; partyId?: string; name?: string; aadhaarNumber?: string; file?: File }
-  >({
+  {
+    role: PartyRole;
+    partyId?: string;
+    name?: string;
+    partyType?: PartyType;
+    aadhaarNumber?: string;
+    panNumber?: string;
+    file?: File;
+    panFile?: File;
+  }
+    >({
     mutationFn: async (input) => {
       const fd = new FormData();
       fd.set("role", input.role);
       if (input.partyId) fd.set("partyId", input.partyId);
       if (input.name) fd.set("name", input.name);
+      if (input.partyType) fd.set("partyType", input.partyType);
       if (input.aadhaarNumber) fd.set("aadhaarNumber", input.aadhaarNumber);
+      if (input.panNumber) fd.set("panNumber", input.panNumber);
       if (input.file) fd.set("file", input.file);
+      if (input.panFile) fd.set("panFile", input.panFile);
       try {
         return await api
-          .post(`deeds/${deedId}/parties`, { headers: authHeaders(token), body: fd })
-          .json<DeedPartyItem>();
+        .post(`deeds/${deedId}/parties`, { headers: authHeaders(token), body: fd })
+        .json<DeedPartyItem>();
       } catch (e) {
         throw new Error(await apiErrorMessage(e, "Could not add this person."));
       }
@@ -78,7 +96,7 @@ export function useRemoveDeedParty(deedId: string) {
   });
 }
 
-/** Search already-saved people (by name or Aadhaar) to reuse them across deeds. */
+/** Search already-saved people (by name, Aadhaar, or PAN) to reuse them across deeds. */
 export function useSearchParties(query: string) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
@@ -86,8 +104,8 @@ export function useSearchParties(query: string) {
     enabled: !!token && query.trim().length >= 2,
     queryFn: () =>
       api
-        .get("parties", { headers: authHeaders(token), searchParams: { q: query.trim() } })
-        .json<PartyMeta[]>(),
+    .get("parties", { headers: authHeaders(token), searchParams: { q: query.trim() } })
+    .json<PartyMeta[]>(),
   });
 }
 
@@ -110,8 +128,8 @@ export function useAddNaxa(deedId: string) {
       fd.set("file", file);
       try {
         return await api
-          .post(`deeds/${deedId}/naxa`, { headers: authHeaders(token), body: fd })
-          .json<NaxaMeta>();
+        .post(`deeds/${deedId}/naxa`, { headers: authHeaders(token), body: fd })
+        .json<NaxaMeta>();
       } catch (e) {
         throw new Error(await apiErrorMessage(e, "Could not upload the map."));
       }
@@ -131,7 +149,7 @@ export function useRemoveNaxa(deedId: string) {
 }
 
 /**
- * Fetch a stored file (Aadhaar card or naxa) with the auth token and return a
+ * Fetch a stored file (Aadhaar/PAN card or naxa) with the auth token and return a
  * blob URL for preview/download. The file endpoints are guarded, so a plain
  * <img src> can't reach them — we fetch the bytes and objectURL them instead.
  */
@@ -139,7 +157,7 @@ export function useFileOpener() {
   const token = useAuthStore((s) => s.token);
   return (path: string) =>
     api
-      .get(path, { headers: authHeaders(token) })
-      .blob()
-      .then((b) => URL.createObjectURL(b));
+  .get(path, { headers: authHeaders(token) })
+  .blob()
+  .then((b) => URL.createObjectURL(b));
 }
