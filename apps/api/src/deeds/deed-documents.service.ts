@@ -134,6 +134,7 @@ export class DeedDocumentsService {
    * Attach a buyer/seller to a deed. Either reuse an existing person (by
    * partyId, or by an Aadhaar number that already exists) or create a new one
    * from an uploaded card. Creating requires the file + name; reuse does not.
+   * A person can appear on a deed only once — not as both buyer and seller.
    */
   async addDeedParty(input: {
     deedId: string;
@@ -184,12 +185,22 @@ export class DeedDocumentsService {
       }
     }
 
-    const link = await this.prisma.deedParty.upsert({
-      where: {
-        deedId_partyId_role: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
-      },
-      create: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
-      update: {},
+    // One person per deed: block the same Aadhaar being added twice (even as the other role).
+    const already = await this.prisma.deedParty.findFirst({
+      where: { deedId: input.deedId, partyId: resolvedPartyId },
+      select: { role: true },
+    });
+    if (already) {
+      const asRole = already.role === "buyer" ? "buyer (खरीददार)" : "seller (विक्रेता)";
+      throw new BadRequestException(
+        already.role === input.role
+          ? "This person is already added to this deed."
+          : "This person is already on this deed as " + asRole + ". The same person can't be both buyer and seller.",
+      );
+    }
+
+    const link = await this.prisma.deedParty.create({
+      data: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
       select: { id: true, role: true, party: { select: PARTY_META } },
     });
     return { linkId: link.id, role: link.role as PartyRole, party: toPartyMeta(link.party) };
