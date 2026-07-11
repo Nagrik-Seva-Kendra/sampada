@@ -1,6 +1,7 @@
-import { useRef, useState, type ChangeEvent, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import { Eye, FileUp, Search, Trash2, UserPlus } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
+import { useSampleDeed } from "./useSampleDeeds";
 import {
   useAddDeedParty,
   useAddNaxa,
@@ -28,6 +29,62 @@ function maskAadhaar(a: string | null): string {
   if (d.length < 4) return d;
   return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);}
 
+interface PartyHint {
+  name: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  partyType?: PartyType;
+}
+
+/**
+ * Pull the leading seller/buyer name (+ Aadhaar/PAN if embedded) out of a deed's
+ * drafted text, e.g. "विक्रेता : मैसर्स इन्‍द्रा क्रियेटर ... (पेन नं. AADFI9247E)" or
+ * "क्रेता : श्रीमती सत्‍यवती सिंह पत्‍नी ... (आ.नं. 7526 8181 4484)". Best-effort —
+ * only picks up the primary/first party; multi-party deeds still need the rest
+ * added by hand. Returns null if the deed's text doesn't use this convention.
+ */
+function extractPartyHint(content: string, role: PartyRole): PartyHint | null {
+  const marker = role === "seller" ? /विक्रेता\s*[:：]/ : /क्रेता\s*[:：]/;
+  const m = marker.exec(content);
+  if (!m) return null;
+  const rest = content.slice(m.index + m[0].length);
+  const stopMarker = role === "seller" ? /क्रेता\s*[:：]/ : /\n\s*1\s*\./;
+  const sm = stopMarker.exec(rest);
+  const block = rest.slice(0, sm ? sm.index : Math.min(rest.length, 400));
+
+  const parenIdx = block.indexOf("(");
+  const newlineIdx = block.indexOf("\n");
+  const nameEnd = parenIdx >= 0 ? parenIdx : newlineIdx >= 0 ? newlineIdx : block.length;
+  const name = block
+    .slice(0, nameEnd)
+    .split(/\s+(?:पुत्र|पुत्री|पत्नी|पत्‍नी|पति|विधवा)\s+/)[0]
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[:\-–,।]+|[:\-–,।]+$/g, "")
+    .trim();
+  if (!name) return null;
+
+  let aadhaarNumber: string | undefined;
+  let panNumber: string | undefined;
+  if (parenIdx >= 0) {
+    const closeIdx = block.indexOf(")", parenIdx);
+    const parenText = block.slice(parenIdx, closeIdx >= 0 ? closeIdx + 1 : undefined);
+    const panMatch = parenText.match(/[A-Z]{5}[0-9]{4}[A-Z]/i);
+    if (panMatch) {
+      panNumber = panMatch[0].toUpperCase();
+    } else {
+      const digits = parenText.replace(/[^0-9]/g, "");
+      if (digits.length === 12) aadhaarNumber = digits;
+    }
+  }
+
+  const partyType: PartyType = /मैसर्स|फर्म|कम्‍पनी|कंपनी|प्रा\.?\s*लि|Pvt\.?\s*Ltd|LLP/i.test(name)
+    ? "company"
+    : "individual";
+
+  return { name, aadhaarNumber, panNumber, partyType };
+}
+
 const ROW: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -53,6 +110,16 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const naxa = useDeedNaxa(deedId);
   const openFile = useFileOpener();
   const add = useAddDeedParty(deedId);
+  const deed = useSampleDeed(deedId);
+
+  const sellerHint = useMemo(
+    () => (deed.data?.content ? extractPartyHint(deed.data.content, "seller") : null),
+    [deed.data?.content],
+  );
+  const buyerHint = useMemo(
+    () => (deed.data?.content ? extractPartyHint(deed.data.content, "buyer") : null),
+    [deed.data?.content],
+  );
 
   const items = parties.data ?? [];
   const buyers = items.filter((p) => p.role === "buyer");
@@ -123,8 +190,8 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
         )}
       </div>
 
-      <PartyGroup role="seller" title={T("Sellers", "विक्रेता")} items={sellers} deedId={deedId} onView={view} T={T} />
-      <PartyGroup role="buyer" title={T("Buyers", "खरीददार")} items={buyers} deedId={deedId} onView={view} T={T} />
+      <PartyGroup role="seller" title={T("Sellers", "विक्रेता")} items={sellers} deedId={deedId} onView={view} T={T} hint={sellerHint} />
+      <PartyGroup role="buyer" title={T("Buyers", "खरीददार")} items={buyers} deedId={deedId} onView={view} T={T} hint={buyerHint} />
       <NaxaGroup deedId={deedId} items={naxa.data ?? []} onView={view} T={T} />
     </div>
   );
@@ -137,6 +204,7 @@ function PartyGroup({
   deedId,
   onView,
   T,
+  hint,
 }: {
   role: PartyRole;
   title: string;
@@ -144,6 +212,7 @@ function PartyGroup({
   deedId: string;
   onView: (path: string) => void;
   T: T;
+  hint?: PartyHint | null;
 }) {
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
@@ -155,9 +224,38 @@ function PartyGroup({
     const [pan, setPan] = useState("");
     const [panFile, setPanFile] = useState<File | null>(null);
     const [err, setErr] = useState<string | null>(null);
+    const [autoFilled, setAutoFilled] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
     const panFileRef = useRef<HTMLInputElement>(null);
+    const appliedHint = useRef(false);
+
+    useEffect(() => {
+      if (!hint || appliedHint.current) return;
+      appliedHint.current = true;
+      let filled = false;
+      setName((cur) => {
+        if (cur || !hint.name) return cur;
+        filled = true;
+        return hint.name;
+      });
+      if (hint.partyType) setPartyType(hint.partyType);
+      if (hint.aadhaarNumber) {
+        setAadhaar((cur) => {
+          if (cur) return cur;
+          filled = true;
+          return hint.aadhaarNumber as string;
+        });
+      }
+      if (hint.panNumber) {
+        setPan((cur) => {
+          if (cur) return cur;
+          filled = true;
+          return hint.panNumber as string;
+        });
+      }
+      if (filled) setAutoFilled(true);
+    }, [hint]);
 
     function reset() {
       setName("");
@@ -168,6 +266,7 @@ function PartyGroup({
       setPan("");
       setPanFile(null);
       setErr(null);
+      setAutoFilled(false);
       if (fileRef.current) fileRef.current.value = "";
       if (aadhaarBackFileRef.current) aadhaarBackFileRef.current.value = "";
       if (panFileRef.current) panFileRef.current.value = "";
@@ -262,6 +361,14 @@ function PartyGroup({
         </div>
       )}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        {autoFilled && (
+          <span style={{ fontSize: 11, opacity: 0.55, flexBasis: "100%" }}>
+            {T(
+              "Auto-filled from the deed text — please verify before adding.",
+              "दस्तावेज़ से अपने आप भर गया है — जोड़ने से पहले जांच लें।",
+            )}
+          </span>
+        )}
         <select
           className="district-input"
           style={{ flex: "0 0 130px" }}
