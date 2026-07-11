@@ -49,7 +49,11 @@ export function useDeedParties(deedId: string | null) {
     });
 }
 
-/** Attach a buyer/seller: reuse an existing person (partyId) or add a new one (name + aadhaar/PAN + file). */
+/**
+ * Attach a buyer/seller: reuse an existing person (partyId) or add a new one.
+ * A name is all that's strictly required — the Aadhaar/PAN number and card
+ * file(s) can all be added later (see useUpdatePartyFiles).
+ */
 export function useAddDeedParty(deedId: string) {
     const token = useAuthStore((s) => s.token);
     const qc = useQueryClient();
@@ -97,6 +101,36 @@ export function useRemoveDeedParty(deedId: string) {
     return useMutation<unknown, Error, string>({
           mutationFn: (linkId) =>
                   api.delete(`deeds/${deedId}/parties/${linkId}`, { headers: authHeaders(token) }).json(),
+          onSuccess: () => qc.invalidateQueries({ queryKey: ["deed-parties", deedId] }),
+    });
+}
+
+/**
+ * Attach/replace the Aadhaar (front/back) and/or PAN card image for a person
+ * that was already saved (typically from just their name/number, auto-filled
+ * from the deed text) — used when staff scans the physical card in afterwards.
+ */
+export function useUpdatePartyFiles(deedId: string) {
+    const token = useAuthStore((s) => s.token);
+    const qc = useQueryClient();
+    return useMutation<
+          PartyMeta,
+          Error,
+    { id: string; file?: File; aadhaarBackFile?: File; panFile?: File }
+          >({
+          mutationFn: async ({ id, file, aadhaarBackFile, panFile }) => {
+                  const fd = new FormData();
+                  if (file) fd.set("file", file);
+                  if (aadhaarBackFile) fd.set("aadhaarBackFile", aadhaarBackFile);
+                  if (panFile) fd.set("panFile", panFile);
+                  try {
+                            return await api
+                            .post(`parties/${id}/files`, { headers: authHeaders(token), body: fd })
+                            .json<PartyMeta>();
+                  } catch (e) {
+                            throw new Error(await apiErrorMessage(e, "Could not save the file."));
+                  }
+          },
           onSuccess: () => qc.invalidateQueries({ queryKey: ["deed-parties", deedId] }),
     });
 }
