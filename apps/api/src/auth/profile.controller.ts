@@ -32,6 +32,10 @@ export const PHOTO_DIR =
     ? path.join(process.env.UPLOAD_DIR, "..", "profile-photos")
     : path.resolve(process.cwd(), "uploads", "profile-photos");
 
+/**
+ * Employee self-service profile (own name/email/username/password/photo).
+ * ADMIN has no self-edit UI, so these endpoints are employee-only.
+ */
 @Controller("profile")
 @UseGuards(JwtStaffGuard)
 export class ProfileController {
@@ -49,15 +53,16 @@ export class ProfileController {
     return this.reissue(updated);
   }
 
-  /** Self-service password change for ANY logged-in account (admin + employee). */
+  /**
+   * Self-service password change for any staff account (admin + employee).
+   * Unlike the profile edit above, this is not employee-only: every logged-in
+   * account can change its own password.
+   */
   @Patch("password")
   async changePassword(@Body() body: unknown, @Req() req: StaffRequest): Promise<AuthResponse> {
     const input = UpdateProfileInput.parse(body);
     if (!input.password) throw new BadRequestException("A new password is required.");
-    const updated = await this.users.updateProfile(req.user.id, {
-      currentPassword: input.currentPassword,
-      password: input.password,
-    });
+    const updated = await this.users.updateProfile(req.user.id, input);
     return this.reissue(updated);
   }
 
@@ -70,7 +75,7 @@ export class ProfileController {
     if (req.user.role !== "EMPLOYEE") {
       throw new ForbiddenException("Only employee accounts have an editable profile.");
     }
-    if (!file) throw new BadRequestException("Image file is required (field file).");
+    if (!file) throw new BadRequestException("Image file is required (field 'file').");
     const isImage = file.mimetype?.startsWith("image/");
     if (!isImage) throw new BadRequestException("Only image files are allowed.");
 
@@ -78,7 +83,7 @@ export class ProfileController {
     await this.clearExistingPhoto(req.user.id);
 
     const ext = extFor(file.mimetype, file.originalname);
-    const fileName = req.user.id + ext;
+    const fileName = `${req.user.id}${ext}`;
     await fs.writeFile(path.join(PHOTO_DIR, fileName), file.buffer);
 
     const updated = await this.users.setPhoto(req.user.id, fileName);
@@ -94,11 +99,12 @@ export class ProfileController {
     }
     await Promise.all(
       names
-        .filter((n) => n.startsWith(id + "."))
+        .filter((n) => n.startsWith(`${id}.`))
         .map((n) => fs.unlink(path.join(PHOTO_DIR, n)).catch(() => {})),
     );
   }
 
+  /** Reissue the token so the JWT's embedded name/email stay in sync. */
   private async reissue(updated: Awaited<ReturnType<UsersService["updateProfile"]>>) {
     const user = {
       id: updated.id,
@@ -112,7 +118,7 @@ export class ProfileController {
       sub: user.id,
       email: user.email,
       role: user.role,
-      name: (user.fname + " " + user.lname).trim(),
+      name: `${user.fname} ${user.lname}`.trim(),
     });
     return { accessToken, user };
   }
