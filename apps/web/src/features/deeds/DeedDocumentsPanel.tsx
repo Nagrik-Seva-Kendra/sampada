@@ -14,6 +14,7 @@ import {
   type NaxaMeta,
   type PartyMeta,
   type PartyRole,
+    type PartyType,
 } from "./useDeedDocuments";
 
 type T = (en: string, hi: string) => string;
@@ -140,40 +141,69 @@ function PartyGroup({
 }) {
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
-  const [name, setName] = useState("");
-  const [aadhaar, setAadhaar] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+    const [name, setName] = useState("");
+    const [partyType, setPartyType] = useState<PartyType>("individual");
+    const [aadhaar, setAadhaar] = useState("");
+    const [file, setFile] = useState<File | null>(null);
+    const [pan, setPan] = useState("");
+    const [panFile, setPanFile] = useState<File | null>(null);
+    const [err, setErr] = useState<string | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
+    const panFileRef = useRef<HTMLInputElement>(null);
 
-  function reset() {
-    setName("");
-    setAadhaar("");
-    setFile(null);
-    setErr(null);
-    if (fileRef.current) fileRef.current.value = "";
-  }
+    function reset() {
+      setName("");
+      setPartyType("individual");
+      setAadhaar("");
+      setFile(null);
+      setPan("");
+      setPanFile(null);
+      setErr(null);
+      if (fileRef.current) fileRef.current.value = "";
+      if (panFileRef.current) panFileRef.current.value = "";
+    }
 
-  function addNew() {
-    setErr(null);
-    const digits = aadhaar.replace(/[^0-9]/g, "");
-    if (digits.length !== 12) {
-      setErr(T("Enter a valid 12-digit Aadhaar number.", "सही 12 अंकों का आधार नंबर डालें।"));
-      return;
+    function addNew() {
+      setErr(null);
+      const digits = aadhaar.replace(/[^0-9]/g, "");
+      const panTrimmed = pan.trim().toUpperCase();
+      if (!name.trim()) {
+        setErr(T("Enter the person's name.", "व्यक्ति का नाम डालें।"));
+        return;
+      }
+      if (aadhaar && digits.length !== 12) {
+        setErr(T("Enter a valid 12-digit Aadhaar number.", "सही 12 अंकों का आधार नंबर डालें।"));
+        return;
+      }
+      if (pan && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(panTrimmed)) {
+        setErr(T("Enter a valid 10-character PAN number.", "सही 10 अक्षर का पेन नंबर डालें।"));
+        return;
+      }
+      if (!digits && !panTrimmed) {
+        setErr(T("Enter an Aadhaar number or PAN number.", "आधार नंबर या पेन नंबर डालें।"));
+        return;
+      }
+      if (digits && !file) {
+        setErr(T("Choose the Aadhaar card image/PDF.", "आधार कार्ड की इमेज/PDF चुनें।"));
+        return;
+      }
+      if (panTrimmed && !panFile) {
+        setErr(T("Choose the PAN card image/PDF.", "पेन कार्ड की इमेज/PDF चुनें।"));
+        return;
+      }
+      add.mutate(
+        {
+          role,
+          name: name.trim(),
+          partyType,
+          aadhaarNumber: digits || undefined,
+          panNumber: panTrimmed || undefined,
+          file: file || undefined,
+          panFile: panFile || undefined,
+        },
+        { onSuccess: reset, onError: (e) => setErr(e.message) },
+      );
     }
-    if (!name.trim()) {
-      setErr(T("Enter the person's name.", "व्यक्ति का नाम डालें।"));
-      return;
-    }
-    if (!file) {
-      setErr(T("Choose the Aadhaar card image/PDF.", "आधार कार्ड की इमेज/PDF चुनें।"));
-      return;
-    }
-    add.mutate(
-      { role, name: name.trim(), aadhaarNumber: digits, file },
-      { onSuccess: reset, onError: (e) => setErr(e.message) },
-    );
-  }
 
   return (
     <section style={{ borderTop: "1px solid var(--border, #333)", paddingTop: 12 }}>
@@ -210,8 +240,23 @@ function PartyGroup({
           })}
         </div>
       )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <input className="district-input" style={{ flex: "1 1 150px" }} value={name} onChange={(e) => setName(e.target.value)} placeholder={T("Name", "नाम")} />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <select
+          className="district-input"
+          style={{ flex: "0 0 130px" }}
+          value={partyType}
+          onChange={(e) => setPartyType(e.target.value as PartyType)}
+        >
+          <option value="individual">{T("Individual", "व्यक्ति")}</option>
+          <option value="company">{T("Company/Firm", "कंपनी/फर्म")}</option>
+        </select>
+        <input
+          className="district-input"
+          style={{ flex: "1 1 150px" }}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
+        />
         <input
           className="district-input"
           style={{ flex: "1 1 150px" }}
@@ -225,10 +270,30 @@ function PartyGroup({
           type="file"
           accept="image/*,application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          style={{ flex: "1 1 190px", fontSize: 13 }}
+          style={{ flex: "1 1 170px", fontSize: 13 }}
         />
-        <button type="button" className="btn-calc" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} disabled={add.isPending} onClick={addNew}>
-          <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे…") : T("Add new", "नया जोड़ें")}
+        <input
+          className="district-input"
+          style={{ flex: "1 1 130px" }}
+          value={pan}
+          onChange={(e) => setPan(e.target.value.toUpperCase())}
+          placeholder={T("PAN number", "पेन नंबर")}
+        />
+        <input
+          ref={panFileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={(e) => setPanFile(e.target.files?.[0] ?? null)}
+          style={{ flex: "1 1 170px", fontSize: 13 }}
+        />
+        <button
+          type="button"
+          className="btn-calc"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          disabled={add.isPending}
+          onClick={addNew}
+        >
+          <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे...") : T("Add new", "नया जोड़ें")}
         </button>
       </div>
       {err && (
