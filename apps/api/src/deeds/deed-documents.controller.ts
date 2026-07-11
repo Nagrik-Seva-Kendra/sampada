@@ -94,6 +94,37 @@ function parsePartyType(raw: unknown): PartyType {
           return new StreamableFile(f.data);
     }
 
+@Post("parties/:id/files")
+    @UseInterceptors(
+          FileFieldsInterceptor(
+                  [
+                    { name: "file", maxCount: 1 },
+                    { name: "aadhaarBackFile", maxCount: 1 },
+                    { name: "panFile", maxCount: 1 },
+                            ],
+            { limits: { fileSize: MAX_FILE } },
+                  ),
+          )
+    updatePartyFiles(
+          @Param("id") id: string,
+          @UploadedFiles() files?: { file?: UploadedDoc[]; aadhaarBackFile?: UploadedDoc[]; panFile?: UploadedDoc[] },
+          ) {
+          const file = files?.file?.[0];
+          const aadhaarBackFile = files?.aadhaarBackFile?.[0];
+          const panFile = files?.panFile?.[0];
+          return this.service.updatePartyFiles(id, {
+                  file: file
+                  ? { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype }
+                            : undefined,
+                  aadhaarBackFile: aadhaarBackFile
+                  ? { buffer: aadhaarBackFile.buffer, originalname: aadhaarBackFile.originalname, mimetype: aadhaarBackFile.mimetype }
+                            : undefined,
+                  panFile: panFile
+                  ? { buffer: panFile.buffer, originalname: panFile.originalname, mimetype: panFile.mimetype }
+                            : undefined,
+          });
+    }
+
 // ---- Deed <-> people ----
 
 @Get("deeds/:deedId/parties")
