@@ -1,0 +1,259 @@
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service.js";
+
+export type PartyRole = "buyer" | "seller";
+
+export interface PartyMeta {
+  id: string;
+  name: string;
+  aadhaarNumber: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface DeedPartyItem {
+  linkId: string;
+  role: PartyRole;
+  party: PartyMeta;
+}
+
+export interface NaxaMeta {
+  id: string;
+  deedId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+interface UploadedDoc {
+  buffer: Buffer;
+  originalname?: string;
+  mimetype?: string;
+}
+
+const PARTY_META = {
+  id: true,
+  name: true,
+  aadhaarNumber: true,
+  fileName: true,
+  mimeType: true,
+  size: true,
+  createdAt: true,
+} as const;
+
+function toPartyMeta(r: {
+  id: string;
+  name: string;
+  aadhaarNumber: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+}): PartyMeta {
+  return {
+    id: r.id,
+    name: r.name,
+    aadhaarNumber: r.aadhaarNumber,
+    fileName: r.fileName,
+    mimeType: r.mimeType,
+    size: r.size,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/** Digits-only Aadhaar (strips spaces/dashes users may type). */
+function normalizeAadhaar(raw: string): string {
+  return (raw ?? "").replace(/[^0-9]/g, "");
+}
+
+/**
+ * Aadhaar cards (reusable "people", deduped by Aadhaar number) and per-deed
+ * property maps (naxa). All bytes live in Postgres because the API host has no
+ * persistent disk, so filesystem uploads wouldn't survive a redeploy.
+ */
+@Injectable()
+export class DeedDocumentsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ---- Parties (reusable people, deduped by Aadhaar number) ----
+
+  /** Search existing people by name or Aadhaar number, for the reuse picker. */
+  async searchParties(query: string): Promise<PartyMeta[]> {
+    const q = (query ?? "").trim();
+    const digits = normalizeAadhaar(q);
+    const rows = await this.prisma.party.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              ...(digits ? [{ aadhaarNumber: { contains: digits } }] : []),
+            ],
+          }
+        : {},
+      orderBy: { name: "asc" },
+      take: 20,
+      select: PARTY_META,
+    });
+    return rows.map(toPartyMeta);
+  }
+
+  /** Aadhaar card bytes for one person. */
+  async partyFile(id: string): Promise<{ fileName: string; mimeType: string; data: Buffer }> {
+    const row = await this.prisma.party.findUnique({
+      where: { id },
+      select: { fileName: true, mimeType: true, data: true },
+    });
+    if (!row) throw new NotFoundException("Person not found.");
+    return { fileName: row.fileName, mimeType: row.mimeType, data: Buffer.from(row.data) };
+  }
+
+  // ---- Deed <-> Party links ----
+
+  async listDeedParties(deedId: string): Promise<DeedPartyItem[]> {
+    const rows = await this.prisma.deedParty.findMany({
+      where: { deedId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, role: true, party: { select: PARTY_META } },
+    });
+    return rows.map((r) => ({
+      linkId: r.id,
+      role: r.role as PartyRole,
+      party: toPartyMeta(r.party),
+    }));
+  }
+
+  /**
+   * Attach a buyer/seller to a deed. Either reuse an existing person (by
+   * partyId, or by an Aadhaar number that already exists) or create a new one
+   * from an uploaded card. Creating requires the file + name; reuse does not.
+   */
+  async addDeedParty(input: {
+    deedId: string;
+    role: PartyRole;
+    partyId?: string;
+    name?: string;
+    aadhaarNumber?: string;
+    file?: UploadedDoc;
+  }): Promise<DeedPartyItem> {
+    let resolvedPartyId: string;
+
+    if (input.partyId) {
+      const found = await this.prisma.party.findUnique({
+        where: { id: input.partyId },
+        select: { id: true },
+      });
+      if (!found) throw new NotFoundException("Selected person not found.");
+      resolvedPartyId = found.id;
+    } else {
+      const aadhaar = normalizeAadhaar(input.aadhaarNumber ?? "");
+      if (aadhaar.length !== 12) {
+        throw new BadRequestException("A valid 12-digit Aadhaar number is required.");
+      }
+      const existing = await this.prisma.party.findUnique({
+        where: { aadhaarNumber: aadhaar },
+        select: { id: true },
+      });
+      if (existing) {
+        resolvedPartyId = existing.id;
+      } else {
+        if (!input.file) {
+          throw new BadRequestException("Aadhaar card image is required for a new person.");
+        }
+        const name = (input.name ?? "").trim();
+        if (!name) throw new BadRequestException("Name is required for a new person.");
+        const created = await this.prisma.party.create({
+          data: {
+            name,
+            aadhaarNumber: aadhaar,
+            fileName: input.file.originalname ?? "aadhaar",
+            mimeType: input.file.mimetype ?? "application/octet-stream",
+            size: input.file.buffer.length,
+            data: input.file.buffer,
+          },
+          select: { id: true },
+        });
+        resolvedPartyId = created.id;
+      }
+    }
+
+    const link = await this.prisma.deedParty.upsert({
+      where: {
+        deedId_partyId_role: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
+      },
+      create: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
+      update: {},
+      select: { id: true, role: true, party: { select: PARTY_META } },
+    });
+    return { linkId: link.id, role: link.role as PartyRole, party: toPartyMeta(link.party) };
+  }
+
+  /** Remove a person from a deed (keeps them on file for other deeds). */
+  async removeDeedParty(deedId: string, linkId: string): Promise<void> {
+    const link = await this.prisma.deedParty.findUnique({
+      where: { id: linkId },
+      select: { deedId: true },
+    });
+    if (!link || link.deedId !== deedId) throw new NotFoundException("Link not found.");
+    await this.prisma.deedParty.delete({ where: { id: linkId } });
+  }
+
+  // ---- Naxa (per-deed property map) ----
+
+  async listNaxa(deedId: string): Promise<NaxaMeta[]> {
+    const rows = await this.prisma.deedNaxa.findMany({
+      where: { deedId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, deedId: true, fileName: true, mimeType: true, size: true, createdAt: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      deedId: r.deedId,
+      fileName: r.fileName,
+      mimeType: r.mimeType,
+      size: r.size,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async addNaxa(input: { deedId: string; file: UploadedDoc }): Promise<NaxaMeta> {
+    const row = await this.prisma.deedNaxa.create({
+      data: {
+        deedId: input.deedId,
+        fileName: input.file.originalname ?? "naxa",
+        mimeType: input.file.mimetype ?? "application/octet-stream",
+        size: input.file.buffer.length,
+        data: input.file.buffer,
+      },
+      select: { id: true, deedId: true, fileName: true, mimeType: true, size: true, createdAt: true },
+    });
+    return {
+      id: row.id,
+      deedId: row.deedId,
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      size: row.size,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async naxaFile(id: string): Promise<{ fileName: string; mimeType: string; data: Buffer }> {
+    const row = await this.prisma.deedNaxa.findUnique({
+      where: { id },
+      select: { fileName: true, mimeType: true, data: true },
+    });
+    if (!row) throw new NotFoundException("Naxa not found.");
+    return { fileName: row.fileName, mimeType: row.mimeType, data: Buffer.from(row.data) };
+  }
+
+  async removeNaxa(deedId: string, id: string): Promise<void> {
+    const row = await this.prisma.deedNaxa.findUnique({
+      where: { id },
+      select: { deedId: true },
+    });
+    if (!row || row.deedId !== deedId) throw new NotFoundException("Naxa not found.");
+    await this.prisma.deedNaxa.delete({ where: { id } });
+  }
+}
