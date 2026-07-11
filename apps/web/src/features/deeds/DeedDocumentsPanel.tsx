@@ -18,6 +18,10 @@ import {
 
 type T = (en: string, hi: string) => string;
 
+/** Files accepted for a property map (naxa): images, PDF, and Word documents. */
+const NAXA_ACCEPT =
+  "image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 function maskAadhaar(a: string): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
@@ -294,8 +298,8 @@ function NaxaGroup({
         </div>
       )}
       <label className="btn-calc" style={{ display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer" }}>
-        <FileUp size={15} /> {add.isPending ? T("Uploading…", "अपलोड हो रहा…") : T("Upload map", "नक्शा अपलोड करें")}
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
+        <FileUp size={15} /> {add.isPending ? T("Uploading…", "अपलोड हो रहा…") : T("Upload map (image / PDF / Word)", "नक्शा अपलोड करें (इमेज / PDF / Word)")}
+        <input ref={fileRef} type="file" accept={NAXA_ACCEPT} onChange={onFile} style={{ display: "none" }} />
       </label>
       {err && (
         <p className="modal-error" style={{ marginTop: 8 }}>
