@@ -38,6 +38,12 @@ const ROW: CSSProperties = {
   background: "var(--surface, rgba(255,255,255,0.02))",
 };
 
+const FILE_LABEL: CSSProperties = {
+  fontSize: 11,
+  opacity: 0.55,
+  marginBottom: 2,
+};
+
 /** Inline documents panel shown under a deed row: sellers'/buyers' Aadhaar (reused across deeds) + property map, plus a search over saved people to see who's already added. */
 export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const lang = useUiStore((s) => s.lang);
@@ -145,10 +151,12 @@ function PartyGroup({
     const [partyType, setPartyType] = useState<PartyType>("individual");
     const [aadhaar, setAadhaar] = useState("");
     const [file, setFile] = useState<File | null>(null);
+    const [aadhaarBack, setAadhaarBack] = useState<File | null>(null);
     const [pan, setPan] = useState("");
     const [panFile, setPanFile] = useState<File | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
+    const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
     const panFileRef = useRef<HTMLInputElement>(null);
 
     function reset() {
@@ -156,10 +164,12 @@ function PartyGroup({
       setPartyType("individual");
       setAadhaar("");
       setFile(null);
+      setAadhaarBack(null);
       setPan("");
       setPanFile(null);
       setErr(null);
       if (fileRef.current) fileRef.current.value = "";
+      if (aadhaarBackFileRef.current) aadhaarBackFileRef.current.value = "";
       if (panFileRef.current) panFileRef.current.value = "";
     }
 
@@ -184,7 +194,7 @@ function PartyGroup({
         return;
       }
       if (digits && !file) {
-        setErr(T("Choose the Aadhaar card image/PDF.", "आधार कार्ड की इमेज/PDF चुनें।"));
+        setErr(T("Choose the Aadhaar card image/PDF (front).", "आधार कार्ड की इमेज/PDF चुनें (आगे)।"));
         return;
       }
       if (panTrimmed && !panFile) {
@@ -199,6 +209,7 @@ function PartyGroup({
           aadhaarNumber: digits || undefined,
           panNumber: panTrimmed || undefined,
           file: file || undefined,
+          aadhaarBackFile: aadhaarBack || undefined,
           panFile: panFile || undefined,
         },
         { onSuccess: reset, onError: (e) => setErr(e.message) },
@@ -224,8 +235,18 @@ function PartyGroup({
                   style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5 }}
                   onClick={() => onView("parties/" + it.party.id + "/file")}
                 >
-                  <Eye size={15} /> {T("View", "देखें")}
+                  <Eye size={15} /> {T("View front", "आगे देखें")}
                 </button>
+                {it.party.aadhaarBackFileName && (
+                  <button
+                    type="button"
+                    className="doc-btn"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                    onClick={() => onView("parties/" + it.party.id + "/aadhaar-back-file")}
+                  >
+                    <Eye size={15} /> {T("View back", "पीछे देखें")}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="doc-btn"
@@ -265,13 +286,26 @@ function PartyGroup({
           placeholder={T("Aadhaar number", "आधार नंबर")}
           inputMode="numeric"
         />
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          style={{ flex: "1 1 170px", fontSize: 13 }}
-        />
+        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
+          <span style={FILE_LABEL}>{T("Aadhaar (front)", "आधार (आगे)")}</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            style={{ fontSize: 13 }}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
+          <span style={FILE_LABEL}>{T("Aadhaar (back)", "आधार (पीछे)")}</span>
+          <input
+            ref={aadhaarBackFileRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setAadhaarBack(e.target.files?.[0] ?? null)}
+            style={{ fontSize: 13 }}
+          />
+        </div>
         <input
           className="district-input"
           style={{ flex: "1 1 130px" }}
@@ -279,13 +313,16 @@ function PartyGroup({
           onChange={(e) => setPan(e.target.value.toUpperCase())}
           placeholder={T("PAN number", "पेन नंबर")}
         />
-        <input
-          ref={panFileRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={(e) => setPanFile(e.target.files?.[0] ?? null)}
-          style={{ flex: "1 1 170px", fontSize: 13 }}
-        />
+        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
+          <span style={FILE_LABEL}>{T("PAN card", "पेन कार्ड")}</span>
+          <input
+            ref={panFileRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setPanFile(e.target.files?.[0] ?? null)}
+            style={{ fontSize: 13 }}
+          />
+        </div>
         <button
           type="button"
           className="btn-calc"
