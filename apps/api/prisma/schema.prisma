@@ -85,3 +85,52 @@ model User {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
+
+
+/// A person on deeds (buyer/seller). Their Aadhaar card is stored once here,
+/// deduplicated by aadhaarNumber, and reused across every deed they're part of
+/// so the same card is never uploaded twice. Bytes live in Postgres because the
+/// API host has no persistent disk.
+model Party {
+  id            String      @id @default(cuid())
+  name          String
+  aadhaarNumber String      @unique
+  fileName      String
+  mimeType      String
+  size          Int
+  data          Bytes
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deedLinks     DeedParty[]
+}
+
+/// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
+/// is "buyer" | "seller". A party is linked at most once per role per deed.
+/// `deedId` is the DeedTemplate id, kept as a plain column (the codebase does
+/// not FK to DeedTemplate because of legacy synthetic ids).
+model DeedParty {
+  id        String   @id @default(cuid())
+  deedId    String
+  partyId   String
+  role      String
+  createdAt DateTime @default(now())
+  party     Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@unique([deedId, partyId, role])
+  @@index([deedId])
+  @@index([partyId])
+}
+
+/// The property map ("naxa") for a deed. Per-deed (not shared); multiple pages
+/// allowed. Bytes stored in Postgres for the same persistence reason.
+model DeedNaxa {
+  id        String   @id @default(cuid())
+  deedId    String
+  fileName  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([deedId])
+}
