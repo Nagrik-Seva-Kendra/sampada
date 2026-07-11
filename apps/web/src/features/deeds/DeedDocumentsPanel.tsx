@@ -25,8 +25,7 @@ const NAXA_ACCEPT =
 function maskAadhaar(a: string): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
-  return "XXXX-XXXX-" + d.slice(-4);
-}
+  return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);}
 
 const ROW: CSSProperties = {
   display: "flex",
