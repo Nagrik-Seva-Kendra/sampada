@@ -16,6 +16,7 @@ import {
 } from "./useSampleDeeds";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { DeedDocumentsModal } from "./DeedDocumentsModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -73,6 +74,7 @@ export function AllDeedsPage() {
   const [page, setPage] = useState(1);
   const [viewId, setViewId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
+  const [docsFor, setDocsFor] = useState<SampleDeedListItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
 
@@ -349,6 +351,10 @@ export function AllDeedsPage() {
                               {t("deedsViewDeed")}
                             </DropdownMenuItem>
 
+                            <DropdownMenuItem onSelect={() => setDocsFor(d)}>
+                              {lang === "hi" ? "दस्तावेज़ (आधार / नक्शा)" : "Documents (Aadhaar / Map)"}
+                            </DropdownMenuItem>
+
                             {isStaff && (
                               <>
                                 <DropdownMenuItem onSelect={() => openEdit(d)}>
@@ -426,6 +432,14 @@ export function AllDeedsPage() {
           error={del.isError ? t("deedsDeleteFailed") : null}
           onConfirm={confirmDelete}
           onClose={() => setPendingDelete(null)}
+        />
+      )}
+
+      {docsFor && (
+        <DeedDocumentsModal
+          deedId={docsFor.id}
+          deedTitle={docsFor.title}
+          onClose={() => setDocsFor(null)}
         />
       )}
     </section>
