@@ -93,13 +93,17 @@ model User {
 /// API host has no persistent disk.
 model Party {
   id            String      @id @default(cuid())
-name          String
+  name          String
   partyType     String   @default("individual")
   aadhaarNumber String?  @unique
   fileName      String?
   mimeType      String?
   size          Int?
   data          Bytes?
+  aadhaarBackFileName String?
+  aadhaarBackMimeType String?
+  aadhaarBackSize     Int?
+  aadhaarBackData     Bytes?
   panNumber     String?  @unique
   panFileName   String?
   panMimeType   String?
