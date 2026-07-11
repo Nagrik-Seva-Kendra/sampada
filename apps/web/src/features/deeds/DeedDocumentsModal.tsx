@@ -18,7 +18,7 @@ import {
 
 type L = (en: string, hi: string) => string;
 
-function maskAadhaar(a: string): string {
+function maskAadhaar(a: string | null): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
   return "XXXX-XXXX-" + d.slice(-4);
