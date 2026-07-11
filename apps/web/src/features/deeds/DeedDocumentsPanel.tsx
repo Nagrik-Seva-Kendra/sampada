@@ -34,7 +34,7 @@ const ROW: CSSProperties = {
   background: "var(--surface, rgba(255,255,255,0.02))",
 };
 
-/** Inline documents panel shown under a deed row: buyers'/sellers' Aadhaar (reused across deeds) + property map, plus a search over saved people to see who's already added. */
+/** Inline documents panel shown under a deed row: sellers'/buyers' Aadhaar (reused across deeds) + property map, plus a search over saved people to see who's already added. */
 export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const lang = useUiStore((s) => s.lang);
   const T: T = (en, hi) => (lang === "hi" ? hi : en);
@@ -90,11 +90,11 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
                     </span>
                   ) : (
                     <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      <button type="button" className="doc-btn" disabled={add.isPending} onClick={() => addExisting(p, "buyer")}>
-                        + {T("Buyer", "खरीददार")}
-                      </button>
                       <button type="button" className="doc-btn" disabled={add.isPending} onClick={() => addExisting(p, "seller")}>
                         + {T("Seller", "विक्रेता")}
+                      </button>
+                      <button type="button" className="doc-btn" disabled={add.isPending} onClick={() => addExisting(p, "buyer")}>
+                        + {T("Buyer", "खरीददार")}
                       </button>
                     </span>
                   )}
@@ -113,8 +113,8 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
         )}
       </div>
 
-      <PartyGroup role="buyer" title={T("Buyers", "खरीददार")} items={buyers} deedId={deedId} onView={view} T={T} />
       <PartyGroup role="seller" title={T("Sellers", "विक्रेता")} items={sellers} deedId={deedId} onView={view} T={T} />
+      <PartyGroup role="buyer" title={T("Buyers", "खरीददार")} items={buyers} deedId={deedId} onView={view} T={T} />
       <NaxaGroup deedId={deedId} items={naxa.data ?? []} onView={view} T={T} />
     </div>
   );
