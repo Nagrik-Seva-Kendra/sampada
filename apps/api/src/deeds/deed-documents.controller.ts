@@ -10,13 +10,14 @@ import {
   Res,
   StreamableFile,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
-import { DeedDocumentsService, type PartyRole } from "./deed-documents.service.js";
+import { DeedDocumentsService, type PartyRole, type PartyType } from "./deed-documents.service.js";
 
 interface UploadedDoc {
   buffer: Buffer;
@@ -31,28 +32,34 @@ function parseRole(raw: unknown): PartyRole {
   throw new BadRequestException("role must be buyer or seller.");
 }
 
+function parsePartyType(raw: unknown): PartyType {
+  if (raw === "company") return "company";
+  return "individual";
+}
+
 /**
- * Aadhaar cards (deduped, reusable people) and per-deed property maps (naxa).
- * Staff (admin + employee) only. File bytes are streamed behind the auth guard,
- * so the web app fetches them with its bearer token and shows a blob preview.
+ * Aadhaar/PAN cards (deduped, reusable people/companies) and per-deed property
+ * maps (naxa). Staff (admin + employee) only. File bytes are streamed behind
+ * the auth guard, so the web app fetches them with its bearer token and shows
+ * a blob preview.
  */
 @Controller()
-@UseGuards(JwtStaffGuard)
-export class DeedDocumentsController {
+  @UseGuards(JwtStaffGuard)
+  export class DeedDocumentsController {
   constructor(private readonly service: DeedDocumentsService) {}
 
-  // ---- People picker (reuse across deeds) ----
+// ---- People picker (reuse across deeds) ----
 
-  @Get("parties")
+@Get("parties")
   searchParties(@Query("q") q?: string) {
     return this.service.searchParties(q ?? "");
   }
 
-  @Get("parties/:id/file")
+@Get("parties/:id/file")
   async partyFile(
     @Param("id") id: string,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile> {
+    ): Promise<StreamableFile> {
     const f = await this.service.partyFile(id);
     res.set({
       "Content-Type": f.mimeType,
@@ -61,46 +68,82 @@ export class DeedDocumentsController {
     return new StreamableFile(f.data);
   }
 
-  // ---- Deed <-> people ----
+@Get("parties/:id/pan-file")
+  async panFile(
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: Response,
+    ): Promise<StreamableFile> {
+    const f = await this.service.panFile(id);
+    res.set({
+      "Content-Type": f.mimeType,
+      "Content-Disposition": "inline; filename=" + JSON.stringify(f.fileName),
+    });
+    return new StreamableFile(f.data);
+  }
 
-  @Get("deeds/:deedId/parties")
+// ---- Deed <-> people ----
+
+@Get("deeds/:deedId/parties")
   listParties(@Param("deedId") deedId: string) {
     return this.service.listDeedParties(deedId);
   }
 
-  @Post("deeds/:deedId/parties")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
+@Post("deeds/:deedId/parties")
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: "file", maxCount: 1 },
+        { name: "panFile", maxCount: 1 },
+        ],
+      { limits: { fileSize: MAX_FILE } },
+      ),
+    )
   addParty(
     @Param("deedId") deedId: string,
-    @Body() body: { role?: unknown; partyId?: string; name?: string; aadhaarNumber?: string },
-    @UploadedFile() file?: UploadedDoc,
-  ) {
+    @Body()
+    body: {
+      role?: unknown;
+      partyId?: string;
+      name?: string;
+      partyType?: unknown;
+      aadhaarNumber?: string;
+      panNumber?: string;
+    },
+    @UploadedFiles() files?: { file?: UploadedDoc[]; panFile?: UploadedDoc[] },
+    ) {
+    const file = files?.file?.[0];
+    const panFile = files?.panFile?.[0];
     return this.service.addDeedParty({
       deedId,
       role: parseRole(body.role),
       partyId: body.partyId || undefined,
       name: body.name,
+      partyType: parsePartyType(body.partyType),
       aadhaarNumber: body.aadhaarNumber,
+      panNumber: body.panNumber,
       file: file
-        ? { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype }
+      ? { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype }
+        : undefined,
+      panFile: panFile
+      ? { buffer: panFile.buffer, originalname: panFile.originalname, mimetype: panFile.mimetype }
         : undefined,
     });
   }
 
-  @Delete("deeds/:deedId/parties/:linkId")
+@Delete("deeds/:deedId/parties/:linkId")
   async removeParty(@Param("deedId") deedId: string, @Param("linkId") linkId: string) {
     await this.service.removeDeedParty(deedId, linkId);
     return { removed: true };
   }
 
-  // ---- Naxa (per-deed property map) ----
+// ---- Naxa (per-deed property map) ----
 
-  @Get("deeds/:deedId/naxa")
+@Get("deeds/:deedId/naxa")
   listNaxa(@Param("deedId") deedId: string) {
     return this.service.listNaxa(deedId);
   }
 
-  @Post("deeds/:deedId/naxa")
+@Post("deeds/:deedId/naxa")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
   addNaxa(@Param("deedId") deedId: string, @UploadedFile() file?: UploadedDoc) {
     if (!file) throw new BadRequestException("A file is required.");
@@ -110,11 +153,11 @@ export class DeedDocumentsController {
     });
   }
 
-  @Get("deeds/:deedId/naxa/:id/file")
+@Get("deeds/:deedId/naxa/:id/file")
   async naxaFile(
     @Param("id") id: string,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile> {
+    ): Promise<StreamableFile> {
     const f = await this.service.naxaFile(id);
     res.set({
       "Content-Type": f.mimeType,
@@ -123,7 +166,7 @@ export class DeedDocumentsController {
     return new StreamableFile(f.data);
   }
 
-  @Delete("deeds/:deedId/naxa/:id")
+@Delete("deeds/:deedId/naxa/:id")
   async removeNaxa(@Param("deedId") deedId: string, @Param("id") id: string) {
     await this.service.removeNaxa(deedId, id);
     return { removed: true };
