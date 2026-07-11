@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronDownIcon, FilePlus2, MoreVertical } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ChevronDownIcon, FilePlus2, FileText, MoreVertical } from "lucide-react";
 import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
@@ -16,7 +16,7 @@ import {
 } from "./useSampleDeeds";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
-import { DeedDocumentsModal } from "./DeedDocumentsModal";
+import { DeedDocumentsPanel } from "./DeedDocumentsPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -74,7 +74,7 @@ export function AllDeedsPage() {
   const [page, setPage] = useState(1);
   const [viewId, setViewId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SampleDeedListItem | null>(null);
-  const [docsFor, setDocsFor] = useState<SampleDeedListItem | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
 
@@ -323,67 +323,89 @@ export function AllDeedsPage() {
                   ))}
                 {!deeds.isLoading &&
                   pageRows.map((d, i) => (
-                    <tr key={d.id}>
-                      <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
-                      <td>{formatDate(d.createdAt)}</td>
-                      <td>{d.title}</td>
-                      <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
-                      <td>
-                        <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
-                          {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
-                        </span>
-                      </td>
-                      <td>{d.createdByName}</td>
-                      <td>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                    <Fragment key={d.id}>
+                      <tr>
+                        <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
+                        <td>{formatDate(d.createdAt)}</td>
+                        <td>{d.title}</td>
+                        <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
+                        <td>
+                          <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
+                            {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
+                          </span>
+                        </td>
+                        <td>{d.createdByName}</td>
+                        <td>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  aria-label={t("deedsActionPlaceholder")}
+                                  className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none disabled:opacity-50"
+                                >
+                                  <MoreVertical className="size-4 opacity-70" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => setViewId(d.id)}>
+                                  {t("deedsViewDeed")}
+                                </DropdownMenuItem>
+
+                                {isStaff && (
+                                  <>
+                                    <DropdownMenuItem onSelect={() => openEdit(d)}>
+                                      {t("deedsEditDeed")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void onDuplicate(d)}>
+                                      {t("deedsCreateDeedOption")}
+                                    </DropdownMenuItem>
+                                    {canDelete && (
+                                      <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={() => setPendingDelete(d)}
+                                      >
+                                        {t("deedsDeleteDeed")}
+                                      </DropdownMenuItem>
+                                    )}
+                                  </>
+                                )}
+
+                                <DropdownMenuItem onSelect={() => void onPrint(d)}>
+                                  {t("deedsPrintDeed")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => void onDownloadPdf(d)}>
+                                  {t("deedsDownloadPdf")}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+
                             <button
                               type="button"
-                              disabled={busy}
-                              aria-label={t("deedsActionPlaceholder")}
-                              className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none disabled:opacity-50"
+                              aria-label="Documents"
+                              title={lang === "hi" ? "दस्तावेज़ (आधार / नक्शा)" : "Documents (Aadhaar / Map)"}
+                              onClick={() => setExpandedId((cur) => (cur === d.id ? null : d.id))}
+                              className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none"
+                              style={
+                                expandedId === d.id
+                                  ? { background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }
+                                  : undefined
+                              }
                             >
-                              <MoreVertical className="size-4 opacity-70" />
+                              <FileText className="size-4 opacity-80" />
                             </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => setViewId(d.id)}>
-                              {t("deedsViewDeed")}
-                            </DropdownMenuItem>
-
-                            <DropdownMenuItem onSelect={() => setDocsFor(d)}>
-                              {lang === "hi" ? "दस्तावेज़ (आधार / नक्शा)" : "Documents (Aadhaar / Map)"}
-                            </DropdownMenuItem>
-
-                            {isStaff && (
-                              <>
-                                <DropdownMenuItem onSelect={() => openEdit(d)}>
-                                  {t("deedsEditDeed")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => void onDuplicate(d)}>
-                                  {t("deedsCreateDeedOption")}
-                                </DropdownMenuItem>
-                                {canDelete && (
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    onSelect={() => setPendingDelete(d)}
-                                  >
-                                    {t("deedsDeleteDeed")}
-                                  </DropdownMenuItem>
-                                )}
-                              </>
-                            )}
-
-                            <DropdownMenuItem onSelect={() => void onPrint(d)}>
-                              {t("deedsPrintDeed")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => void onDownloadPdf(d)}>
-                              {t("deedsDownloadPdf")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedId === d.id && (
+                        <tr>
+                          <td colSpan={7} style={{ padding: 0, background: "rgba(0,0,0,0.12)" }}>
+                            <DeedDocumentsPanel deedId={d.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 {!deeds.isLoading && pageRows.length === 0 && (
                   <tr>
@@ -432,14 +454,6 @@ export function AllDeedsPage() {
           error={del.isError ? t("deedsDeleteFailed") : null}
           onConfirm={confirmDelete}
           onClose={() => setPendingDelete(null)}
-        />
-      )}
-
-      {docsFor && (
-        <DeedDocumentsModal
-          deedId={docsFor.id}
-          deedTitle={docsFor.title}
-          onClose={() => setDocsFor(null)}
         />
       )}
     </section>
