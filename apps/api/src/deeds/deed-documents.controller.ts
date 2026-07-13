@@ -125,6 +125,15 @@ export class DeedDocumentsController {
     });
   }
 
+  // ---- OCR (server-side, Google Vision) ----
+
+  @Post("ocr")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
+  ocr(@UploadedFile() file?: UploadedDoc) {
+    if (!file) throw new BadRequestException("A file is required.");
+    return this.service.ocrImage(file.buffer);
+  }
+
   // ---- Deed <-> people ----
 
   @Get("deeds/:deedId/parties")
