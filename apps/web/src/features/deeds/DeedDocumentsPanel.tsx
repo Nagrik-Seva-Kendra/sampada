@@ -70,7 +70,7 @@ async function ocrImageText(file: File): Promise<string> {
 function findAadhaar(text: string): string | undefined {
   const m = text.match(/(?<!\d)(\d{4})\s?(\d{4})\s?(\d{4})(?!\s?\d)/);
   if (!m) return undefined;
-  const digits = m[1] + m[2] + m[3];
+  const digits = (m[1] ?? "") + (m[2] ?? "") + (m[3] ?? "");
   return digits.length === 12 ? digits : undefined;
 }
 
@@ -122,9 +122,9 @@ function extractPartyHint(content: string, role: PartyRole): PartyHint | null {
   const parenIdx = block.indexOf("(");
   const newlineIdx = block.indexOf("\n");
   const nameEnd = parenIdx >= 0 ? parenIdx : newlineIdx >= 0 ? newlineIdx : block.length;
-  const name = block
+  const name = (block
     .slice(0, nameEnd)
-    .split(/\s+(?:पुत्र|पुत्री|पत्नी|पत्‍नी|पति|विधवा)\s+/)[0]
+    .split(/\s+(?:पुत्र|पुत्री|पत्नी|पत्‍नी|पति|विधवा)\s+/)[0] ?? "")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^[:\-–,।]+|[:\-–,।]+$/g, "")
