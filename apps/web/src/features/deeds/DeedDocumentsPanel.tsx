@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type RefObject } from "react";
-import { Camera, Eye, FileUp, Plus, Search, Trash2, UserPlus } from "lucide-react";
+import { Camera, Eye, FileUp, Info, Plus, Search, Trash2, UserPlus } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useSampleDeed } from "./useSampleDeeds";
 import {
@@ -28,6 +28,13 @@ function maskAadhaar(a: string | null): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
   return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);
+}
+
+/** Group a 12-digit Aadhaar as "1234 5678 9012" (unmasked, for the details view). */
+function formatAadhaar(a: string | null): string {
+  const d = (a || "").replace(/[^0-9]/g, "");
+  if (d.length !== 12) return a || "";
+  return d.slice(0, 4) + " " + d.slice(4, 8) + " " + d.slice(8, 12);
 }
 
 /* ------------------------------------------------------------------ *
@@ -428,6 +435,7 @@ function PartyGroup({
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
   const [expanded, setExpanded] = useState(false);
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [partyType, setPartyType] = useState<PartyType>("individual");
   const [aadhaar, setAadhaar] = useState("");
@@ -605,37 +613,101 @@ function PartyGroup({
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
           {items.map((it) => {
             const removing = remove.isPending && remove.variables === it.linkId;
+            const p = it.party;
+            const open = detailsFor === it.linkId;
             return (
-              <div key={it.linkId} style={ROW}>
-                <span style={{ fontWeight: 600 }}>{it.party.name}</span>
-                <span style={{ opacity: 0.6, fontSize: 13 }}>{maskAadhaar(it.party.aadhaarNumber)}</span>
-                <button
-                  type="button"
-                  className="doc-btn"
-                  style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5 }}
-                  onClick={() => onView("parties/" + it.party.id + "/file")}
-                >
-                  <Eye size={15} /> {T("View front", "आगे देखें")}
-                </button>
-                {it.party.aadhaarBackFileName && (
+              <div key={it.linkId} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={ROW}>
+                  <span style={{ fontWeight: 600 }}>{p.name}</span>
+                  <span style={{ opacity: 0.6, fontSize: 13 }}>{maskAadhaar(p.aadhaarNumber)}</span>
                   <button
                     type="button"
                     className="doc-btn"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-                    onClick={() => onView("parties/" + it.party.id + "/aadhaar-back-file")}
+                    style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5 }}
+                    onClick={() => setDetailsFor(open ? null : it.linkId)}
                   >
-                    <Eye size={15} /> {T("View back", "पीछे देखें")}
+                    <Info size={15} /> {open ? T("Hide details", "विवरण छिपाएँ") : T("Details", "विवरण")}
                   </button>
+                  <button
+                    type="button"
+                    className="doc-btn"
+                    disabled={removing}
+                    onClick={() => remove.mutate(it.linkId)}
+                    title={T("Remove", "हटाएँ")}
+                  >
+                    {removing ? T("Removing…", "हटा रहे…") : <Trash2 size={15} />}
+                  </button>
+                </div>
+                {open && (
+                  <div
+                    style={{
+                      border: "1px solid var(--border, #333)",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      fontSize: 13,
+                      background: "var(--surface-2, rgba(255,255,255,0.03))",
+                    }}
+                  >
+                    <div>
+                      <b>{T("Type", "प्रकार")}:</b>{" "}
+                      {p.partyType === "company" ? T("Company/Firm", "कंपनी/फर्म") : T("Individual", "व्यक्ति")}
+                    </div>
+                    <div>
+                      <b>{T("Name", "नाम")}:</b> {p.name}
+                    </div>
+                    <div>
+                      <b>{T("Aadhaar", "आधार")}:</b> {p.aadhaarNumber ? formatAadhaar(p.aadhaarNumber) : "—"}
+                    </div>
+                    <div>
+                      <b>{T("PAN", "पेन")}:</b> {p.panNumber || "—"}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      <b>{T("Documents", "दस्तावेज़")}:</b>
+                      {p.fileName ? (
+                        <button
+                          type="button"
+                          className="doc-btn"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                          onClick={() => onView("parties/" + p.id + "/file")}
+                        >
+                          <Eye size={14} /> {T("Aadhaar front", "आधार आगे")}
+                        </button>
+                      ) : (
+                        <span style={{ opacity: 0.5 }}>{T("no Aadhaar front", "आधार आगे नहीं")}</span>
+                      )}
+                      {p.aadhaarBackFileName ? (
+                        <button
+                          type="button"
+                          className="doc-btn"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                          onClick={() => onView("parties/" + p.id + "/aadhaar-back-file")}
+                        >
+                          <Eye size={14} /> {T("Aadhaar back", "आधार पीछे")}
+                        </button>
+                      ) : (
+                        <span style={{ opacity: 0.5 }}>{T("no Aadhaar back", "आधार पीछे नहीं")}</span>
+                      )}
+                      {p.panFileName ? (
+                        <button
+                          type="button"
+                          className="doc-btn"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                          onClick={() => onView("parties/" + p.id + "/pan-file")}
+                        >
+                          <Eye size={14} /> {T("PAN card", "पेन कार्ड")}
+                        </button>
+                      ) : (
+                        <span style={{ opacity: 0.5 }}>{T("no PAN card", "पेन कार्ड नहीं")}</span>
+                      )}
+                    </div>
+                    <div style={{ opacity: 0.6 }}>
+                      {T("Added", "जोड़ा गया")}: {new Date(p.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  className="doc-btn"
-                  disabled={removing}
-                  onClick={() => remove.mutate(it.linkId)}
-                  title={T("Remove", "हटाएँ")}
-                >
-                  {removing ? T("Removing…", "हटा रहे…") : <Trash2 size={15} />}
-                </button>
               </div>
             );
           })}
