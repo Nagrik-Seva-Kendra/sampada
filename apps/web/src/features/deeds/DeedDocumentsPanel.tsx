@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
-import { Eye, FileUp, Search, Trash2, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type RefObject } from "react";
+import { Camera, Eye, FileUp, Plus, Search, Trash2, UserPlus } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useSampleDeed } from "./useSampleDeeds";
 import {
@@ -96,6 +96,82 @@ function guessName(text: string): string | undefined {
   return undefined;
 }
 
+/* ------------------------------------------------------------------ *
+ * Camera-capture auto-crop (edge detection).
+ * When a photo is TAKEN with the camera it usually has a background;
+ * jscanify (built on OpenCV.js) finds the document's edges and crops/
+ * warps just the card out. Both libs load lazily from CDN, and only
+ * on the first camera capture — regular "choose file" uploads never
+ * pay this cost. Fully best-effort: any failure falls back to the
+ * original photo so the upload + OCR still work.
+ * ------------------------------------------------------------------ */
+
+let jscanifyPromise: Promise<unknown> | null = null;
+
+function loadJscanify(): Promise<new () => { loadOpenCV: (cb: () => void) => void; extractPaper: (img: HTMLImageElement | HTMLCanvasElement, w: number, h: number) => HTMLCanvasElement }> {
+  const w = window as unknown as { jscanify?: unknown };
+  if (w.jscanify) return Promise.resolve(w.jscanify as never);
+  if (!jscanifyPromise) {
+    jscanifyPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/jscanify@1.3.0/src/jscanify.min.js";
+      s.async = true;
+      s.onload = () => resolve((window as unknown as { jscanify: unknown }).jscanify);
+      s.onerror = () => reject(new Error("jscanify load failed"));
+      document.head.appendChild(s);
+    });
+  }
+  return jscanifyPromise as never;
+}
+
+/** Decode a File into an HTMLImageElement. */
+function fileToImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image decode failed"));
+    };
+    img.src = url;
+  });
+}
+
+/** Auto-detect the document edges in a photo and return a cropped image.
+ * Returns the ORIGINAL file unchanged on any failure (or for non-images). */
+async function autoCropDocument(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const JscanifyCtor = await loadJscanify();
+    const scanner = new JscanifyCtor();
+    await new Promise<void>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("opencv timeout")), 20000);
+      try {
+        scanner.loadOpenCV(() => {
+          clearTimeout(t);
+          resolve();
+        });
+      } catch (e) {
+        clearTimeout(t);
+        reject(e as Error);
+      }
+    });
+    const img = await fileToImage(file);
+    const natW = img.naturalWidth || img.width;
+    const natH = img.naturalHeight || img.height;
+    if (!natW || !natH) return file;
+    const resultW = Math.min(1400, natW);
+    const resultH = Math.round(resultW * (natH / natW));
+    const out = scanner.extractPaper(img, resultW, resultH);
+    const blob: Blob | null = await new Promise((res) => out.toBlob((b: Blob | null) => res(b), "image/jpeg", 0.92));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + "-scan.jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 interface PartyHint {
   name: string;
   aadhaarNumber?: string;
@@ -167,6 +243,74 @@ const FILE_LABEL: CSSProperties = {
   opacity: 0.55,
   marginBottom: 2,
 };
+
+const CAM_BTN: CSSProperties = {
+  marginTop: 4,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  fontSize: 11,
+  opacity: 0.8,
+  background: "none",
+  border: "1px solid var(--border, #333)",
+  borderRadius: 6,
+  padding: "2px 6px",
+  cursor: "pointer",
+  color: "inherit",
+  width: "fit-content",
+};
+
+type OcrSlot = "aadhaar" | "aadhaarBack" | "pan";
+
+/** One document slot: a "Choose file" input (works on desktop) plus a
+ * "Take photo" button that opens the camera on mobile. Both feed the same
+ * OCR pipeline; the camera path additionally auto-crops the document. */
+function DocSlot({
+  label,
+  slot,
+  ocrBusy,
+  T,
+  fileInputRef,
+  camInputRef,
+  onFile,
+  onCamera,
+}: {
+  label: string;
+  slot: OcrSlot;
+  ocrBusy: OcrSlot | null;
+  T: T;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  camInputRef: RefObject<HTMLInputElement | null>;
+  onFile: (e: ChangeEvent<HTMLInputElement>) => void;
+  onCamera: (e: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
+      <span style={FILE_LABEL}>
+        {label}
+        {ocrBusy === slot ? T(" — reading…", " — पढ़ रहे…") : ""}
+      </span>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        onChange={onFile}
+        style={{ fontSize: 13 }}
+      />
+      <button type="button" style={CAM_BTN} onClick={() => camInputRef.current?.click()}>
+        <Camera size={12} /> {T("Take photo", "फोटो लें")}
+      </button>
+      <input
+        ref={camInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={onCamera}
+        style={{ display: "none" }}
+      />
+    </div>
+  );
+}
 
 /** Inline documents panel shown under a deed row: sellers'/buyers' Aadhaar (reused across deeds) + property map, plus a search over saved people to see who's already added. */
 export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
@@ -283,6 +427,7 @@ function PartyGroup({
 }) {
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
+  const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
   const [partyType, setPartyType] = useState<PartyType>("individual");
   const [aadhaar, setAadhaar] = useState("");
@@ -292,10 +437,13 @@ function PartyGroup({
   const [panFile, setPanFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [autoFilled, setAutoFilled] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState<null | "aadhaar" | "aadhaarBack" | "pan">(null);
+  const [ocrBusy, setOcrBusy] = useState<null | OcrSlot>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
   const panFileRef = useRef<HTMLInputElement>(null);
+  const frontCamRef = useRef<HTMLInputElement>(null);
+  const backCamRef = useRef<HTMLInputElement>(null);
+  const panCamRef = useRef<HTMLInputElement>(null);
   const appliedHint = useRef(false);
 
   useEffect(() => {
@@ -322,79 +470,67 @@ function PartyGroup({
         return hint.panNumber as string;
       });
     }
-    if (filled) setAutoFilled(true);
+    if (filled) {
+      setAutoFilled(true);
+      setExpanded(true);
+    }
   }, [hint]);
 
-  /** Aadhaar (front) chosen — set the file, then OCR it to auto-fill number/name. */
-  async function onAadhaarFront(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    if (!f || !f.type.startsWith("image/")) return;
-    setOcrBusy("aadhaar");
-    try {
-      const text = await ocrImageText(f);
+  /** Run OCR on an image and fill the empty fields relevant to the slot. */
+  async function runOcrFill(f: File, slot: OcrSlot) {
+    if (!f.type.startsWith("image/")) return;
+    const text = await ocrImageText(f);
+    let filled = false;
+    if (slot === "aadhaar" || slot === "aadhaarBack") {
       const num = findAadhaar(text);
-      const nm = guessName(text);
-      let filled = false;
       if (num && !aadhaar) {
         setAadhaar(num);
         filled = true;
       }
-      if (nm && !name) {
-        setName(nm);
-        filled = true;
-      }
-      if (filled) setAutoFilled(true);
-    } catch {
-      /* OCR is best-effort; ignore failures and let the user type. */
-    } finally {
-      setOcrBusy(null);
     }
-  }
-
-  /** Aadhaar (back) chosen — set the file, then OCR it to auto-fill the Aadhaar
-   * number (printed on the back). No name on the back side, so name is left as-is. */
-  async function onAadhaarBackChange(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setAadhaarBack(f);
-    if (!f || !f.type.startsWith("image/")) return;
-    setOcrBusy("aadhaarBack");
-    try {
-      const text = await ocrImageText(f);
-      const num = findAadhaar(text);
-      if (num && !aadhaar) {
-        setAadhaar(num);
-        setAutoFilled(true);
-      }
-    } catch {
-      /* OCR is best-effort; ignore failures and let the user type. */
-    } finally {
-      setOcrBusy(null);
-    }
-  }
-
-  /** PAN card chosen — set the file, then OCR it to auto-fill PAN/name. */
-  async function onPanFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setPanFile(f);
-    if (!f || !f.type.startsWith("image/")) return;
-    setOcrBusy("pan");
-    try {
-      const text = await ocrImageText(f);
+    if (slot === "pan") {
       const p = findPan(text);
-      const nm = guessName(text);
-      let filled = false;
       if (p && !pan) {
         setPan(p);
         filled = true;
       }
+    }
+    if (slot === "aadhaar" || slot === "pan") {
+      const nm = guessName(text);
       if (nm && !name) {
         setName(nm);
         filled = true;
       }
-      if (filled) setAutoFilled(true);
+    }
+    if (filled) setAutoFilled(true);
+  }
+
+  /** A file was chosen via "Choose file" — store it as-is and OCR it. */
+  async function onFilePick(e: ChangeEvent<HTMLInputElement>, slot: OcrSlot, setF: (f: File | null) => void) {
+    const f = e.target.files?.[0] ?? null;
+    setF(f);
+    if (!f || !f.type.startsWith("image/")) return;
+    setOcrBusy(slot);
+    try {
+      await runOcrFill(f, slot);
     } catch {
       /* OCR is best-effort; ignore failures and let the user type. */
+    } finally {
+      setOcrBusy(null);
+    }
+  }
+
+  /** A photo was taken with the camera — auto-crop the document, then store + OCR. */
+  async function onCameraPick(e: ChangeEvent<HTMLInputElement>, slot: OcrSlot, setF: (f: File | null) => void) {
+    const raw = e.target.files?.[0] ?? null;
+    if (!raw) return;
+    setOcrBusy(slot);
+    try {
+      const cropped = await autoCropDocument(raw);
+      setF(cropped);
+      await runOcrFill(cropped, slot);
+    } catch {
+      setF(raw);
     } finally {
       setOcrBusy(null);
     }
@@ -411,9 +547,10 @@ function PartyGroup({
     setErr(null);
     setAutoFilled(false);
     setOcrBusy(null);
-    if (fileRef.current) fileRef.current.value = "";
-    if (aadhaarBackFileRef.current) aadhaarBackFileRef.current.value = "";
-    if (panFileRef.current) panFileRef.current.value = "";
+    setExpanded(false);
+    for (const r of [fileRef, aadhaarBackFileRef, panFileRef, frontCamRef, backCamRef, panCamRef]) {
+      if (r.current) r.current.value = "";
+    }
   }
 
   function addNew() {
@@ -504,99 +641,109 @@ function PartyGroup({
           })}
         </div>
       )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        {autoFilled && (
-          <span style={{ fontSize: 11, opacity: 0.55, flexBasis: "100%" }}>
-            {T(
-              "Auto-filled — please verify before adding.",
-              "अपने आप भर गया — जोड़ने से पहले जांच लें।",
-            )}
-          </span>
-        )}
-        <select
-          className="district-input"
-          style={{ flex: "0 0 130px" }}
-          value={partyType}
-          onChange={(e) => setPartyType(e.target.value as PartyType)}
-        >
-          <option value="individual">{T("Individual", "व्यक्ति")}</option>
-          <option value="company">{T("Company/Firm", "कंपनी/फर्म")}</option>
-        </select>
-        <input
-          className="district-input"
-          style={{ flex: "1 1 150px" }}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
-        />
-        <input
-          className="district-input"
-          style={{ flex: "1 1 150px" }}
-          value={aadhaar}
-          onChange={(e) => setAadhaar(e.target.value)}
-          placeholder={T("Aadhaar number", "आधार नंबर")}
-          inputMode="numeric"
-        />
-        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>
-            {T("Aadhaar (front)", "आधार (आगे)")}
-            {ocrBusy === "aadhaar" ? T(" — reading…", " — पढ़ रहे…") : ""}
-          </span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={onAadhaarFront}
-            style={{ fontSize: 13 }}
-          />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>
-            {T("Aadhaar (back)", "आधार (पीछे)")}
-            {ocrBusy === "aadhaarBack" ? T(" — reading…", " — पढ़ रहे…") : ""}
-          </span>
-          <input
-            ref={aadhaarBackFileRef}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={onAadhaarBackChange}
-            style={{ fontSize: 13 }}
-          />
-        </div>
-        <input
-          className="district-input"
-          style={{ flex: "1 1 130px" }}
-          value={pan}
-          onChange={(e) => setPan(e.target.value.toUpperCase())}
-          placeholder={T("PAN number", "पेन नंबर")}
-        />
-        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>
-            {T("PAN card", "पेन कार्ड")}
-            {ocrBusy === "pan" ? T(" — reading…", " — पढ़ रहे…") : ""}
-          </span>
-          <input
-            ref={panFileRef}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={onPanFileChange}
-            style={{ fontSize: 13 }}
-          />
-        </div>
+
+      {!expanded ? (
         <button
           type="button"
-          className="btn-calc"
+          className="doc-btn"
           style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-          disabled={add.isPending}
-          onClick={addNew}
+          onClick={() => setExpanded(true)}
         >
-          <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे...") : T("Add new", "नया जोड़ें")}
+          <Plus size={15} /> {T("Add new", "नया जोड़ें")}
         </button>
-      </div>
-      {err && (
-        <p className="modal-error" style={{ marginTop: 8 }}>
-          {err}
-        </p>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
+            {autoFilled && (
+              <span style={{ fontSize: 11, opacity: 0.55, flexBasis: "100%" }}>
+                {T(
+                  "Auto-filled — please verify before adding.",
+                  "अपने आप भर गया — जोड़ने से पहले जांच लें।",
+                )}
+              </span>
+            )}
+            <select
+              className="district-input"
+              style={{ flex: "0 0 130px" }}
+              value={partyType}
+              onChange={(e) => setPartyType(e.target.value as PartyType)}
+            >
+              <option value="individual">{T("Individual", "व्यक्ति")}</option>
+              <option value="company">{T("Company/Firm", "कंपनी/फर्म")}</option>
+            </select>
+            <input
+              className="district-input"
+              style={{ flex: "1 1 150px" }}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
+            />
+            <input
+              className="district-input"
+              style={{ flex: "1 1 150px" }}
+              value={aadhaar}
+              onChange={(e) => setAadhaar(e.target.value)}
+              placeholder={T("Aadhaar number", "आधार नंबर")}
+              inputMode="numeric"
+            />
+            <DocSlot
+              label={T("Aadhaar (front)", "आधार (आगे)")}
+              slot="aadhaar"
+              ocrBusy={ocrBusy}
+              T={T}
+              fileInputRef={fileRef}
+              camInputRef={frontCamRef}
+              onFile={(e) => onFilePick(e, "aadhaar", setFile)}
+              onCamera={(e) => onCameraPick(e, "aadhaar", setFile)}
+            />
+            <DocSlot
+              label={T("Aadhaar (back)", "आधार (पीछे)")}
+              slot="aadhaarBack"
+              ocrBusy={ocrBusy}
+              T={T}
+              fileInputRef={aadhaarBackFileRef}
+              camInputRef={backCamRef}
+              onFile={(e) => onFilePick(e, "aadhaarBack", setAadhaarBack)}
+              onCamera={(e) => onCameraPick(e, "aadhaarBack", setAadhaarBack)}
+            />
+            <input
+              className="district-input"
+              style={{ flex: "1 1 130px" }}
+              value={pan}
+              onChange={(e) => setPan(e.target.value.toUpperCase())}
+              placeholder={T("PAN number", "पेन नंबर")}
+            />
+            <DocSlot
+              label={T("PAN card", "पेन कार्ड")}
+              slot="pan"
+              ocrBusy={ocrBusy}
+              T={T}
+              fileInputRef={panFileRef}
+              camInputRef={panCamRef}
+              onFile={(e) => onFilePick(e, "pan", setPanFile)}
+              onCamera={(e) => onCameraPick(e, "pan", setPanFile)}
+            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn-calc"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                disabled={add.isPending}
+                onClick={addNew}
+              >
+                <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे...") : T("Save", "सेव करें")}
+              </button>
+              <button type="button" className="doc-btn" disabled={add.isPending} onClick={reset}>
+                {T("Cancel", "रद्द करें")}
+              </button>
+            </div>
+          </div>
+          {err && (
+            <p className="modal-error" style={{ marginTop: 8 }}>
+              {err}
+            </p>
+          )}
+        </>
       )}
     </section>
   );
