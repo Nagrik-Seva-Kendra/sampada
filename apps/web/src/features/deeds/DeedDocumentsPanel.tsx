@@ -279,8 +279,8 @@ function DocSlot({
   slot: OcrSlot;
   ocrBusy: OcrSlot | null;
   T: T;
-  fileInputRef: RefObject<HTMLInputElement>;
-  camInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  camInputRef: RefObject<HTMLInputElement | null>;
   onFile: (e: ChangeEvent<HTMLInputElement>) => void;
   onCamera: (e: ChangeEvent<HTMLInputElement>) => void;
 }) {
