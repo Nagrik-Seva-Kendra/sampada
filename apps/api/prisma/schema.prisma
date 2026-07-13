@@ -86,32 +86,36 @@ model User {
   updatedAt     DateTime   @updatedAt
 }
 
-
 /// A person on deeds (buyer/seller). Their Aadhaar card is stored once here,
 /// deduplicated by aadhaarNumber, and reused across every deed they're part of
 /// so the same card is never uploaded twice. Bytes live in Postgres because the
 /// API host has no persistent disk.
 model Party {
-  id            String      @id @default(cuid())
-  name          String
-  partyType     String   @default("individual")
-  aadhaarNumber String?  @unique
-  fileName      String?
-  mimeType      String?
-  size          Int?
-  data          Bytes?
+  id                  String      @id @default(cuid())
+  name                String
+  partyType           String      @default("individual")
+  /**
+   * Date of birth as free text (e.g. "01/01/1990" or just a year), typically
+   * OCR'd off the Aadhaar card; optional.
+   */
+  dob                 String?
+  aadhaarNumber       String?     @unique
+  fileName            String?
+  mimeType            String?
+  size                Int?
+  data                Bytes?
   aadhaarBackFileName String?
   aadhaarBackMimeType String?
   aadhaarBackSize     Int?
   aadhaarBackData     Bytes?
-  panNumber     String?  @unique
-  panFileName   String?
-  panMimeType   String?
-  panSize       Int?
-  panData       Bytes?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deedLinks     DeedParty[]
+  panNumber           String?     @unique
+  panFileName         String?
+  panMimeType         String?
+  panSize             Int?
+  panData             Bytes?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  deedLinks           DeedParty[]
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
