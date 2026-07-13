@@ -87,19 +87,43 @@ function findPan(text: string): string | undefined {
   return m ? m[0].toUpperCase() : undefined;
 }
 
-/** Best-effort English-name guess from an Aadhaar/PAN OCR text. */
+/** Best-effort English-name guess from an Aadhaar/PAN OCR text.
+ * On an Aadhaar the English name sits just above the DOB / gender line, so we
+ * anchor on that first (most reliable), then fall back to the first plausible
+ * name-looking line. Names are still the weakest part of OCR, so the field
+ * stays editable for staff to correct. */
 function guessName(text: string): string | undefined {
   const bad =
-    /aadhaar|government|india|male|female|dob|date of birth|year of birth|income tax|department|permanent|account|number|govt|father|signature|vid/i;
-  for (const raw of text.split(/\n/)) {
-    const line = raw.trim();
-    if (!line || /\d/.test(line) || bad.test(line)) continue;
-    const letters = line.replace(/[^A-Za-z ]/g, "").trim();
-    const words = letters.split(/\s+/).filter(Boolean);
-    if (letters.length >= 4 && words.length >= 1 && words.length <= 5) {
-      return words.join(" ");
+    /aadhaar|government|govt|india|uidai|male|female|dob|date of birth|year of birth|income tax|department|permanent|account|number|father|husband|signature|vid|help|www|gov\.in|enrol|address/i;
+  const clean = (l: string) => l.replace(/[^A-Za-z ]/g, "").replace(/\s+/g, " ").trim();
+  const isNameLine = (l: string) => {
+    if (!l || /\d/.test(l) || bad.test(l)) return false;
+    const c = clean(l);
+    const words = c.split(/\s+/).filter(Boolean);
+    return c.length >= 4 && words.length >= 1 && words.length <= 5;
+  };
+  const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  // Strongest signal: the name is the line just above DOB / gender.
+  const anchor = lines.findIndex((l) => /(date of birth|dob|year of birth|male|female)/i.test(l));
+  if (anchor > 0) {
+    for (let i = anchor - 1; i >= 0; i--) {
+      const l = lines[i] ?? "";
+      if (isNameLine(l)) return clean(l);
     }
   }
+  // Fallback: first plausible name-looking line.
+  for (const l of lines) {
+    if (isNameLine(l)) return clean(l);
+  }
+  return undefined;
+}
+
+/** Best-effort DOB from Aadhaar OCR text: a DD/MM/YYYY date, else a birth year. */
+function findDob(text: string): string | undefined {
+  const d = text.match(/\b(\d{2})[/\-.](\d{2})[/\-.](\d{4})\b/);
+  if (d) return (d[1] ?? "") + "/" + (d[2] ?? "") + "/" + (d[3] ?? "");
+  const y = text.match(/(?:year of birth|yob)\D{0,8}(\d{4})/i);
+  if (y && y[1]) return y[1];
   return undefined;
 }
 
@@ -439,6 +463,7 @@ function PartyGroup({
   const [name, setName] = useState("");
   const [partyType, setPartyType] = useState<PartyType>("individual");
   const [aadhaar, setAadhaar] = useState("");
+  const [dob, setDob] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [aadhaarBack, setAadhaarBack] = useState<File | null>(null);
   const [pan, setPan] = useState("");
@@ -496,6 +521,13 @@ function PartyGroup({
         filled = true;
       }
     }
+    if (slot === "aadhaar") {
+      const d = findDob(text);
+      if (d && !dob) {
+        setDob(d);
+        filled = true;
+      }
+    }
     if (slot === "pan") {
       const p = findPan(text);
       if (p && !pan) {
@@ -505,7 +537,9 @@ function PartyGroup({
     }
     if (slot === "aadhaar" || slot === "pan") {
       const nm = guessName(text);
-      if (nm && !name) {
+      // Auto-save the name in English: fill when empty, or replace a Devanagari
+      // value (e.g. pre-filled from the Hindi deed text) with the Latin OCR name.
+      if (nm && (!name || /[ऀ-ॿ]/.test(name))) {
         setName(nm);
         filled = true;
       }
@@ -548,6 +582,7 @@ function PartyGroup({
     setName("");
     setPartyType("individual");
     setAadhaar("");
+    setDob("");
     setFile(null);
     setAadhaarBack(null);
     setPan("");
@@ -594,6 +629,7 @@ function PartyGroup({
         role,
         name: name.trim(),
         partyType,
+        dob: dob.trim() || undefined,
         aadhaarNumber: digits || undefined,
         panNumber: panTrimmed || undefined,
         file: file || undefined,
@@ -659,6 +695,9 @@ function PartyGroup({
                       <b>{T("Name", "नाम")}:</b> {p.name}
                     </div>
                     <div>
+                      <b>{T("DOB", "जन्म तिथि")}:</b> {p.dob || "—"}
+                    </div>
+                    <div>
                       <b>{T("Aadhaar", "आधार")}:</b> {p.aadhaarNumber ? formatAadhaar(p.aadhaarNumber) : "—"}
                     </div>
                     <div>
@@ -703,9 +742,6 @@ function PartyGroup({
                         <span style={{ opacity: 0.5 }}>{T("no PAN card", "पेन कार्ड नहीं")}</span>
                       )}
                     </div>
-                    <div style={{ opacity: 0.6 }}>
-                      {T("Added", "जोड़ा गया")}: {new Date(p.createdAt).toLocaleDateString()}
-                    </div>
                   </div>
                 )}
               </div>
@@ -749,6 +785,13 @@ function PartyGroup({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
+            />
+            <input
+              className="district-input"
+              style={{ flex: "1 1 120px" }}
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              placeholder={T("DOB (DD/MM/YYYY)", "जन्म तिथि (DD/MM/YYYY)")}
             />
             <input
               className="district-input"
