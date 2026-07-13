@@ -203,3 +203,24 @@ export function useFileOpener() {
       .blob()
       .then((b) => URL.createObjectURL(b));
 }
+
+/**
+ * Server-side OCR (Google Vision) for a card image. Returns the detected text,
+ * or "" on any failure so the caller can fall back to in-browser OCR. Only the
+ * backend knows whether a Vision API key is configured; if not, it returns "".
+ */
+export function usePartyOcr() {
+  const token = useAuthStore((s) => s.token);
+  return async (file: File): Promise<string> => {
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const r = await api
+        .post("ocr", { headers: authHeaders(token), body: fd })
+        .json<{ text: string }>();
+      return r.text || "";
+    } catch {
+      return "";
+    }
+  };
+}

@@ -195,6 +195,40 @@ export class DeedDocumentsService {
     };
   }
 
+  /**
+   * Server-side OCR for an Aadhaar/PAN card image via Google Cloud Vision.
+   * Returns the detected plain text, which the web app then parses for the
+   * name / DOB / Aadhaar / PAN. This is far more accurate on real phone photos
+   * than the in-browser fallback. Requires the GOOGLE_VISION_API_KEY env var;
+   * if it's unset or Vision errors, we return empty text so the client quietly
+   * falls back to its own OCR — nothing breaks either way.
+   */
+  async ocrImage(buffer: Buffer): Promise<{ text: string }> {
+    const key = process.env.GOOGLE_VISION_API_KEY;
+    if (!key) return { text: "" };
+    try {
+      const res = await fetch("https://vision.googleapis.com/v1/images:annotate?key=" + key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: { content: buffer.toString("base64") },
+              features: [{ type: "TEXT_DETECTION" }],
+            },
+          ],
+        }),
+      });
+      if (!res.ok) return { text: "" };
+      const data = (await res.json()) as {
+        responses?: Array<{ fullTextAnnotation?: { text?: string } }>;
+      };
+      return { text: data.responses?.[0]?.fullTextAnnotation?.text ?? "" };
+    } catch {
+      return { text: "" };
+    }
+  }
+
   // ---- Deed <-> Party links ----
 
   async listDeedParties(deedId: string): Promise<DeedPartyItem[]> {

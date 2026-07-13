@@ -8,6 +8,7 @@ import {
   useDeedNaxa,
   useDeedParties,
   useFileOpener,
+  usePartyOcr,
   useRemoveDeedParty,
   useRemoveNaxa,
   useSearchParties,
@@ -100,9 +101,20 @@ async function preprocessForOcr(file: File): Promise<File | HTMLCanvasElement> {
   }
 }
 
-/** OCR an image file to plain text (best-effort; images only, not PDFs). */
-async function ocrImageText(file: File): Promise<string> {
+/** OCR an image file to plain text (best-effort; images only, not PDFs).
+ * If a backend OCR function is provided (Google Vision), try it first — it's
+ * much more accurate on real photos — and only fall back to in-browser
+ * Tesseract if it returns nothing (e.g. no API key configured). */
+async function ocrImageText(file: File, backendOcr?: (f: File) => Promise<string>): Promise<string> {
   if (!file.type.startsWith("image/")) return "";
+  if (backendOcr) {
+    try {
+      const t = await backendOcr(file);
+      if (t && t.trim()) return t;
+    } catch {
+      /* fall back to in-browser OCR */
+    }
+  }
   const Tesseract = await loadTesseract();
   const input = await preprocessForOcr(file);
   const { data } = await Tesseract.recognize(input, "eng");
@@ -505,6 +517,7 @@ function PartyGroup({
 }) {
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
+  const backendOcr = usePartyOcr();
   const [expanded, setExpanded] = useState(false);
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -559,7 +572,7 @@ function PartyGroup({
   /** Run OCR on an image and fill the empty fields relevant to the slot. */
   async function runOcrFill(f: File, slot: OcrSlot) {
     if (!f.type.startsWith("image/")) return;
-    const text = await ocrImageText(f);
+    const text = await ocrImageText(f, backendOcr);
     let filled = false;
     if (slot === "aadhaar" || slot === "aadhaarBack") {
       const num = findAadhaar(text);
