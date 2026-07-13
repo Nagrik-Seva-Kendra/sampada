@@ -49,7 +49,7 @@ function formatAadhaar(a: string | null): string {
 let tesseractPromise: Promise<unknown> | null = null;
 
 /** Lazy-load Tesseract.js from CDN once; resolves to the global Tesseract. */
-function loadTesseract(): Promise<{ recognize: (img: File, lang: string) => Promise<{ data: { text: string } }> }> {
+function loadTesseract(): Promise<{ recognize: (img: File | HTMLCanvasElement, lang: string) => Promise<{ data: { text: string } }> }> {
   const w = window as unknown as { Tesseract?: unknown };
   if (w.Tesseract) return Promise.resolve(w.Tesseract as never);
   if (!tesseractPromise) {
@@ -65,17 +65,61 @@ function loadTesseract(): Promise<{ recognize: (img: File, lang: string) => Prom
   return tesseractPromise as never;
 }
 
+/** Prepare an image for OCR: upscale, grayscale and boost contrast — this
+ * markedly improves Tesseract's accuracy on phone photos of cards. Falls back
+ * to the original file if anything goes wrong. */
+async function preprocessForOcr(file: File): Promise<File | HTMLCanvasElement> {
+  try {
+    const img = await fileToImage(file);
+    const natW = img.naturalWidth || img.width;
+    const natH = img.naturalHeight || img.height;
+    if (!natW || !natH) return file;
+    const scale = Math.min(2.5, 1800 / natW) || 1;
+    const w = Math.max(1, Math.round(natW * scale));
+    const h = Math.max(1, Math.round(natH * scale));
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+    const im = ctx.getImageData(0, 0, w, h);
+    const d = im.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = 0.299 * (d[i] ?? 0) + 0.587 * (d[i + 1] ?? 0) + 0.114 * (d[i + 2] ?? 0);
+      let v = (g - 128) * 1.35 + 128;
+      v = v < 0 ? 0 : v > 255 ? 255 : v;
+      d[i] = v;
+      d[i + 1] = v;
+      d[i + 2] = v;
+    }
+    ctx.putImageData(im, 0, 0);
+    return c;
+  } catch {
+    return file;
+  }
+}
+
 /** OCR an image file to plain text (best-effort; images only, not PDFs). */
 async function ocrImageText(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) return "";
   const Tesseract = await loadTesseract();
-  const { data } = await Tesseract.recognize(file, "eng");
+  const input = await preprocessForOcr(file);
+  const { data } = await Tesseract.recognize(input, "eng");
   return data?.text || "";
 }
 
-/** Extract a 12-digit Aadhaar number from OCR text (rejects a 16-digit VID). */
+/** Extract a 12-digit Aadhaar number from OCR text (rejects a 16-digit VID).
+ * First fixes common OCR letter→digit confusions so a slightly misread number
+ * (e.g. "O"→0, "I"→1, "S"→5, "B"→8) can still be recovered. */
 function findAadhaar(text: string): string | undefined {
-  const m = text.match(/(?<!\d)(\d{4})\s?(\d{4})\s?(\d{4})(?!\s?\d)/);
+  const norm = text
+    .replace(/[OoQ]/g, "0")
+    .replace(/[Il|!]/g, "1")
+    .replace(/[Ss]/g, "5")
+    .replace(/B/g, "8")
+    .replace(/[Zz]/g, "2");
+  const m = norm.match(/(?<!\d)(\d{4})\s?(\d{4})\s?(\d{4})(?!\s?\d)/);
   if (!m) return undefined;
   const digits = (m[1] ?? "") + (m[2] ?? "") + (m[3] ?? "");
   return digits.length === 12 ? digits : undefined;
@@ -96,11 +140,14 @@ function guessName(text: string): string | undefined {
   const bad =
     /aadhaar|government|govt|india|uidai|male|female|dob|date of birth|year of birth|income tax|department|permanent|account|number|father|husband|signature|vid|help|www|gov\.in|enrol|address/i;
   const clean = (l: string) => l.replace(/[^A-Za-z ]/g, "").replace(/\s+/g, " ").trim();
+  // A real name reads as capitalised words ("Seema Devi" / "SEEMA DEVI"), which
+  // rejects OCR garbage like "cEEED" so we leave the field blank instead.
+  const nameLike = (c: string) => /^[A-Z][A-Za-z.'-]*(?:\s+[A-Z][A-Za-z.'-]*){0,4}$/.test(c);
   const isNameLine = (l: string) => {
     if (!l || /\d/.test(l) || bad.test(l)) return false;
     const c = clean(l);
     const words = c.split(/\s+/).filter(Boolean);
-    return c.length >= 4 && words.length >= 1 && words.length <= 5;
+    return c.length >= 4 && words.length >= 1 && words.length <= 5 && nameLike(c);
   };
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
   // Strongest signal: the name is the line just above DOB / gender.
