@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type RefObject } from "react";
-import { Camera, Eye, FileUp, Info, Plus, Search, Trash2, UserPlus } from "lucide-react";
+import { Camera, Eye, FileUp, Info, Plus, Trash2, UserPlus } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useSampleDeed } from "./useSampleDeeds";
 import {
@@ -328,6 +328,15 @@ const ROW: CSSProperties = {
   background: "var(--surface, rgba(255,255,255,0.02))",
 };
 
+/** Highlighted row for an auto-detected Aadhaar match (found while typing/OCR-ing
+ * the Aadhaar number in the add-new form — no separate manual search needed). */
+const MATCH_ROW: CSSProperties = {
+  ...ROW,
+  flexBasis: "100%",
+  border: "1px solid var(--accent, #6366f1)",
+  background: "var(--accent-soft, rgba(99,102,241,0.08))",
+};
+
 const FILE_LABEL: CSSProperties = {
   fontSize: 11,
   opacity: 0.55,
@@ -402,7 +411,11 @@ function DocSlot({
   );
 }
 
-/** Inline documents panel shown under a deed row: sellers'/buyers' Aadhaar (reused across deeds) + property map, plus a search over saved people to see who's already added. */
+/** Inline documents panel shown under a deed row: sellers'/buyers' Aadhaar (reused across deeds) + property map.
+ * There is no separate "search saved people" box any more — as soon as a 12-digit
+ * Aadhaar is typed (or auto-filled by OCR off an uploaded card), each Seller/Buyer
+ * form silently checks whether that person is already on file and, if so, offers a
+ * one-click "add as seller/buyer" instead of asking staff to redo the whole form. */
 export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const lang = useUiStore((s) => s.lang);
   const T: T = (en, hi) => (lang === "hi" ? hi : en);
@@ -410,7 +423,6 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const parties = useDeedParties(deedId);
   const naxa = useDeedNaxa(deedId);
   const openFile = useFileOpener();
-  const add = useAddDeedParty(deedId);
   const deed = useSampleDeed(deedId);
 
   const sellerHint = useMemo(
@@ -426,73 +438,33 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const buyers = items.filter((p) => p.role === "buyer");
   const sellers = items.filter((p) => p.role === "seller");
 
-  const [q, setQ] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const results = useSearchParties(q);
-
   async function view(path: string) {
     const url = await openFile(path);
     window.open(url, "_blank");
   }
 
-  function addExisting(p: PartyMeta, role: PartyRole) {
-    setErr(null);
-    add.mutate({ role, partyId: p.id }, { onError: (e) => setErr(e.message) });
-  }
-
   return (
     <div style={{ padding: "14px 8px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ background: "var(--surface-2, rgba(255,255,255,0.03))", borderRadius: 10, padding: 12 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Search size={15} style={{ opacity: 0.6 }} />
-          <input
-            className="district-input"
-            style={{ flex: 1 }}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={T("Search saved people — already added?", "सेव लोगों में खोजें — पहले से जुड़ा?")}
-          />
-        </label>
-        {q.trim().length >= 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-            {(results.data ?? []).map((p) => {
-              const on = items.find((it) => it.party.id === p.id);
-              return (
-                <div key={p.id} style={ROW}>
-                  <span style={{ fontWeight: 600 }}>{p.name}</span>
-                  <span style={{ opacity: 0.6, fontSize: 13 }}>{maskAadhaar(p.aadhaarNumber)}</span>
-                  {on ? (
-                    <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 13, fontWeight: 600 }}>
-                      {T("Already added — ", "पहले से जुड़ा — ") +
-                        (on.role === "buyer" ? T("buyer", "खरीददार") : T("seller", "विक्रेता"))}
-                    </span>
-                  ) : (
-                    <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      <button type="button" className="doc-btn" disabled={add.isPending} onClick={() => addExisting(p, "seller")}>
-                        + {T("Seller", "विक्रेता")}
-                      </button>
-                      <button type="button" className="doc-btn" disabled={add.isPending} onClick={() => addExisting(p, "buyer")}>
-                        + {T("Buyer", "खरीददार")}
-                      </button>
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-            {results.isFetched && (results.data?.length ?? 0) === 0 && (
-              <div style={{ fontSize: 13, opacity: 0.6 }}>{T("No saved person found.", "कोई सेव व्यक्ति नहीं मिला।")}</div>
-            )}
-          </div>
-        )}
-        {err && (
-          <p className="modal-error" style={{ marginTop: 8 }}>
-            {err}
-          </p>
-        )}
-      </div>
-
-      <PartyGroup role="seller" title={T("Sellers", "विक्रेता")} items={sellers} deedId={deedId} onView={view} T={T} hint={sellerHint} />
-      <PartyGroup role="buyer" title={T("Buyers", "खरीददार")} items={buyers} deedId={deedId} onView={view} T={T} hint={buyerHint} />
+      <PartyGroup
+        role="seller"
+        title={T("Sellers", "विक्रेता")}
+        items={sellers}
+        allItems={items}
+        deedId={deedId}
+        onView={view}
+        T={T}
+        hint={sellerHint}
+      />
+      <PartyGroup
+        role="buyer"
+        title={T("Buyers", "खरीददार")}
+        items={buyers}
+        allItems={items}
+        deedId={deedId}
+        onView={view}
+        T={T}
+        hint={buyerHint}
+      />
       <NaxaGroup deedId={deedId} items={naxa.data ?? []} onView={view} T={T} />
     </div>
   );
@@ -502,6 +474,7 @@ function PartyGroup({
   role,
   title,
   items,
+  allItems,
   deedId,
   onView,
   T,
@@ -510,6 +483,8 @@ function PartyGroup({
   role: PartyRole;
   title: string;
   items: DeedPartyItem[];
+  /** Every party already on this deed (both roles) — used to tell "already added as buyer" apart from "already added as seller". */
+  allItems: DeedPartyItem[];
   deedId: string;
   onView: (path: string) => void;
   T: T;
@@ -538,6 +513,27 @@ function PartyGroup({
   const backCamRef = useRef<HTMLInputElement>(null);
   const panCamRef = useRef<HTMLInputElement>(null);
   const appliedHint = useRef(false);
+
+  // ---- Auto-search on Aadhaar (replaces the old separate "search saved people" box) ----
+  // As soon as 12 valid digits are present — typed by hand OR auto-filled by OCR
+  // right after a card is uploaded/photographed — silently look this person up.
+  const aadhaarDigits = aadhaar.replace(/[^0-9]/g, "");
+  const aadhaarQuery = aadhaarDigits.length === 12 ? aadhaarDigits : "";
+  const autoMatch = useSearchParties(aadhaarQuery);
+  const matchedParty: PartyMeta | undefined = aadhaarQuery
+    ? (autoMatch.data ?? []).find((p) => (p.aadhaarNumber || "").replace(/[^0-9]/g, "") === aadhaarDigits)
+    : undefined;
+  const alreadyOnDeed = matchedParty ? allItems.find((it) => it.party.id === matchedParty.id) : undefined;
+  const checkingMatch = Boolean(aadhaarQuery) && autoMatch.isFetching;
+
+  function addExistingMatch() {
+    if (!matchedParty) return;
+    setErr(null);
+    add.mutate(
+      { role, partyId: matchedParty.id },
+      { onSuccess: reset, onError: (e) => setErr(e.message) },
+    );
+  }
 
   useEffect(() => {
     if (!hint || appliedHint.current) return;
@@ -607,7 +603,8 @@ function PartyGroup({
     if (filled) setAutoFilled(true);
   }
 
-  /** A file was chosen via "Choose file" — store it as-is and OCR it. */
+  /** A file was chosen via "Choose file" — store it as-is, then OCR it (which,
+   * if the Aadhaar number comes back, triggers the auto-search above). */
   async function onFilePick(e: ChangeEvent<HTMLInputElement>, slot: OcrSlot, setF: (f: File | null) => void) {
     const f = e.target.files?.[0] ?? null;
     setF(f);
@@ -830,29 +827,9 @@ function PartyGroup({
                 )}
               </span>
             )}
-            <select
-              className="district-input"
-              style={{ flex: "0 0 130px" }}
-              value={partyType}
-              onChange={(e) => setPartyType(e.target.value as PartyType)}
-            >
-              <option value="individual">{T("Individual", "व्यक्ति")}</option>
-              <option value="company">{T("Company/Firm", "कंपनी/फर्म")}</option>
-            </select>
-            <input
-              className="district-input"
-              style={{ flex: "1 1 150px" }}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
-            />
-            <input
-              className="district-input"
-              style={{ flex: "1 1 120px" }}
-              value={dob}
-              onChange={(e) => setDob(e.target.value)}
-              placeholder={T("DOB (DD/MM/YYYY)", "जन्म तिथि (DD/MM/YYYY)")}
-            />
+
+            {/* Aadhaar number + card go first: typing 12 digits (or OCR reading them off
+                an uploaded/photographed card) triggers the auto-search below. */}
             <input
               className="district-input"
               style={{ flex: "1 1 150px" }}
@@ -881,37 +858,100 @@ function PartyGroup({
               onFile={(e) => onFilePick(e, "aadhaarBack", setAadhaarBack)}
               onCamera={(e) => onCameraPick(e, "aadhaarBack", setAadhaarBack)}
             />
-            <input
-              className="district-input"
-              style={{ flex: "1 1 130px" }}
-              value={pan}
-              onChange={(e) => setPan(e.target.value.toUpperCase())}
-              placeholder={T("PAN number", "पेन नंबर")}
-            />
-            <DocSlot
-              label={T("PAN card", "पेन कार्ड")}
-              slot="pan"
-              ocrBusy={ocrBusy}
-              T={T}
-              fileInputRef={panFileRef}
-              camInputRef={panCamRef}
-              onFile={(e) => onFilePick(e, "pan", setPanFile)}
-              onCamera={(e) => onCameraPick(e, "pan", setPanFile)}
-            />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button
-                type="button"
-                className="btn-calc"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                disabled={add.isPending}
-                onClick={addNew}
-              >
-                <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे...") : T("Save", "सेव करें")}
-              </button>
-              <button type="button" className="doc-btn" disabled={add.isPending} onClick={reset}>
-                {T("Cancel", "रद्द करें")}
-              </button>
-            </div>
+
+            {checkingMatch && (
+              <span style={{ fontSize: 12, opacity: 0.6, flexBasis: "100%" }}>
+                {T("Checking if this Aadhaar is already on file…", "देख रहे हैं कि यह आधार पहले से मौजूद है या नहीं…")}
+              </span>
+            )}
+
+            {matchedParty && (
+              <div style={MATCH_ROW}>
+                <span style={{ fontWeight: 600 }}>{matchedParty.name}</span>
+                <span style={{ opacity: 0.6, fontSize: 13 }}>{maskAadhaar(matchedParty.aadhaarNumber)}</span>
+                {alreadyOnDeed ? (
+                  <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 13, fontWeight: 600 }}>
+                    {T("Already added — ", "पहले से जुड़ा — ") +
+                      (alreadyOnDeed.role === "buyer" ? T("buyer", "खरीददार") : T("seller", "विक्रेता"))}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-calc"
+                    style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}
+                    disabled={add.isPending}
+                    onClick={addExistingMatch}
+                  >
+                    <UserPlus size={15} />{" "}
+                    {add.isPending
+                      ? T("Adding…", "जोड़ रहे...")
+                      : role === "seller"
+                        ? T("Found on file — add as seller", "पहले से मौजूद — विक्रेता जोड़ें")
+                        : T("Found on file — add as buyer", "पहले से मौजूद — खरीददार जोड़ें")}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Rest of the form (name, DOB, PAN, Save) is only needed for a genuinely
+                new person — hidden once an existing Aadhaar match is found above. */}
+            {!matchedParty && (
+              <>
+                <select
+                  className="district-input"
+                  style={{ flex: "0 0 130px" }}
+                  value={partyType}
+                  onChange={(e) => setPartyType(e.target.value as PartyType)}
+                >
+                  <option value="individual">{T("Individual", "व्यक्ति")}</option>
+                  <option value="company">{T("Company/Firm", "कंपनी/फर्म")}</option>
+                </select>
+                <input
+                  className="district-input"
+                  style={{ flex: "1 1 150px" }}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={partyType === "company" ? T("Company/Firm name", "कंपनी/फर्म का नाम") : T("Name", "नाम")}
+                />
+                <input
+                  className="district-input"
+                  style={{ flex: "1 1 120px" }}
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  placeholder={T("DOB (DD/MM/YYYY)", "जन्म तिथि (DD/MM/YYYY)")}
+                />
+                <input
+                  className="district-input"
+                  style={{ flex: "1 1 130px" }}
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value.toUpperCase())}
+                  placeholder={T("PAN number", "पेन नंबर")}
+                />
+                <DocSlot
+                  label={T("PAN card", "पेन कार्ड")}
+                  slot="pan"
+                  ocrBusy={ocrBusy}
+                  T={T}
+                  fileInputRef={panFileRef}
+                  camInputRef={panCamRef}
+                  onFile={(e) => onFilePick(e, "pan", setPanFile)}
+                  onCamera={(e) => onCameraPick(e, "pan", setPanFile)}
+                />
+                <button
+                  type="button"
+                  className="btn-calc"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  disabled={add.isPending}
+                  onClick={addNew}
+                >
+                  <UserPlus size={15} /> {add.isPending ? T("Adding…", "जोड़ रहे...") : T("Save", "सेव करें")}
+                </button>
+              </>
+            )}
+
+            <button type="button" className="doc-btn" disabled={add.isPending} onClick={reset}>
+              {T("Cancel", "रद्द करें")}
+            </button>
           </div>
           {err && (
             <p className="modal-error" style={{ marginTop: 8 }}>
