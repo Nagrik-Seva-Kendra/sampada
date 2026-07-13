@@ -203,9 +203,9 @@ export class DeedDocumentsService {
    * if it's unset or Vision errors, we return empty text so the client quietly
    * falls back to its own OCR — nothing breaks either way.
    */
-  async ocrImage(buffer: Buffer): Promise<{ text: string }> {
+  async ocrImage(buffer: Buffer): Promise<{ text: string; debug?: string }> {
     const key = process.env.GOOGLE_VISION_API_KEY;
-    if (!key) return { text: "" };
+    if (!key) return { text: "", debug: "no-key" };
     try {
       const res = await fetch("https://vision.googleapis.com/v1/images:annotate?key=" + key, {
         method: "POST",
@@ -219,13 +219,19 @@ export class DeedDocumentsService {
           ],
         }),
       });
-      if (!res.ok) return { text: "" };
-      const data = (await res.json()) as {
-        responses?: Array<{ fullTextAnnotation?: { text?: string } }>;
+      const raw = await res.text();
+      if (!res.ok) return { text: "", debug: "HTTP " + res.status + ": " + raw.slice(0, 300) };
+      const data = JSON.parse(raw) as {
+        responses?: Array<{ fullTextAnnotation?: { text?: string }; error?: { message?: string } }>;
       };
-      return { text: data.responses?.[0]?.fullTextAnnotation?.text ?? "" };
-    } catch {
-      return { text: "" };
+      const first = data.responses?.[0];
+      const respErr = first?.error?.message;
+      return {
+        text: first?.fullTextAnnotation?.text ?? "",
+        debug: respErr ? "resp-error: " + respErr : "ok",
+      };
+    } catch (e) {
+      return { text: "", debug: "EXC " + ((e as Error).message || String(e)) };
     }
   }
 
