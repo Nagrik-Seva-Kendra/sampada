@@ -292,7 +292,7 @@ function PartyGroup({
   const [panFile, setPanFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [autoFilled, setAutoFilled] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState<null | "aadhaar" | "pan">(null);
+  const [ocrBusy, setOcrBusy] = useState<null | "aadhaar" | "aadhaarBack" | "pan">(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
   const panFileRef = useRef<HTMLInputElement>(null);
@@ -345,6 +345,27 @@ function PartyGroup({
         filled = true;
       }
       if (filled) setAutoFilled(true);
+    } catch {
+      /* OCR is best-effort; ignore failures and let the user type. */
+    } finally {
+      setOcrBusy(null);
+    }
+  }
+
+  /** Aadhaar (back) chosen — set the file, then OCR it to auto-fill the Aadhaar
+   * number (printed on the back). No name on the back side, so name is left as-is. */
+  async function onAadhaarBackChange(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setAadhaarBack(f);
+    if (!f || !f.type.startsWith("image/")) return;
+    setOcrBusy("aadhaarBack");
+    try {
+      const text = await ocrImageText(f);
+      const num = findAadhaar(text);
+      if (num && !aadhaar) {
+        setAadhaar(num);
+        setAutoFilled(true);
+      }
     } catch {
       /* OCR is best-effort; ignore failures and let the user type. */
     } finally {
@@ -530,12 +551,15 @@ function PartyGroup({
           />
         </div>
         <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>{T("Aadhaar (back)", "आधार (पीछे)")}</span>
+          <span style={FILE_LABEL}>
+            {T("Aadhaar (back)", "आधार (पीछे)")}
+            {ocrBusy === "aadhaarBack" ? T(" — reading…", " — पढ़ रहे…") : ""}
+          </span>
           <input
             ref={aadhaarBackFileRef}
             type="file"
             accept="image/*,application/pdf"
-            onChange={(e) => setAadhaarBack(e.target.files?.[0] ?? null)}
+            onChange={onAadhaarBackChange}
             style={{ fontSize: 13 }}
           />
         </div>
