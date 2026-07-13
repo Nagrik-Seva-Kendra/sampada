@@ -15,7 +15,7 @@ import {
   type NaxaMeta,
   type PartyMeta,
   type PartyRole,
-    type PartyType,
+  type PartyType,
 } from "./useDeedDocuments";
 
 type T = (en: string, hi: string) => string;
@@ -27,7 +27,74 @@ const NAXA_ACCEPT =
 function maskAadhaar(a: string | null): string {
   const d = (a || "").replace(/[^0-9]/g, "");
   if (d.length < 4) return d;
-  return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);}
+  return d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8, 12);
+}
+
+/* ------------------------------------------------------------------ *
+ * Client-side OCR auto-fill for Aadhaar / PAN cards.
+ * Tesseract.js is loaded lazily from a CDN the first time a card image
+ * is chosen, so there is no npm dependency / lockfile change and the
+ * bundle stays small. Everything is best-effort: the number is pulled
+ * with a strict regex (reliable); the name is a rough guess. Extracted
+ * values only fill EMPTY fields, and the user is always asked to verify.
+ * ------------------------------------------------------------------ */
+
+let tesseractPromise: Promise<unknown> | null = null;
+
+/** Lazy-load Tesseract.js from CDN once; resolves to the global Tesseract. */
+function loadTesseract(): Promise<{ recognize: (img: File, lang: string) => Promise<{ data: { text: string } }> }> {
+  const w = window as unknown as { Tesseract?: unknown };
+  if (w.Tesseract) return Promise.resolve(w.Tesseract as never);
+  if (!tesseractPromise) {
+    tesseractPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.async = true;
+      s.onload = () => resolve((window as unknown as { Tesseract: unknown }).Tesseract);
+      s.onerror = () => reject(new Error("OCR load failed"));
+      document.head.appendChild(s);
+    });
+  }
+  return tesseractPromise as never;
+}
+
+/** OCR an image file to plain text (best-effort; images only, not PDFs). */
+async function ocrImageText(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) return "";
+  const Tesseract = await loadTesseract();
+  const { data } = await Tesseract.recognize(file, "eng");
+  return data?.text || "";
+}
+
+/** Extract a 12-digit Aadhaar number from OCR text (rejects a 16-digit VID). */
+function findAadhaar(text: string): string | undefined {
+  const m = text.match(/(?<!\d)(\d{4})\s?(\d{4})\s?(\d{4})(?!\s?\d)/);
+  if (!m) return undefined;
+  const digits = m[1] + m[2] + m[3];
+  return digits.length === 12 ? digits : undefined;
+}
+
+/** Extract a PAN (ABCDE1234F) from OCR text. */
+function findPan(text: string): string | undefined {
+  const m = text.match(/[A-Z]{5}[0-9]{4}[A-Z]/);
+  return m ? m[0].toUpperCase() : undefined;
+}
+
+/** Best-effort English-name guess from an Aadhaar/PAN OCR text. */
+function guessName(text: string): string | undefined {
+  const bad =
+    /aadhaar|government|india|male|female|dob|date of birth|year of birth|income tax|department|permanent|account|number|govt|father|signature|vid/i;
+  for (const raw of text.split(/\n/)) {
+    const line = raw.trim();
+    if (!line || /\d/.test(line) || bad.test(line)) continue;
+    const letters = line.replace(/[^A-Za-z ]/g, "").trim();
+    const words = letters.split(/\s+/).filter(Boolean);
+    if (letters.length >= 4 && words.length >= 1 && words.length <= 5) {
+      return words.join(" ");
+    }
+  }
+  return undefined;
+}
 
 interface PartyHint {
   name: string;
@@ -216,104 +283,160 @@ function PartyGroup({
 }) {
   const add = useAddDeedParty(deedId);
   const remove = useRemoveDeedParty(deedId);
-    const [name, setName] = useState("");
-    const [partyType, setPartyType] = useState<PartyType>("individual");
-    const [aadhaar, setAadhaar] = useState("");
-    const [file, setFile] = useState<File | null>(null);
-    const [aadhaarBack, setAadhaarBack] = useState<File | null>(null);
-    const [pan, setPan] = useState("");
-    const [panFile, setPanFile] = useState<File | null>(null);
-    const [err, setErr] = useState<string | null>(null);
-    const [autoFilled, setAutoFilled] = useState(false);
-    const fileRef = useRef<HTMLInputElement>(null);
-    const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
-    const panFileRef = useRef<HTMLInputElement>(null);
-    const appliedHint = useRef(false);
+  const [name, setName] = useState("");
+  const [partyType, setPartyType] = useState<PartyType>("individual");
+  const [aadhaar, setAadhaar] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [aadhaarBack, setAadhaarBack] = useState<File | null>(null);
+  const [pan, setPan] = useState("");
+  const [panFile, setPanFile] = useState<File | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [autoFilled, setAutoFilled] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState<null | "aadhaar" | "pan">(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const aadhaarBackFileRef = useRef<HTMLInputElement>(null);
+  const panFileRef = useRef<HTMLInputElement>(null);
+  const appliedHint = useRef(false);
 
-    useEffect(() => {
-      if (!hint || appliedHint.current) return;
-      appliedHint.current = true;
-      let filled = false;
-      setName((cur) => {
-        if (cur || !hint.name) return cur;
+  useEffect(() => {
+    if (!hint || appliedHint.current) return;
+    appliedHint.current = true;
+    let filled = false;
+    setName((cur) => {
+      if (cur || !hint.name) return cur;
+      filled = true;
+      return hint.name;
+    });
+    if (hint.partyType) setPartyType(hint.partyType);
+    if (hint.aadhaarNumber) {
+      setAadhaar((cur) => {
+        if (cur) return cur;
         filled = true;
-        return hint.name;
+        return hint.aadhaarNumber as string;
       });
-      if (hint.partyType) setPartyType(hint.partyType);
-      if (hint.aadhaarNumber) {
-        setAadhaar((cur) => {
-          if (cur) return cur;
-          filled = true;
-          return hint.aadhaarNumber as string;
-        });
+    }
+    if (hint.panNumber) {
+      setPan((cur) => {
+        if (cur) return cur;
+        filled = true;
+        return hint.panNumber as string;
+      });
+    }
+    if (filled) setAutoFilled(true);
+  }, [hint]);
+
+  /** Aadhaar (front) chosen — set the file, then OCR it to auto-fill number/name. */
+  async function onAadhaarFront(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    if (!f || !f.type.startsWith("image/")) return;
+    setOcrBusy("aadhaar");
+    try {
+      const text = await ocrImageText(f);
+      const num = findAadhaar(text);
+      const nm = guessName(text);
+      let filled = false;
+      if (num && !aadhaar) {
+        setAadhaar(num);
+        filled = true;
       }
-      if (hint.panNumber) {
-        setPan((cur) => {
-          if (cur) return cur;
-          filled = true;
-          return hint.panNumber as string;
-        });
+      if (nm && !name) {
+        setName(nm);
+        filled = true;
       }
       if (filled) setAutoFilled(true);
-    }, [hint]);
-
-    function reset() {
-      setName("");
-      setPartyType("individual");
-      setAadhaar("");
-      setFile(null);
-      setAadhaarBack(null);
-      setPan("");
-      setPanFile(null);
-      setErr(null);
-      setAutoFilled(false);
-      if (fileRef.current) fileRef.current.value = "";
-      if (aadhaarBackFileRef.current) aadhaarBackFileRef.current.value = "";
-      if (panFileRef.current) panFileRef.current.value = "";
+    } catch {
+      /* OCR is best-effort; ignore failures and let the user type. */
+    } finally {
+      setOcrBusy(null);
     }
+  }
 
-    function addNew() {
-      setErr(null);
-      const digits = aadhaar.replace(/[^0-9]/g, "");
-      const panTrimmed = pan.trim().toUpperCase();
-      if (!name.trim()) {
-        setErr(T("Enter the person's name.", "व्यक्ति का नाम डालें।"));
-        return;
+  /** PAN card chosen — set the file, then OCR it to auto-fill PAN/name. */
+  async function onPanFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setPanFile(f);
+    if (!f || !f.type.startsWith("image/")) return;
+    setOcrBusy("pan");
+    try {
+      const text = await ocrImageText(f);
+      const p = findPan(text);
+      const nm = guessName(text);
+      let filled = false;
+      if (p && !pan) {
+        setPan(p);
+        filled = true;
       }
-      if (aadhaar && digits.length !== 12) {
-        setErr(T("Enter a valid 12-digit Aadhaar number.", "सही 12 अंकों का आधार नंबर डालें।"));
-        return;
+      if (nm && !name) {
+        setName(nm);
+        filled = true;
       }
-      if (pan && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(panTrimmed)) {
-        setErr(T("Enter a valid 10-character PAN number.", "सही 10 अक्षर का पेन नंबर डालें।"));
-        return;
-      }
-      if (!digits && !panTrimmed) {
-        setErr(T("Enter an Aadhaar number or PAN number.", "आधार नंबर या पेन नंबर डालें।"));
-        return;
-      }
-      if (digits && !file) {
-        setErr(T("Choose the Aadhaar card image/PDF (front).", "आधार कार्ड की इमेज/PDF चुनें (आगे)।"));
-        return;
-      }
-      if (panTrimmed && !panFile) {
-        setErr(T("Choose the PAN card image/PDF.", "पेन कार्ड की इमेज/PDF चुनें।"));
-        return;
-      }
-      add.mutate(
-        {
-          role,
-          name: name.trim(),
-          partyType,
-          aadhaarNumber: digits || undefined,
-          panNumber: panTrimmed || undefined,
-          file: file || undefined,
-          aadhaarBackFile: aadhaarBack || undefined,
-          panFile: panFile || undefined,
-        },
-        { onSuccess: reset, onError: (e) => setErr(e.message) },
-      );
+      if (filled) setAutoFilled(true);
+    } catch {
+      /* OCR is best-effort; ignore failures and let the user type. */
+    } finally {
+      setOcrBusy(null);
     }
+  }
+
+  function reset() {
+    setName("");
+    setPartyType("individual");
+    setAadhaar("");
+    setFile(null);
+    setAadhaarBack(null);
+    setPan("");
+    setPanFile(null);
+    setErr(null);
+    setAutoFilled(false);
+    setOcrBusy(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (aadhaarBackFileRef.current) aadhaarBackFileRef.current.value = "";
+    if (panFileRef.current) panFileRef.current.value = "";
+  }
+
+  function addNew() {
+    setErr(null);
+    const digits = aadhaar.replace(/[^0-9]/g, "");
+    const panTrimmed = pan.trim().toUpperCase();
+    if (!name.trim()) {
+      setErr(T("Enter the person's name.", "व्यक्ति का नाम डालें।"));
+      return;
+    }
+    if (aadhaar && digits.length !== 12) {
+      setErr(T("Enter a valid 12-digit Aadhaar number.", "सही 12 अंकों का आधार नंबर डालें।"));
+      return;
+    }
+    if (pan && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(panTrimmed)) {
+      setErr(T("Enter a valid 10-character PAN number.", "सही 10 अक्षर का पेन नंबर डालें।"));
+      return;
+    }
+    if (!digits && !panTrimmed) {
+      setErr(T("Enter an Aadhaar number or PAN number.", "आधार नंबर या पेन नंबर डालें।"));
+      return;
+    }
+    if (digits && !file) {
+      setErr(T("Choose the Aadhaar card image/PDF (front).", "आधार कार्ड की इमेज/PDF चुनें (आगे)।"));
+      return;
+    }
+    if (panTrimmed && !panFile) {
+      setErr(T("Choose the PAN card image/PDF.", "पेन कार्ड की इमेज/PDF चुनें।"));
+      return;
+    }
+    add.mutate(
+      {
+        role,
+        name: name.trim(),
+        partyType,
+        aadhaarNumber: digits || undefined,
+        panNumber: panTrimmed || undefined,
+        file: file || undefined,
+        aadhaarBackFile: aadhaarBack || undefined,
+        panFile: panFile || undefined,
+      },
+      { onSuccess: reset, onError: (e) => setErr(e.message) },
+    );
+  }
 
   return (
     <section style={{ borderTop: "1px solid var(--border, #333)", paddingTop: 12 }}>
@@ -360,12 +483,12 @@ function PartyGroup({
           })}
         </div>
       )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {autoFilled && (
           <span style={{ fontSize: 11, opacity: 0.55, flexBasis: "100%" }}>
             {T(
-              "Auto-filled from the deed text — please verify before adding.",
-              "दस्तावेज़ से अपने आप भर गया है — जोड़ने से पहले जांच लें।",
+              "Auto-filled — please verify before adding.",
+              "अपने आप भर गया — जोड़ने से पहले जांच लें।",
             )}
           </span>
         )}
@@ -394,12 +517,15 @@ function PartyGroup({
           inputMode="numeric"
         />
         <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>{T("Aadhaar (front)", "आधार (आगे)")}</span>
+          <span style={FILE_LABEL}>
+            {T("Aadhaar (front)", "आधार (आगे)")}
+            {ocrBusy === "aadhaar" ? T(" — reading…", " — पढ़ रहे…") : ""}
+          </span>
           <input
             ref={fileRef}
             type="file"
             accept="image/*,application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={onAadhaarFront}
             style={{ fontSize: 13 }}
           />
         </div>
@@ -421,12 +547,15 @@ function PartyGroup({
           placeholder={T("PAN number", "पेन नंबर")}
         />
         <div style={{ display: "flex", flexDirection: "column", flex: "1 1 170px" }}>
-          <span style={FILE_LABEL}>{T("PAN card", "पेन कार्ड")}</span>
+          <span style={FILE_LABEL}>
+            {T("PAN card", "पेन कार्ड")}
+            {ocrBusy === "pan" ? T(" — reading…", " — पढ़ रहे…") : ""}
+          </span>
           <input
             ref={panFileRef}
             type="file"
             accept="image/*,application/pdf"
-            onChange={(e) => setPanFile(e.target.files?.[0] ?? null)}
+            onChange={onPanFileChange}
             style={{ fontSize: 13 }}
           />
         </div>
