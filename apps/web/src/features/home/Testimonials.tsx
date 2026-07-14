@@ -86,6 +86,30 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+function Card({
+  r,
+  lang,
+}: {
+  r: Testimonial;
+  lang: "en" | "hi";
+}) {
+  return (
+    <div className="t-card">
+      <Stars rating={r.rating} />
+      <p className="t-text">&ldquo;{r.text[lang]}&rdquo;</p>
+      <div className="t-foot">
+        <span className="t-avatar">{r.name.charAt(0)}</span>
+        <div>
+          <div className="t-name">{r.name}</div>
+          <div className="t-meta">
+            {r.city[lang]} · {r.deedType[lang]}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Testimonials() {
   const lang = useLang();
   const t = (k: StringKey) => translate(k, lang);
@@ -95,22 +119,19 @@ export function Testimonials() {
       <div className="wrap">
         <h2>{t("testimonialsTitle")}</h2>
         <p className="testimonials-sub">{t("testimonialsSub")}</p>
-        <div className="t-grid">
+      </div>
+      <div className="t-track-wrap">
+        <div className="t-track">
+          {/* Rendered twice back-to-back so the loop is seamless — the
+              animation slides exactly one copy's width then resets. */}
           {TESTIMONIALS.map((r, i) => (
-            <div className="t-card" key={i}>
-              <Stars rating={r.rating} />
-              <p className="t-text">&ldquo;{r.text[lang]}&rdquo;</p>
-              <div className="t-foot">
-                <span className="t-avatar">{r.name.charAt(0)}</span>
-                <div>
-                  <div className="t-name">{r.name}</div>
-                  <div className="t-meta">
-                    {r.city[lang]} · {r.deedType[lang]}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Card r={r} lang={lang} key={`a-${i}`} />
           ))}
+          <div aria-hidden style={{ display: "contents" }}>
+            {TESTIMONIALS.map((r, i) => (
+              <Card r={r} lang={lang} key={`b-${i}`} />
+            ))}
+          </div>
         </div>
       </div>
     </section>
