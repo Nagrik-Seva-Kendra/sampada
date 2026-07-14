@@ -58,8 +58,8 @@ const FAQS: FaqItem[] = [
       hi: "क्या गाइडलाइन दरें सभी जिलों में एक जैसी होती हैं?",
     },
     a: {
-      en: "No — guideline (collector) rates are set separately for each of Madhya Pradesh's 51 districts, and often vary by colony, road, or locality within a district too. Use our Guideline Rates tool and select your specific district to see the correct rate for your property.",
-      hi: "नहीं — गाइडलाइन (कलेक्टर) दरें मध्य प्रदेश के हर 51 जिलों के लिए अलग-अलग तय होती हैं, और अक्सर एक ही जिले में कॉलोनी, रोड या इलाके के हिसाब से भी अलग होती हैं। अपनी संपत्ति की सही दर देखने के लिए हमारा Guideline Rates टूल इस्तेमाल करें और अपना ज़िला चुनें।",
+      en: "No — guideline (collector) rates are set separately for each of Madhya Pradesh's 52 districts, and often vary by colony, road, or locality within a district too. Use our Guideline Rates tool and select your specific district to see the correct rate for your property.",
+      hi: "नहीं — गाइडलाइन (कलेक्टर) दरें मध्य प्रदेश के हर 52 जिलों के लिए अलग-अलग तय होती हैं, और अक्सर एक ही जिले में कॉलोनी, रोड या इलाके के हिसाब से भी अलग होती हैं। अपनी संपत्ति की सही दर देखने के लिए हमारा Guideline Rates टूल इस्तेमाल करें और अपना ज़िला चुनें।",
     },
   },
   {
@@ -68,8 +68,8 @@ const FAQS: FaqItem[] = [
       hi: "आप किस-किस तरह के विलेख बनाने में मदद करते हैं?",
     },
     a: {
-      en: "We handle all major property instruments — sale deed, gift deed, lease deed, partition deed, mortgage, power of attorney, and agreements — with bilingual explanations so you understand every clause before signing.",
-      hi: "हम सभी प्रमुख संपत्ति दस्तावेज़ों में मदद करते हैं — सेल डीड, गिफ्ट डीड, पट्टा (लीज़) डीड, विभाजन डीड, बंधक, मुख़्तारनामा और अनुबंध — द्विभाषी व्याख्या के साथ ताकि साइन करने से पहले आप हर धारा समझ सकें।",
+      en: "We handle all major instruments registrable at the Sub-Registrar (Registrar) office — sale deed, gift deed, lease deed, partition deed, mortgage, power of attorney, agreements, consent deed, exchange deed, release deed, settlement deed, cancellation deed, rectification deed, adoption deed, trust deed, and will registration — with bilingual explanations so you understand every clause before signing.",
+      hi: "हम सब-रजिस्ट्रार (रजिस्ट्रार) कार्यालय में पंजीकृत होने वाले सभी प्रमुख दस्तावेज़ों में मदद करते हैं — सेल डीड, गिफ्ट डीड, पट्टा (लीज़) डीड, विभाजन डीड, बंधक, मुख़्तारनामा, अनुबंध, राजीनामा (कंसेंट डीड), विनिमय विलेख, त्याग/रिलीज़ विलेख, सेटलमेंट विलेख, निरसन (कैंसिलेशन) विलेख, संशोधन (रेक्टिफिकेशन) विलेख, दत्तक ग्रहण (एडॉप्शन) विलेख, ट्रस्ट विलेख, और वसीयत पंजीकरण — द्विभाषी व्याख्या के साथ ताकि साइन करने से पहले आप हर धारा समझ सकें।",
     },
   },
 ];
