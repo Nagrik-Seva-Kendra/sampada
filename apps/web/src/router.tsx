@@ -8,6 +8,7 @@ import {
 import { Nav } from "./features/home/Nav";
 import { Hero } from "./features/home/Hero";
 import { Services } from "./features/home/Services";
+import { Testimonials } from "./features/home/Testimonials";
 import { Footer } from "./features/home/Footer";
 import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
@@ -36,6 +37,7 @@ function HomePage() {
     <>
       <Hero />
       <Services />
+      <Testimonials />
     </>
   );
 }
