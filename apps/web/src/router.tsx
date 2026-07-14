@@ -8,6 +8,7 @@ import {
 import { Nav } from "./features/home/Nav";
 import { Hero } from "./features/home/Hero";
 import { Services } from "./features/home/Services";
+import { OurStory } from "./features/home/OurStory";
 import { Testimonials } from "./features/home/Testimonials";
 import { Footer } from "./features/home/Footer";
 import { DeedsPage } from "./features/deeds/DeedsPage";
@@ -37,6 +38,7 @@ function HomePage() {
     <>
       <Hero />
       <Services />
+      <OurStory />
       <Testimonials />
     </>
   );
