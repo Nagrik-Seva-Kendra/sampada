@@ -18,6 +18,7 @@ export const strings = {
   },
 
   navHome: { en: "Home", hi: "होम" },
+  navContact: { en: "Contact", hi: "संपर्क करें" },
   navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
