@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { StaffRole } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -15,6 +16,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
   const lang = useLang();
   const t = (k: StringKey) => translate(k, lang);
   const login = useLogin();
+  const navigate = useNavigate();
   const [role, setRole] = useState<StaffRole>("EMPLOYEE");
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +33,17 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    login.mutate({ role, login: loginValue, password }, { onSuccess: onClose });
+    login.mutate(
+      { role, login: loginValue, password },
+      {
+        onSuccess: () => {
+          onClose();
+          // Always land on the home page after logging in, regardless of
+          // whatever page (Contact, About, etc.) was open before login.
+          navigate({ to: "/" });
+        },
+      },
+    );
   }
 
   return (
