@@ -940,6 +940,45 @@ h3 {
   color: var(--muted);
 }
 
+/* ---------- floating WhatsApp launcher ---------- */
+.wa-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  box-shadow: var(--shadow);
+  animation: wa-pulse 2.6s ease-in-out infinite;
+  transition: transform 0.15s;
+}
+.wa-fab:hover {
+  transform: scale(1.06);
+}
+@keyframes wa-pulse {
+  0%,
+  100% {
+    box-shadow: var(--shadow), 0 0 0 0 rgba(37, 211, 102, 0.45);
+  }
+  50% {
+    box-shadow: var(--shadow), 0 0 0 10px rgba(37, 211, 102, 0);
+  }
+}
+@media (max-width: 860px) {
+  .wa-fab {
+    right: 16px;
+    bottom: 16px;
+    width: 52px;
+    height: 52px;
+  }
+}
+
 /* ---------- footer ---------- */
 .foot {
   background: var(--primary);
