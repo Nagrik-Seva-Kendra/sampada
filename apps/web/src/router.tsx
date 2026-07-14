@@ -13,6 +13,7 @@ import { Testimonials } from "./features/home/Testimonials";
 import { FAQ } from "./features/home/FAQ";
 import { Footer } from "./features/home/Footer";
 import { WhatsAppFab } from "./features/home/WhatsAppFab";
+import { CallNowFab } from "./features/home/CallNowFab";
 import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
@@ -32,6 +33,7 @@ const rootRoute = createRootRoute({
       </div>
       <Footer />
       <WhatsAppFab />
+      <CallNowFab />
     </div>
   ),
   notFoundComponent: () => <Navigate to="/" />,
