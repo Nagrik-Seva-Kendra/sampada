@@ -57,13 +57,17 @@ export function AllDeedsPage() {
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [createdById, setCreatedById] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const filters: ListDeedsQuery = useMemo(
     () => ({
       ...(selectedTypes.size ? { types: [...selectedTypes] } : {}),
       ...(createdById ? { createdById } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     }),
-    [selectedTypes, createdById],
+    [selectedTypes, createdById, dateFrom, dateTo],
   );
   const hasFilters = Object.keys(filters).length > 0;
 
@@ -104,6 +108,8 @@ export function AllDeedsPage() {
   function clearFilters() {
     setSelectedTypes(new Set());
     setCreatedById("");
+    setDateFrom("");
+    setDateTo("");
   }
 
   // No name prompt — create a blank draft and open the editor, where the user types the title.
@@ -281,6 +287,28 @@ export function AllDeedsPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            <input
+              type="date"
+              className="district-input"
+              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label={t("allDeedsFilterDateFrom")}
+              title={t("allDeedsFilterDateFrom")}
+            />
+            <span style={{ opacity: 0.5, fontSize: 12 }}>–</span>
+            <input
+              type="date"
+              className="district-input"
+              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label={t("allDeedsFilterDateTo")}
+              title={t("allDeedsFilterDateTo")}
+            />
 
             {hasFilters && (
               <button
