@@ -58,6 +58,16 @@ function toListItem(row: ListRow): SampleDeedListItem {
   };
 }
 
+/** "YYYY-MM-DD" (from a native date input) -> start-of-day UTC Date. */
+function startOfDay(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
+/** "YYYY-MM-DD" (from a native date input) -> end-of-day UTC Date, so the "to" bound is inclusive. */
+function endOfDay(dateStr: string): Date {
+  return new Date(`${dateStr}T23:59:59.999Z`);
+}
+
 /**
  * Example deeds shown on a deed-type's public info page. Any staff member
  * (admin or employee) can draft their own; ADMIN additionally sees everyone's.
@@ -84,10 +94,19 @@ export class SampleDeedsService {
    * (AND); all are optional. Drops the heavy content body to keep it light.
    */
   async listAll(query: ListDeedsQuery): Promise<SampleDeedListItem[]> {
+    const dateFilter: Prisma.DateTimeFilter | undefined =
+      query.dateFrom || query.dateTo
+        ? {
+            ...(query.dateFrom ? { gte: startOfDay(query.dateFrom) } : {}),
+            ...(query.dateTo ? { lte: endOfDay(query.dateTo) } : {}),
+          }
+        : undefined;
+
     const where: Prisma.DeedTemplateWhereInput = {
       ...(query.types?.length ? { type: { in: query.types } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.createdById ? { createdById: query.createdById } : {}),
+      ...(dateFilter ? { createdAt: dateFilter } : {}),
     };
     const rows = await this.prisma.deedTemplate.findMany({
       where,
