@@ -10,7 +10,10 @@ import { LoginModal } from "../auth/LoginModal";
 import { useChangePassword } from "../profile/useProfile";
 
 // Buy/Sell intentionally omitted — feature dropped from scope.
-const NAV_ITEMS: { key: StringKey; to: string }[] = [{ key: "navHome", to: "/" }];
+const NAV_ITEMS: { key: StringKey; to: string }[] = [
+  { key: "navHome", to: "/" },
+  { key: "navContact", to: "/contact" },
+];
 const LANGS: Language[] = ["en", "hi"];
 
 export function Nav() {
