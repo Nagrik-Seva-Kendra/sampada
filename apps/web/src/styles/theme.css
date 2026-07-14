@@ -1796,3 +1796,33 @@ h3 {
     height: 220px;
   }
 }
+
+/* ---------- floating Call Now launcher ---------- */
+.call-fab {
+     position: fixed;
+     right: 24px;
+     bottom: 92px;
+     z-index: 200;
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     width: 58px;
+     height: 58px;
+     border-radius: 50%;
+     background: var(--primary);
+     color: #fff;
+     box-shadow: var(--shadow);
+     transition: transform 0.15s, background 0.15s;
+}
+.call-fab:hover {
+     background: var(--primary-2);
+     transform: scale(1.06);
+}
+@media (max-width: 860px) {
+     .call-fab {
+            right: 16px;
+            bottom: 76px;
+            width: 52px;
+            height: 52px;
+     }
+}
