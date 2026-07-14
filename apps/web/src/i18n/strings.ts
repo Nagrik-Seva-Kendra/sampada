@@ -21,8 +21,8 @@ export const strings = {
   navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
-    en: "Official guideline rates · 51 districts",
-    hi: "सरकारी गाइडलाइन दरें · 51 जिले",
+    en: "Official guideline rates · 52 districts",
+    hi: "सरकारी गाइडलाइन दरें · 52 जिले",
   },
   heroTitle: {
     en: "Official guideline rates & property deeds — in one trusted portal.",
