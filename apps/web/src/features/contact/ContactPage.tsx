@@ -7,7 +7,6 @@ const OFFICE_ADDRESS =
   "G-11,12 Millenium Plaza, University Road, Govindpuri, Gwalior, Madhya Pradesh 474011";
 const PHONE_DIGITS = "917898475648";
 const EMAIL = "anujshrm325@gmail.com";
-const MAP_EMBED_SRC = `https://www.google.com/maps?q=${encodeURIComponent(OFFICE_ADDRESS)}&output=embed`;
 const MAP_DIRECTIONS_LINK = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(OFFICE_ADDRESS)}`;
 const WHATSAPP_LINK = `https://wa.me/${PHONE_DIGITS}`;
 
@@ -57,16 +56,6 @@ export function ContactPage() {
             <p>{t("email")}</p>
             <p>{L("Open Mon–Sat, 10 AM – 7 PM", "सोम–शनि, सुबह 10 बजे – शाम 7 बजे तक खुला")}</p>
           </div>
-        </div>
-
-        <h3 className="er-section">{L("Find us on the map", "मानचित्र पर हमें खोजें")}</h3>
-        <div className="contact-map">
-          <iframe
-            title={L("Nagrik Seva Kendra — office location", "नागरिक सेवा केंद्र — कार्यालय स्थान")}
-            src={MAP_EMBED_SRC}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
         </div>
       </div>
     </section>
