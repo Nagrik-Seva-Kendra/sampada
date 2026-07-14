@@ -53,6 +53,12 @@ export const strings = {
     hi: "विलेख बनाएं, प्रिंट करें और प्रबंधित करें।",
   },
 
+  testimonialsTitle: { en: "What our clients say", hi: "हमारे क्लाइंट्स क्या कहते हैं" },
+  testimonialsSub: {
+    en: "Real experiences from citizens who used our guideline-rate and deed services.",
+    hi: "गाइडलाइन दरों और विलेख सेवाओं का उपयोग करने वाले नागरिकों के असली अनुभव।",
+  },
+
   authUsername: { en: "Username", hi: "यूज़रनेम" },
   authPassword: { en: "Password", hi: "पासवर्ड" },
   authLogin: { en: "Login", hi: "लॉगिन" },
@@ -286,7 +292,6 @@ export const strings = {
   aboutStat1: { en: "Districts covered", hi: "कवर किए गए जिले" },
   aboutStat2: { en: "Guideline years", hi: "गाइडलाइन वर्ष" },
   aboutStat3: { en: "Citizens served", hi: "सेवित नागरिक" },
-
 } as const;
 
 export type StringKey = keyof typeof strings;
