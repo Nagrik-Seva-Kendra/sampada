@@ -14,6 +14,7 @@ import { FAQ } from "./features/home/FAQ";
 import { Footer } from "./features/home/Footer";
 import { WhatsAppFab } from "./features/home/WhatsAppFab";
 import { CallNowFab } from "./features/home/CallNowFab";
+import { TrustBadges } from "./features/home/TrustBadges";
 import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
@@ -43,6 +44,7 @@ function HomePage() {
   return (
     <>
       <Hero />
+      <TrustBadges />
       <Services />
       <OurStory />
       <Testimonials />
