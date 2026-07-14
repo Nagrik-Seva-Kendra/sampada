@@ -18,16 +18,16 @@ const STORY_TITLE: Bi = {
 };
 
 const STORY_BODY: Bi = {
-  en: "In 2011, Mr. Rajesh Kumar Sharma laid the foundation of this journey with a humble beginning — when everything was still written by hand. In 2015, we stepped into the digital era with Sampada 1, and in 2025 we moved forward again with Sampada 2 and our new website. To date, we have successfully prepared and registered over 7,000 documents.",
-  hi: "वर्ष दो हज़ार ग्यारह में श्री राजेश कुमार शर्मा जी ने एक साधारण सी शुरुआत के साथ इस सफर की नींव रखी — तब सब कुछ हाथ से लिखा जाता था। वर्ष दो हज़ार पंद्रह में संपदा एक के साथ हमने डिजिटल युग में कदम रखा, और वर्ष दो हज़ार पच्चीस में संपदा दो और अपनी नई वेबसाइट के साथ हम फिर आगे बढ़े। आज तक हमने सात हज़ार से अधिक दस्तावेज़ सफलतापूर्वक तैयार और पंजीकृत किए हैं।",
+  en: "In 2011, Mr. Rajesh Kumar Sharma laid the foundation of this journey with a humble beginning. In 2015, we stepped into the digital era with Sampada 1, and in 2025 we moved forward again with Sampada 2 and our new website. To date, we have successfully prepared and registered over 7,000 documents.",
+  hi: "वर्ष दो हज़ार ग्यारह में श्री राजेश कुमार शर्मा जी ने एक साधारण सी शुरुआत के साथ इस सफर की नींव रखी। वर्ष दो हज़ार पंद्रह में संपदा एक के साथ हमने डिजिटल युग में कदम रखा, और वर्ष दो हज़ार पच्चीस में संपदा दो और अपनी नई वेबसाइट के साथ हम फिर आगे बढ़े। आज तक हमने सात हज़ार से अधिक दस्तावेज़ सफलतापूर्वक तैयार और पंजीकृत किए हैं।",
 };
 
 const TIMELINE: { year: string; text: Bi }[] = [
   {
     year: "2011",
     text: {
-      en: "Manual service began, built on hard work and trust.",
-      hi: "मेहनत और भरोसे के साथ मैनुअल सेवा की शुरुआत।",
+      en: "Service began, built on hard work and trust.",
+      hi: "मेहनत और भरोसे के साथ सेवा की शुरुआत।",
     },
   },
   {
