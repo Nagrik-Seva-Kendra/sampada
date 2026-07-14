@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { Role } from "./enums.js";
 
-/** Instrument categories, as on the SAMPADA portal (slugs match web routes). */
 export const DeedType = z.enum([
   "sale-deed",
   "release-deed",
@@ -17,23 +16,18 @@ export const DeedType = z.enum([
 ]);
 export type DeedType = z.infer<typeof DeedType>;
 
-/** Admin-drafted deed shown on the public deed-type info page (view/print only). */
 export const DeedRecordStatus = z.enum(["active", "inactive"]);
 export type DeedRecordStatus = z.infer<typeof DeedRecordStatus>;
 
 export const CreateSampleDeedInput = z.object({
   type: DeedType,
   title: z.string().trim().min(1).max(200),
-  // Blank when first drafted; filled in on the edit page afterward.
   content: z.string().trim().max(40000).default(""),
 });
 export type CreateSampleDeedInput = z.infer<typeof CreateSampleDeedInput>;
 
 export const UpdateSampleDeedInput = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  // Empty is allowed: the editor auto-saves drafts as they're typed, and a deed
-  // whose body the author has just cleared must still round-trip. The editor's
-  // explicit Save is what enforces a non-empty body.
   content: z.string().trim().max(40000).optional(),
   status: DeedRecordStatus.optional(),
 });
@@ -47,7 +41,6 @@ export const SampleDeedItem = z.object({
   status: DeedRecordStatus,
   createdById: z.string(),
   createdByName: z.string(),
-  // Optional: absent on records drafted before this field existed.
   createdByRole: Role.optional(),
   createdAt: z.string(), // ISO timestamp
 });
@@ -64,10 +57,14 @@ export const ListDeedsQuery = z.object({
     .optional(),
   status: DeedRecordStatus.optional(),
   createdById: z.string().trim().min(1).optional(),
+  // Inclusive date-range filter on createdAt, sent as "YYYY-MM-DD" (from a
+  // native <input type="date">). Kept as plain strings here — the API parses
+  // them to Date and applies day-boundary bounds.
+  dateFrom: z.string().trim().min(1).optional(),
+  dateTo: z.string().trim().min(1).optional(),
 });
 export type ListDeedsQuery = z.infer<typeof ListDeedsQuery>;
 
-/** One entry in the "All Deeds" creator filter dropdown. */
 export const DeedCreator = z.object({
   id: z.string(),
   name: z.string(),
