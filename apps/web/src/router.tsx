@@ -10,6 +10,7 @@ import { Hero } from "./features/home/Hero";
 import { Services } from "./features/home/Services";
 import { OurStory } from "./features/home/OurStory";
 import { Testimonials } from "./features/home/Testimonials";
+import { FAQ } from "./features/home/FAQ";
 import { Footer } from "./features/home/Footer";
 import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
@@ -40,6 +41,7 @@ function HomePage() {
       <Services />
       <OurStory />
       <Testimonials />
+      <FAQ />
     </>
   );
 }
