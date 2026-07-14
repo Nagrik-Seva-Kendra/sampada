@@ -18,6 +18,7 @@ import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { AboutPage } from "./features/about/AboutPage";
+import { ContactPage } from "./features/contact/ContactPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { TeamPage } from "./features/employees/TeamPage";
 import { useAuthStore, useIsStaff } from "./stores/authStore";
@@ -96,6 +97,7 @@ const routes = [
     component: () => <Navigate to="/deeds" />,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/about", component: AboutPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/contact", component: ContactPage }),
 ];
 
 export const router = createRouter({
