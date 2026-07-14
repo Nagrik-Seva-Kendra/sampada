@@ -41,6 +41,10 @@ export function Nav() {
 
   const initial = user?.fname?.trim().charAt(0).toUpperCase() || "?";
 
+  // Admins manage citizen enquiries through the Manage Team / office tools,
+  // not the public contact form — so hide that nav link once logged in as admin.
+  const visibleNavItems = NAV_ITEMS.filter((item) => !(isAdmin && item.key === "navContact"));
+
   return (
     <nav className="nav">
       <div className="wrap">
@@ -52,7 +56,7 @@ export function Nav() {
           </div>
         </Link>
         <div className="menu">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
