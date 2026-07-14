@@ -18,7 +18,7 @@ export const strings = {
   },
 
   navHome: { en: "Home", hi: "होम" },
-  navContact: { en: "Contact", hi: "संपर्क करें" },
+  navContact: { en: "Contact Us", hi: "संपर्क करें" },
   navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
@@ -202,6 +202,8 @@ export const strings = {
   allDeedsFilterAllStatuses: { en: "All statuses", hi: "सभी स्थितियां" },
   allDeedsFilterAllCreators: { en: "All creators", hi: "सभी निर्माता" },
   allDeedsFilterClear: { en: "Clear filters", hi: "फ़िल्टर साफ़ करें" },
+  allDeedsFilterDateFrom: { en: "From date", hi: "दिनांक से" },
+  allDeedsFilterDateTo: { en: "To date", hi: "दिनांक तक" },
   deedStatusActive: { en: "Active", hi: "सक्रिय" },
   deedStatusInactive: { en: "Inactive", hi: "निष्क्रिय" },
   deedsAction: { en: "Action", hi: "कार्रवाई" },
