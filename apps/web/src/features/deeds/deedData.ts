@@ -104,6 +104,54 @@ export const DEEDS: DeedInfo[] = [
       hi: "पूर्व में पंजीकृत विलेख की शर्तों में सुधार या संशोधन करना।",
     },
   },
+  {
+    slug: "consent-deed",
+    name: { en: "Consent Deed", hi: "राजीनामा (सहमति विलेख)" },
+    tagline: {
+      en: "Record mutual consent between parties to settle a dispute or claim.",
+      hi: "विवाद या दावे को सुलझाने हेतु पक्षों के बीच आपसी सहमति दर्ज करना।",
+    },
+  },
+  {
+    slug: "exchange-deed",
+    name: { en: "Exchange Deed", hi: "विनिमय विलेख" },
+    tagline: {
+      en: "Swap properties between two parties instead of a sale.",
+      hi: "बिक्री के बजाय दो पक्षों के बीच संपत्तियों की अदला-बदली।",
+    },
+  },
+  {
+    slug: "settlement-deed",
+    name: { en: "Settlement Deed", hi: "व्यवस्थापन विलेख" },
+    tagline: {
+      en: "Distribute property among family members by mutual settlement, outside inheritance.",
+      hi: "उत्तराधिकार से अलग, आपसी सहमति से परिवार के सदस्यों में संपत्ति का बंटवारा।",
+    },
+  },
+  {
+    slug: "cancellation-deed",
+    name: { en: "Cancellation Deed", hi: "निरसन विलेख" },
+    tagline: {
+      en: "Cancel a previously registered deed that both parties no longer wish to honour.",
+      hi: "पूर्व में पंजीकृत विलेख को रद्द करना जिसे दोनों पक्ष अब मान्य नहीं रखना चाहते।",
+    },
+  },
+  {
+    slug: "adoption-deed",
+    name: { en: "Adoption Deed", hi: "दत्तक ग्रहण विलेख" },
+    tagline: {
+      en: "Legally record the adoption of a child.",
+      hi: "किसी बच्चे को कानूनी रूप से गोद लेने का दस्तावेज़ीकरण।",
+    },
+  },
+  {
+    slug: "trust-deed",
+    name: { en: "Trust Deed", hi: "न्यास विलेख" },
+    tagline: {
+      en: "Set up a trust and define how its property is managed.",
+      hi: "न्यास (ट्रस्ट) की स्थापना और उसकी संपत्ति के प्रबंधन का निर्धारण।",
+    },
+  },
 ];
 
 export function findDeed(slug: string): DeedInfo | undefined {
