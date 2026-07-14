@@ -1,5 +1,7 @@
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
+import { DocumentChecklist } from "./DocumentChecklist";
+import { CallbackForm } from "./CallbackForm";
 
 // Same office address/number used in the footer map + WhatsApp fab — kept as
 // one source of truth per component since none of these are user-editable.
@@ -56,6 +58,9 @@ export function ContactPage() {
             <p>{t("email")}</p>
             <p>{L("Open Mon–Sat, 10 AM – 7 PM", "सोम–शनि, सुबह 10 बजे – शाम 7 बजे तक खुला")}</p>
           </div>
+
+                    <CallbackForm />
+                    <DocumentChecklist />
         </div>
       </div>
     </section>
