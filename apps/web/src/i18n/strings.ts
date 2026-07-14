@@ -41,7 +41,7 @@ export const strings = {
     hi: "संपत्ति और रजिस्ट्री के लिए सब कुछ",
   },
   svcGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
-  svcGuidelineDesc: { en: "Official rates 2016–2020.", hi: "सरकारी दरें 2016–2020।" },
+  svcGuidelineDesc: { en: "Official rates 2016–2026.", hi: "सरकारी दरें 2016–2026।" },
   svcDeeds: { en: "Deeds & Instruments", hi: "विलेख व दस्तावेज़" },
   svcDeedsDesc: {
     en: "Sale, lease, partition & more — explained.",
