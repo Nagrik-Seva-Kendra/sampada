@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useUiStore } from "../../stores/uiStore";
+import { useAuthStore } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 
 const LINKS: { key: StringKey; to?: string; href?: string }[] = [
@@ -17,27 +18,40 @@ const MAP_DIRECTIONS_LINK = `https://www.google.com/maps/search/?api=1&query=${e
 export function Footer() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
+  // The map + directions link are only useful to a walk-in visitor who
+  // hasn't signed in yet — once logged in, hide them on every page.
+  const isLoggedOut = !useAuthStore((s) => s.user);
 
   return (
     <footer className="foot">
-      {/* Walk-in clients often just need directions — an embedded map is
-          faster than typing the address into their own maps app. */}
-      <div className="foot-map">
-        <iframe
-          title={lang === "hi" ? "नागरिक सेवा केंद्र — कार्यालय स्थान" : "Nagrik Seva Kendra — office location"}
-          src={MAP_EMBED_SRC}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </div>
+      {isLoggedOut && (
+        <>
+          {/* Walk-in clients often just need directions — an embedded map is
+              faster than typing the address into their own maps app. */}
+          <div className="foot-map">
+            <iframe
+              title={
+                lang === "hi"
+                  ? "नागरिक सेवा केंद्र — कार्यालय स्थान"
+                  : "Nagrik Seva Kendra — office location"
+              }
+              src={MAP_EMBED_SRC}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </>
+      )}
       <div className="wrap">
         <span className="name">{t("brandName")}</span>
         <div className="contact">
           <span>{t("phone")}</span>
           <span>{t("email")}</span>
-          <a href={MAP_DIRECTIONS_LINK} target="_blank" rel="noreferrer">
-            {lang === "hi" ? "दिशा-निर्देश पाएं" : "Get directions"}
-          </a>
+          {isLoggedOut && (
+            <a href={MAP_DIRECTIONS_LINK} target="_blank" rel="noreferrer">
+              {lang === "hi" ? "दिशा-निर्देश पाएं" : "Get directions"}
+            </a>
+          )}
         </div>
         <div className="links">
           {LINKS.map((l) =>
