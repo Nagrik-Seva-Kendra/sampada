@@ -81,7 +81,7 @@ export function DeedViewModal({
                   )}
                 </div>
               )}
-              <p style={{ whiteSpace: "pre-wrap" }}>{d.content}</p>
+              <p style={{ whiteSpace: "pre-wrap", textAlign: "justify" }}>{d.content}</p>
             </>
           )}
         </div>
