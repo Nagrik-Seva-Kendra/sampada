@@ -226,27 +226,14 @@ export class SampleDeedsService {
     const userPrompt = trimmedExisting
       ? "Deed type: " +
         deedTypeName +
-        '
-
-Existing draft (correct/complete it per the instructions below; keep the same legal Hindi format and style):
-"""
-' +
+        "\n\nExisting draft (correct/complete it per the instructions below; keep the same legal Hindi format and style):\n\"\"\"\n" +
         trimmedExisting +
-        '
-"""
-
-Instructions:
-' +
+        "\n\"\"\"\n\nInstructions:\n" +
         instructions
       : "Deed type: " +
         deedTypeName +
-        "
-
-There is no existing draft. Write a complete new deed matching the standard legal Hindi drafting " +
-        "format used for this deed type in Madhya Pradesh, based on these instructions:
-" +
+        "\n\nThere is no existing draft. Write a complete new deed matching the standard legal Hindi drafting format used for this deed type in Madhya Pradesh, based on these instructions:\n" +
         instructions;
-
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
