@@ -69,6 +69,22 @@ function endOfDay(dateStr: string): Date {
 }
 
 /**
+ * Keeps prompt size sane for very long real deeds (up to ~30KB): keeps the
+ * opening (heading + party listing) and closing (formula + dateline) intact,
+ * since those carry the most format signal, and elides the middle.
+ */
+function truncateExample(content: string, maxLen = 6000): string {
+  if (content.length <= maxLen) return content;
+  const headLen = Math.floor(maxLen * 0.7);
+  const tailLen = maxLen - headLen;
+  return (
+    content.slice(0, headLen) +
+    "\n\n...[बीच का भाग संक्षेप हेतु हटाया गया]...\n\n" +
+    content.slice(-tailLen)
+  );
+}
+
+/**
  * Example deeds shown on a deed-type's public info page. Any staff member
  * (admin or employee) can draft their own; ADMIN additionally sees everyone's.
  * Backed by the DeedTemplate table.
@@ -195,13 +211,31 @@ export class SampleDeedsService {
     if (!existing || (!canEditAny && existing.createdById !== user.id)) {
       throw new NotFoundException("Deed not found.");
     }
+    const exampleContent = await this.findExampleContent(existing.type, id);
     const content = await this.draftWithClaude(
       input.deedTypeName ?? existing.type,
       existing.content,
       input.instructions,
+      exampleContent,
     );
     const row = await this.prisma.deedTemplate.update({ where: { id }, data: { content } });
     return toItem(row);
+  }
+
+  /**
+   * Finds a real, already-drafted deed of the same type to give Claude as a
+   * concrete formatting reference -- closer to matching our actual house
+   * style than relying on written rules alone. Picks the most recently
+   * created active deed of this type (excluding the one being edited) that
+   * actually has content; returns null if none exists yet.
+   */
+  private async findExampleContent(type: DeedType, excludeId: string): Promise<string | null> {
+    const example = await this.prisma.deedTemplate.findFirst({
+      where: { type, status: "active", id: { not: excludeId }, NOT: { content: "" } },
+      orderBy: { createdAt: "desc" },
+      select: { content: true },
+    });
+    return example?.content.trim() ? example.content : null;
   }
 
   /**
@@ -210,7 +244,12 @@ export class SampleDeedsService {
    * ANTHROPIC_API_KEY env var; throws a clear error if it's missing so the
    * frontend can show it rather than a generic 500.
    */
-  private async draftWithClaude(deedTypeName: string, existingContent: string, instructions: string): Promise<string> {
+  private async draftWithClaude(
+    deedTypeName: string,
+    existingContent: string,
+    instructions: string,
+    exampleContent: string | null,
+  ): Promise<string> {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) {
       throw new BadRequestException("AI drafting is not set up yet — ANTHROPIC_API_KEY is missing on the server.");
@@ -233,15 +272,26 @@ export class SampleDeedsService {
       "\"विक्रय पत्र\"), then narrative paragraphs stating the property and parties, listing each party " +
       "numbered (1., 2., ...) with parentage and Aadhaar reference where given, and close with the standard " +
       "\"अतएव यह लिखतम् ... सम्‍पादित कर दिया ... सनद् रहे व वक्‍त जरूरत काम आवें।\" formula before the " +
-      "final dateline.";
+      "final dateline. (4) If a real example deed from this platform is given below, treat it as the " +
+      "authoritative reference for exact wording conventions, party-listing style, and structure -- match " +
+      "it as closely as possible, even where it differs slightly from the general rules above.";
+    const exampleSection = exampleContent
+      ? "Here is a REAL, already-approved deed of the exact same type from this platform -- use it as your " +
+        "primary reference for exact formatting, party-listing style, wording conventions, and closing/date " +
+        "format (the written rules above are a fallback for anything this example doesn't show):\n\"\"\"\n" +
+        truncateExample(exampleContent) +
+        "\n\"\"\"\n\n"
+      : "";
     const userPrompt = trimmedExisting
-      ? "Deed type: " +
+      ? exampleSection +
+        "Deed type: " +
         deedTypeName +
         "\n\nExisting draft (correct/complete it per the instructions below; keep the same legal Hindi format and style):\n\"\"\"\n" +
         trimmedExisting +
         "\n\"\"\"\n\nInstructions:\n" +
         instructions
-      : "Deed type: " +
+      : exampleSection +
+        "Deed type: " +
         deedTypeName +
         "\n\nThere is no existing draft. Write a complete new deed matching the standard legal Hindi drafting format used for this deed type in Madhya Pradesh, based on these instructions:\n" +
         instructions;
