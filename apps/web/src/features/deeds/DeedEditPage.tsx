@@ -129,7 +129,7 @@ export function DeedEditPage() {
             {t("deedsContentLabel")}
             <textarea
               rows={34}
-              style={{ fontSize: "1.05rem", lineHeight: 1.8, minHeight: "65vh" }}
+              style={{ fontSize: "1.05rem", lineHeight: 1.8, minHeight: "65vh", textAlign: "justify" }}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               required
