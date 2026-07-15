@@ -5,11 +5,12 @@ import {
   formatSession,
   guidelineFileUrl,
   guidelineSessions,
+  guidelineViewUrl,
   useDeleteGuideline,
   useGuidelineList,
   useUploadGuideline,
 } from "./useGuideline";
-import { FileText, Trash2, UploadCloud } from "lucide-react";
+import { Eye, FileText, Trash2, UploadCloud } from "lucide-react";
 
 const SESSIONS = guidelineSessions();
 
@@ -209,11 +210,21 @@ export function ManageGuidelinePage() {
                   <a
                     className="doc-btn"
                     style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}
-                    href={guidelineFileUrl(d.id)}
+                    href={guidelineViewUrl(d.id)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {T("View", "देखें")}
+                    <Eye size={15} /> {T("View", "देखें")}
+                  </a>
+                  <a
+                    className="doc-btn"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+                    href={guidelineFileUrl(d.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                  >
+                    {T("Download", "डाउनलोड करें")}
                   </a>
                   <button
                     type="button"
