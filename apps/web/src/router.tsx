@@ -23,6 +23,8 @@ import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { TeamPage } from "./features/employees/TeamPage";
+import { GuidelinePage } from "./features/guideline/GuidelinePage";
+import { ManageGuidelinePage } from "./features/guideline/ManageGuidelinePage";
 import { useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
@@ -74,6 +76,11 @@ function GuardedTeamPage() {
   const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
   return isAdmin ? <TeamPage /> : <Navigate to="/" />;
 }
+// Guideline document management (upload/delete PDFs) is admin-only.
+function GuardedManageGuidelinePage() {
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  return isAdmin ? <ManageGuidelinePage /> : <Navigate to="/" />;
+}
 // "All Deeds" management table (every user's deeds) is admin + employee only.
 function GuardedAllDeedsPage() {
   const role = useAuthStore((s) => s.user?.role);
@@ -83,6 +90,8 @@ function GuardedAllDeedsPage() {
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/manage-guideline", component: GuardedManageGuidelinePage }),
   // Old route — superseded by the tabbed /team page.
   createRoute({
     getParentRoute: () => rootRoute,
