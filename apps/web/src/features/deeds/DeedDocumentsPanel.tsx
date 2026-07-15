@@ -475,7 +475,6 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
         T={T}
         hint={buyerHint}
       />
-      />
       <NaxaGroup deedId={deedId} items={naxa.data ?? []} onView={view} T={T} />
     </div>
   );
