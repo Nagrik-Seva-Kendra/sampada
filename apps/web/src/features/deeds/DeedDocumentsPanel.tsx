@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSPropert
 import { Camera, Eye, FileUp, Info, Plus, Trash2, UserPlus } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useSampleDeed } from "./useSampleDeeds";
+import { partyLabelsFor, type L } from "./deedData";
 import {
   useAddDeedParty,
   useAddNaxa,
@@ -438,6 +439,11 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
   const buyers = items.filter((p) => p.role === "buyer");
   const sellers = items.filter((p) => p.role === "seller");
 
+  // Different deed types use different names for their two named parties
+  // (e.g. Seller/Buyer on a sale deed, Donor/Donee on a gift deed) — the
+  // underlying role stored on each party is still just "seller"/"buyer".
+  const labels = partyLabelsFor(deed.data?.type ?? "");
+
   async function view(path: string) {
     const url = await openFile(path);
     window.open(url, "_blank");
@@ -447,7 +453,9 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
     <div style={{ padding: "14px 8px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
       <PartyGroup
         role="seller"
-        title={T("Sellers", "विक्रेता")}
+        title={T(labels.seller.plural.en, labels.seller.plural.hi)}
+        singularLabel={labels.seller.singular}
+        otherSingularLabel={labels.buyer.singular}
         items={sellers}
         allItems={items}
         deedId={deedId}
@@ -457,13 +465,16 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
       />
       <PartyGroup
         role="buyer"
-        title={T("Buyers", "खरीददार")}
+        title={T(labels.buyer.plural.en, labels.buyer.plural.hi)}
+        singularLabel={labels.buyer.singular}
+        otherSingularLabel={labels.seller.singular}
         items={buyers}
         allItems={items}
         deedId={deedId}
         onView={view}
         T={T}
         hint={buyerHint}
+      />
       />
       <NaxaGroup deedId={deedId} items={naxa.data ?? []} onView={view} T={T} />
     </div>
@@ -473,6 +484,8 @@ export function DeedDocumentsPanel({ deedId }: { deedId: string }) {
 function PartyGroup({
   role,
   title,
+  singularLabel,
+  otherSingularLabel,
   items,
   allItems,
   deedId,
@@ -482,6 +495,10 @@ function PartyGroup({
 }: {
   role: PartyRole;
   title: string;
+  /** e.g. "seller"/"विक्रेता" for this group's own role, used in "add as ___". */
+  singularLabel: L;
+  /** The other role's singular label, used when a matched party is already on the deed as that role. */
+  otherSingularLabel: L;
   items: DeedPartyItem[];
   /** Every party already on this deed (both roles) — used to tell "already added as buyer" apart from "already added as seller". */
   allItems: DeedPartyItem[];
@@ -872,7 +889,9 @@ function PartyGroup({
                 {alreadyOnDeed ? (
                   <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 13, fontWeight: 600 }}>
                     {T("Already added — ", "पहले से जुड़ा — ") +
-                      (alreadyOnDeed.role === "buyer" ? T("buyer", "खरीददार") : T("seller", "विक्रेता"))}
+                      (alreadyOnDeed.role === role
+                        ? T(singularLabel.en, singularLabel.hi)
+                        : T(otherSingularLabel.en, otherSingularLabel.hi))}
                   </span>
                 ) : (
                   <button
@@ -883,11 +902,12 @@ function PartyGroup({
                     onClick={addExistingMatch}
                   >
                     <UserPlus size={15} />{" "}
-                    {add.isPending
-                      ? T("Adding…", "जोड़ रहे...")
-                      : role === "seller"
-                        ? T("Found on file — add as seller", "पहले से मौजूद — विक्रेता जोड़ें")
-                        : T("Found on file — add as buyer", "पहले से मौजूद — खरीददार जोड़ें")}
+                  {add.isPending
+                    ? T("Adding…", "जोड़ रहे...")
+                    : T(
+                        `Found on file — add as ${singularLabel.en}`,
+                        `पहले से मौजूद — ${singularLabel.hi} जोड़ें`,
+                      )}
                   </button>
                 )}
               </div>
