@@ -214,6 +214,18 @@ export const strings = {
   pageLabel: { en: "Page", hi: "पृष्ठ" },
   deedsContentLabel: { en: "Deed content", hi: "विलेख सामग्री" },
   deedsSave: { en: "Save", hi: "सहेजें" },
+  deedsAiHelp: { en: "AI drafting help", hi: "AI से मसौदा सहायता" },
+  deedsAiPlaceholder: {
+    en: "Describe the parties, property details, and what the deed should say…",
+    hi: "पक्षों के नाम, संपत्ति का विवरण, और विलेख में क्या लिखना है — यहाँ बताएं…",
+  },
+  deedsAiGenerate: { en: "Generate with AI", hi: "AI से बनाएं" },
+  deedsAiFix: { en: "Fix / complete with AI", hi: "AI से सुधारें / पूरा करें" },
+  deedsAiGenerating: { en: "Working…", hi: "काम हो रहा है…" },
+  deedsAiFailed: {
+    en: "AI drafting failed — please retry.",
+    hi: "AI मसौदा नहीं बन सका — पुनः प्रयास करें।",
+  },
   deedsBackAll: { en: "← All deeds", hi: "← सभी विलेख" },
 
   // Auto-save status (deed editor)
