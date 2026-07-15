@@ -1,11 +1,26 @@
+import { useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
-import { guidelineFileUrl, useGuidelineList } from "./useGuideline";
+import {
+  MP_DISTRICTS,
+  formatSession,
+  guidelineFileUrl,
+  guidelineSessions,
+  useGuidelineList,
+} from "./useGuideline";
 import { Download, FileText } from "lucide-react";
+
+const SESSIONS = guidelineSessions();
 
 export function GuidelinePage() {
   const lang = useUiStore((s) => s.lang);
   const T = (en: string, hi: string) => (lang === "hi" ? hi : en);
-  const { data, isLoading, isError } = useGuidelineList();
+
+  const [district, setDistrict] = useState("");
+  const [session, setSession] = useState("");
+  const { data, isLoading, isError } = useGuidelineList({
+    district: district || undefined,
+    session: session ? Number(session) : undefined,
+  });
   const docs = data ?? [];
 
   return (
@@ -18,10 +33,39 @@ export function GuidelinePage() {
         <h2 className="page-title">{T("Guideline Documents", "गाइडलाइन दस्तावेज़")}</h2>
         <p className="er-sub">
           {T(
-            "Official circulars, notices and guideline-rate documents uploaded by our office — view or download any of them below.",
-            "हमारे कार्यालय द्वारा अपलोड किए गए सरकारी परिपत्र, सूचनाएं और गाइडलाइन दरों के दस्तावेज़ — नीचे देखें या डाउनलोड करें।",
+            "Official circulars, notices and district-wise guideline-rate documents, session-wise from 2015-2016 onward — view or download any of them below.",
+            "जिला-वार सरकारी परिपत्र, सूचनाएं और गाइडलाइन दरों के दस्तावेज़, 2015-2016 से सत्र-वार — नीचे देखें या डाउनलोड करें।",
           )}
         </p>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "16px 0" }}>
+          <select
+            className="district-input"
+            style={{ flex: "1 1 180px" }}
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+          >
+            <option value="">{T("All districts", "सभी जिले")}</option>
+            {MP_DISTRICTS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <select
+            className="district-input"
+            style={{ flex: "1 1 150px" }}
+            value={session}
+            onChange={(e) => setSession(e.target.value)}
+          >
+            <option value="">{T("All sessions", "सभी सत्र")}</option>
+            {SESSIONS.map((y) => (
+              <option key={y} value={y}>
+                {formatSession(y)}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {isLoading && <p>{T("Loading…", "लोड हो रहा है…")}</p>}
         {isError && <p className="modal-error">{T("Could not load documents.", "दस्तावेज़ लोड नहीं हो सके।")}</p>}
@@ -30,7 +74,7 @@ export function GuidelinePage() {
         )}
 
         {docs.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
             {docs.map((d) => (
               <div
                 key={d.id}
@@ -46,8 +90,11 @@ export function GuidelinePage() {
               >
                 <FileText size={20} style={{ opacity: 0.7, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{d.title}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    <span className="doc-district">{d.district}</span> {d.title}
+                  </div>
                   <div style={{ fontSize: 12, opacity: 0.6 }}>
+                    {formatSession(d.session)} ·{" "}
                     {new Date(d.createdAt).toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN")}
                     {d.uploadedByName ? " · " + d.uploadedByName : ""}
                   </div>
