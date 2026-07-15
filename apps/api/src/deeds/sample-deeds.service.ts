@@ -211,7 +211,7 @@ export class SampleDeedsService {
     if (!existing || (!canEditAny && existing.createdById !== user.id)) {
       throw new NotFoundException("Deed not found.");
     }
-    const exampleContent = await this.findExampleContent(existing.type, id);
+    const exampleContent = await this.findExampleContent(existing.type as DeedType, id);
     const content = await this.draftWithClaude(
       input.deedTypeName ?? existing.type,
       existing.content,
