@@ -5,9 +5,10 @@ import {
   formatSession,
   guidelineFileUrl,
   guidelineSessions,
+  guidelineViewUrl,
   useGuidelineList,
 } from "./useGuideline";
-import { Download, FileText } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 
 const SESSIONS = guidelineSessions();
 
@@ -99,6 +100,15 @@ export function GuidelinePage() {
                     {d.uploadedByName ? " · " + d.uploadedByName : ""}
                   </div>
                 </div>
+                <a
+                  className="doc-btn"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+                  href={guidelineViewUrl(d.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Eye size={15} /> {T("View", "देखें")}
+                </a>
                 <a
                   className="btn-calc"
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}
