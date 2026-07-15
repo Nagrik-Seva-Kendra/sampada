@@ -3,13 +3,50 @@ import { useParams } from "@tanstack/react-router";
 import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { findDeed } from "./deedData";
+import { findDeed, partyLabelsFor } from "./deedData";
 import { useSampleDeed, useSaveSampleDeed, useAiDraftDeed } from "./useSampleDeeds";
+import { useDeedParties } from "./useDeedDocuments";
 import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { apiErrorMessage } from "../../lib/api";
 
+/** Group a 12-digit Aadhaar as "1234 5678 9012" for readability; returns other values as-is. */
+function formatAadhaarGrouped(a: string | null): string {
+  const d = (a || "").replace(/[^0-9]/g, "");
+  if (d.length !== 12) return a || "";
+  return d.slice(0, 4) + " " + d.slice(4, 8) + " " + d.slice(8, 12);
+}
+
+/**
+ * Turns the deed's already-added sellers/buyers (from the Documents panel's
+ * Aadhaar/PAN upload + OCR) into a short text block so the AI drafting box
+ * does not require staff to retype names/numbers by hand. Uses the deed
+ * type's own party-role labels (e.g. Donor/Donee for a gift deed).
+ */
+function buildPartyDetailsBlock(
+  items: { role: "seller" | "buyer"; party: { name: string; partyType: string; dob: string | null; aadhaarNumber: string | null; panNumber: string | null } }[],
+  slug: string,
+): string {
+  if (items.length === 0) return "";
+  const labels = partyLabelsFor(slug);
+  const lines: string[] = [];
+  for (const roleKey of ["seller", "buyer"] as const) {
+    const roleItems = items.filter((it) => it.role === roleKey);
+    if (roleItems.length === 0) continue;
+    lines.push(labels[roleKey].plural.en + ":");
+    roleItems.forEach((it, i) => {
+      const p = it.party;
+      const bits: string[] = [p.name];
+      if (p.partyType === "company") bits.push("Company/Firm");
+      if (p.aadhaarNumber) bits.push("Aadhaar: " + formatAadhaarGrouped(p.aadhaarNumber));
+      if (p.panNumber) bits.push("PAN: " + p.panNumber);
+      if (p.dob) bits.push("DOB: " + p.dob);
+      lines.push(i + 1 + ". " + bits.join(", "));
+    });
+  }
+  return lines.join("\n");
+}
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
   const { slug, id } = useParams({ from: "/deeds/$slug/edit/$id" });
@@ -27,6 +64,7 @@ export function DeedEditPage() {
   const saveDeed = useSaveSampleDeed(type);
   const item = record.data;
   const aiDraft = useAiDraftDeed();
+  const deedParties = useDeedParties(id);
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -87,14 +125,25 @@ export function DeedEditPage() {
     }
   }
 
+  const partyBlock = buildPartyDetailsBlock(deedParties.data ?? [], slug);
+  const hasPartyData = partyBlock.length > 0;
+
   async function onAiDraft() {
-    if (!aiInstructions.trim()) return;
+    const combinedInstructions = [
+      partyBlock
+        ? "Already-added parties on this deed (use these exact names/numbers; do not invent different ones):\n" + partyBlock
+        : "",
+      aiInstructions.trim(),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    if (!combinedInstructions.trim()) return;
     setAiBusy(true);
     setAiError(null);
     try {
       const updated = await aiDraft.mutateAsync({
         id,
-        instructions: aiInstructions,
+        instructions: combinedInstructions,
         deedTypeName: deed?.name.en,
       });
       setContent(updated.content);
@@ -169,13 +218,18 @@ export function DeedEditPage() {
               maxLength={4000}
             />
           </label>
+          {hasPartyData && (
+            <p className="doc-sub" style={{ fontSize: 12, opacity: 0.7, margin: "-4px 0 0" }}>
+              {t("deedsAiPartyHint")}
+            </p>
+          )}
           {aiError && <p className="modal-error">{aiError}</p>}
           <div className="deed-edit-actions">
             <button
               type="button"
               className="doc-btn"
               onClick={() => void onAiDraft()}
-              disabled={aiBusy || !aiInstructions.trim()}
+              disabled={aiBusy || (!aiInstructions.trim() && !hasPartyData)}
             >
               {aiBusy ? t("deedsAiGenerating") : content.trim() ? t("deedsAiFix") : t("deedsAiGenerate")}
             </button>
