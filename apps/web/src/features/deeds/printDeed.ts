@@ -4,7 +4,7 @@ export function printDeed(title: string, content: string): void {
   if (!w) return;
   w.document.write(
     `<html><head><title>${escapeHtml(title)}</title></head>` +
-      `<body style="font-family: sans-serif; padding: 32px; white-space: pre-wrap;">` +
+      `<body style="font-family: sans-serif; padding: 32px; white-space: pre-wrap; text-align: justify;">` +
       `<h2>${escapeHtml(title)}</h2><div>${escapeHtml(content)}</div>` +
       `</body></html>`,
   );
