@@ -101,6 +101,11 @@ export function guidelineFileUrl(id: string): string {
   return `${import.meta.env.VITE_API_URL ?? ""}/api/v1/guideline-documents/${id}/file`;
 }
 
+/** Inline-preview URL (opens in the browser tab instead of forcing a download). */
+export function guidelineViewUrl(id: string): string {
+  return `${guidelineFileUrl(id)}?view=1`;
+}
+
 /** Public: list of guideline documents, optionally filtered by district and/or session. Visible to everyone (no login needed). */
 export function useGuidelineList(filters?: { district?: string; session?: number }) {
   const district = filters?.district;
