@@ -226,6 +226,10 @@ export const strings = {
     en: "AI drafting failed — please retry.",
     hi: "AI मसौदा नहीं बन सका — पुनः प्रयास करें।",
   },
+  deedsAiPartyHint: {
+    en: "Already-added parties' details (name, Aadhaar/PAN) on this deed will be sent to the AI automatically.",
+    hi: "इस विलेख में पहले से जुड़े पक्षों का विवरण (नाम, आधार/पेन) अपने आप AI को भेजा जाएगा।",
+  },
   deedsBackAll: { en: "← All deeds", hi: "← सभी विलेख" },
 
   // Auto-save status (deed editor)
