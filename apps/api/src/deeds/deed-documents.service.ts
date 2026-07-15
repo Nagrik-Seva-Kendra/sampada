@@ -393,14 +393,30 @@ export class DeedDocumentsService {
     return toPartyMeta(updated);
   }
 
-  /** Remove a person from a deed (keeps them on file for other deeds). */
+  /**
+   * Remove a person from a deed. If they are not linked to any other deed
+   * afterwards, their Aadhaar/PAN/photo record is erased entirely; if they
+   * are still linked elsewhere, that record is left on file untouched so
+   * the other deed(s) are unaffected.
+   */
   async removeDeedParty(deedId: string, linkId: string): Promise<void> {
     const link = await this.prisma.deedParty.findUnique({
       where: { id: linkId },
-      select: { deedId: true },
+      select: { deedId: true, partyId: true },
     });
     if (!link || link.deedId !== deedId) throw new NotFoundException("Link not found.");
     await this.prisma.deedParty.delete({ where: { id: linkId } });
+
+    const stillUsedElsewhere = await this.prisma.deedParty.findFirst({
+      where: { partyId: link.partyId },
+      select: { id: true },
+    });
+    if (!stillUsedElsewhere) {
+      await this.prisma.party.delete({ where: { id: link.partyId } }).catch(() => {
+        // Best-effort: ignore races (e.g. concurrently re-linked or already
+        // deleted) — the deed-party link above has already been removed.
+      });
+    }
   }
 
   // ---- Naxa (per-deed property map) ----
