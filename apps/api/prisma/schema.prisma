@@ -148,3 +148,21 @@ model DeedNaxa {
 
   @@index([deedId])
 }
+
+/// Guideline documents (official circulars/rate PDFs) uploaded by admins via
+/// the Manage Guideline admin page. Visible and downloadable by everyone —
+/// list/download endpoints are public, only upload/delete require admin auth.
+/// Bytes stored in Postgres for the same persistence reason as Party/DeedNaxa.
+model GuidelineDocument {
+  id             String   @id @default(cuid())
+  title          String
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  uploadedById   String?
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
