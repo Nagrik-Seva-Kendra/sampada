@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { DeedType } from "@sampada/shared";
 import type {
@@ -177,4 +177,98 @@ export class SampleDeedsService {
     }
     await this.prisma.deedTemplate.delete({ where: { id } });
   }
+
+  /**
+   * AI-assisted drafting: given free-text instructions, ask Claude to write
+   * (if the deed is empty) or correct/complete (if it already has a draft)
+   * the deed's body — matching this platform's formal legal Hindi drafting
+   * style for the deed's type. The generated content is saved immediately,
+   * same as a normal edit.
+   */
+  async aiDraft(
+    id: string,
+    input: { instructions: string; deedTypeName?: string },
+    user: StaffUser,
+  ): Promise<SampleDeedItem> {
+    const canEditAny = user.role === "ADMIN" || user.role === "EMPLOYEE";
+    const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+    if (!existing || (!canEditAny && existing.createdById !== user.id)) {
+      throw new NotFoundException("Deed not found.");
+    }
+    const content = await this.draftWithClaude(
+      input.deedTypeName ?? existing.type,
+      existing.content,
+      input.instructions,
+    );
+    const row = await this.prisma.deedTemplate.update({ where: { id }, data: { content } });
+    return toItem(row);
+  }
+
+  /**
+   * Calls the Claude API directly over HTTP (same pattern as the Google
+   * Vision OCR call above) — no SDK dependency needed. Requires the
+   * ANTHROPIC_API_KEY env var; throws a clear error if it's missing so the
+   * frontend can show it rather than a generic 500.
+   */
+  private async draftWithClaude(deedTypeName: string, existingContent: string, instructions: string): Promise<string> {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      throw new BadRequestException("AI drafting is not set up yet — ANTHROPIC_API_KEY is missing on the server.");
+    }
+    const trimmedExisting = existingContent.trim();
+    const systemPrompt =
+      "You are an expert legal drafter specializing in property-registration deeds (registered instruments) " +
+      "in Madhya Pradesh, India, in the same style used on this platform. Write ONLY in formal legal Hindi " +
+      "(Devanagari script), matching standard Indian conveyancing/deed-drafting conventions for the given deed " +
+      "type — correct legal terminology for the parties, clear paragraph structure, and the tone of a real " +
+      "registered deed. Output ONLY the deed's body text as plain paragraphs separated by blank lines — no " +
+      "markdown, no headers, no commentary, no explanations before or after.";
+    const userPrompt = trimmedExisting
+      ? "Deed type: " +
+        deedTypeName +
+        '
+
+Existing draft (correct/complete it per the instructions below; keep the same legal Hindi format and style):
+"""
+' +
+        trimmedExisting +
+        '
+"""
+
+Instructions:
+' +
+        instructions
+      : "Deed type: " +
+        deedTypeName +
+        "
+
+There is no existing draft. Write a complete new deed matching the standard legal Hindi drafting " +
+        "format used for this deed type in Madhya Pradesh, based on these instructions:
+" +
+        instructions;
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    const raw = await res.text();
+    if (!res.ok) {
+      throw new BadRequestException("AI drafting failed: HTTP " + res.status + ": " + raw.slice(0, 300));
+    }
+    const data = JSON.parse(raw) as { content?: Array<{ type?: string; text?: string }> };
+    const text = data.content?.find((b) => b.type === "text")?.text?.trim();
+    if (!text) throw new BadRequestException("AI drafting returned no content.");
+    return text;
+  }
+
 }
