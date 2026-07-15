@@ -12,7 +12,6 @@ import { useChangePassword } from "../profile/useProfile";
 // Buy/Sell intentionally omitted — feature dropped from scope.
 const NAV_ITEMS: { key: StringKey; to: string }[] = [
   { key: "navHome", to: "/" },
-  { key: "navGuideline", to: "/guideline" },
   { key: "navContact", to: "/contact" },
 ];
 
@@ -74,6 +73,11 @@ export function Nav() {
               {t("navAllDeedDetails")}
             </Link>
           )}
+
+          {/* Guideline sits after All Deeds in the nav order. */}
+          <Link to="/guideline" activeProps={{ className: "active" }}>
+            {t("navGuideline")}
+          </Link>
 
           <div className="nav-controls">
             <div className="nav-seg" role="group" aria-label="Language">
