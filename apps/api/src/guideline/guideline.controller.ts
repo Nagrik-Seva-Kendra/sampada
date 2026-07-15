@@ -49,15 +49,19 @@ export class GuidelineController {
     });
   }
 
+  /** Public: stream the PDF. Pass ?view=1 to preview inline in the browser tab
+   * instead of forcing a download (the default). */
   @Get(":id/file")
   async file(
     @Param("id") id: string,
+    @Query("view") view: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
     const f = await this.service.file(id);
+    const disposition = view ? "inline" : "attachment";
     res.set({
       "Content-Type": f.mimeType,
-      "Content-Disposition": "attachment; filename=" + JSON.stringify(f.fileName),
+      "Content-Disposition": disposition + "; filename=" + JSON.stringify(f.fileName),
     });
     return new StreamableFile(f.data);
   }
