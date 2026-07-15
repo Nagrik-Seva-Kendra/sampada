@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { Language } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
@@ -57,27 +57,29 @@ export function Nav() {
           </div>
         </Link>
         <div className="menu">
-          {visibleNavItems.map((item) => (
+        {visibleNavItems.map((item) => (
+          <Fragment key={item.to}>
             <Link
-              key={item.to}
               to={item.to}
               activeProps={{ className: "active" }}
               activeOptions={{ exact: item.to === "/" }}
             >
               {t(item.key)}
             </Link>
-          ))}
+            {/* Guideline sits right after Home, before Contact Us. */}
+            {item.key === "navHome" && (
+              <Link to="/guideline" activeProps={{ className: "active" }}>
+                {t("navGuideline")}
+              </Link>
+            )}
+          </Fragment>
+        ))}
 
-          {(isAdmin || isEmployee) && (
-            <Link to="/all-deed-details" activeProps={{ className: "active" }}>
-              {t("navAllDeedDetails")}
-            </Link>
-          )}
-
-          {/* Guideline sits after All Deeds in the nav order. */}
-          <Link to="/guideline" activeProps={{ className: "active" }}>
-            {t("navGuideline")}
+        {(isAdmin || isEmployee) && (
+          <Link to="/all-deed-details" activeProps={{ className: "active" }}>
+            {t("navAllDeedDetails")}
           </Link>
+        )}
 
           <div className="nav-controls">
             <div className="nav-seg" role="group" aria-label="Language">
