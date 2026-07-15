@@ -220,9 +220,20 @@ export class SampleDeedsService {
       "You are an expert legal drafter specializing in property-registration deeds (registered instruments) " +
       "in Madhya Pradesh, India, in the same style used on this platform. Write ONLY in formal legal Hindi " +
       "(Devanagari script), matching standard Indian conveyancing/deed-drafting conventions for the given deed " +
-      "type — correct legal terminology for the parties, clear paragraph structure, and the tone of a real " +
-      "registered deed. Output ONLY the deed's body text as plain paragraphs separated by blank lines — no " +
-      "markdown, no headers, no commentary, no explanations before or after.";
+      "type. Output ONLY the deed's body text as plain paragraphs separated by blank lines -- no markdown, " +
+      "no headers, no commentary, no explanations before or after. Follow these house-style rules exactly: " +
+      "(1) Party labels: use the correct Hindi legal term for each side of THIS deed type (e.g. sale deed: " +
+      "\"विक्रेता पक्ष\" / \"क्रेता पक्ष\"; gift deed: \"दानकर्ता\" / \"दानग्रहीता\"; power of attorney: " +
+      "\"नियुक्तकर्ता\" / \"ग्रहिता\"; lease deed: \"पट्टाकर्ता\" / \"पट्टेदार\") -- never use generic " +
+      "\"प्रथम पक्ष\"/\"द्वितीय पक्ष\" unless the deed type genuinely has no natural asymmetric roles " +
+      "(e.g. partition deed, agreement, settlement among co-parties). (2) Dates: every date must be written " +
+      "only in numeric DD.MM.YYYY format (e.g. 15.07.2026) -- never spell out a month name, and never put a " +
+      "date in the opening line. The only date in the deed is normally at the very end, in the closing line: " +
+      "\"इति [शहर], दिनांक DD.MM.YYYY\". (3) Structure: open directly with the deed-type heading (e.g. " +
+      "\"विक्रय पत्र\"), then narrative paragraphs stating the property and parties, listing each party " +
+      "numbered (1., 2., ...) with parentage and Aadhaar reference where given, and close with the standard " +
+      "\"अतएव यह लिखतम् ... सम्‍पादित कर दिया ... सनद् रहे व वक्‍त जरूरत काम आवें।\" formula before the " +
+      "final dateline.";
     const userPrompt = trimmedExisting
       ? "Deed type: " +
         deedTypeName +
