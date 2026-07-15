@@ -152,7 +152,16 @@ export function DeedEditPage() {
             >
               {pdfBusy ? "…" : t("deedsDownloadPdf")}
             </button>
-            <button type="button" className="doc-btn" onClick={() => window.close()}>
+            <button
+              type="button"
+              className="doc-btn"
+              onClick={() => {
+                // Flush any not-yet-saved edit before the tab disappears: the 2s
+                // debounce (and window.close() racing past it) is exactly how a
+                // just-typed deed can be lost — closing here always saves first.
+                void saveNow().finally(() => window.close());
+              }}
+            >
               {t("deedsCloseTab")}
             </button>
           </div>
