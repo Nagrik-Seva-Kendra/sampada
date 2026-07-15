@@ -18,6 +18,7 @@ export const strings = {
   },
 
   navHome: { en: "Home", hi: "होम" },
+  navGuideline: { en: "Guideline", hi: "गाइडलाइन" },
   navContact: { en: "Contact Us", hi: "संपर्क करें" },
     navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
@@ -117,6 +118,7 @@ export const strings = {
 
   // Manage Team (admin)
   navManageTeam: { en: "Manage Team", hi: "टीम प्रबंधन" },
+  navManageGuideline: { en: "Manage Guideline", hi: "गाइडलाइन प्रबंधन" },
   teamTabRequests: { en: "Requests", hi: "अनुरोध" },
   teamTabUsers: { en: "User Management", hi: "उपयोगकर्ता प्रबंधन" },
   teamCreateUser: { en: "Add User", hi: "+ उपयोगकर्ता जोड़ें" },
