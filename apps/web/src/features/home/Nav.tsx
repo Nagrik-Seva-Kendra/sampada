@@ -13,8 +13,8 @@ import { useChangePassword } from "../profile/useProfile";
 const NAV_ITEMS: { key: StringKey; to: string }[] = [
   { key: "navHome", to: "/" },
   { key: "navContact", to: "/contact" },
-  { key: "navPartners", to: "/partners" },
-];
+  ];
+
 const LANGS: Language[] = ["en", "hi"];
 
 export function Nav() {
