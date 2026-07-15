@@ -156,6 +156,8 @@ model DeedNaxa {
 model GuidelineDocument {
   id             String   @id @default(cuid())
   title          String
+  district       String
+  session        Int
   fileName       String
   mimeType       String
   size           Int
@@ -165,4 +167,5 @@ model GuidelineDocument {
   createdAt      DateTime @default(now())
 
   @@index([createdAt])
+  @@index([district, session])
 }
