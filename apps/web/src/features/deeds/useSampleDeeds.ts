@@ -172,3 +172,29 @@ export function useDeleteAnyDeed() {
     },
   });
 }
+
+/**
+ * AI-assisted drafting: sends free-text instructions (and the deed's
+ * current content, already known server-side) to Claude, which generates a
+ * fresh draft or corrects/completes the existing one. The server saves the
+ * result immediately, so the response is the updated deed — same cache
+ * write as useSaveSampleDeed, to avoid a mid-edit snap-back.
+ */
+export function useAiDraftDeed() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<SampleDeedItem, Error, { id: string; instructions: string; deedTypeName?: string }>({
+    mutationFn: ({ id, instructions, deedTypeName }) =>
+      api
+        .post(`sample-deeds/${id}/ai-draft`, {
+          headers: authHeaders(token),
+          json: { instructions, deedTypeName },
+          timeout: 60000,
+        })
+        .json<SampleDeedItem>(),
+    onSuccess: (item) => {
+      qc.setQueryData(["sample-deeds", "one", item.id], item);
+    },
+  });
+}
+
