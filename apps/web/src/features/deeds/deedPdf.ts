@@ -242,7 +242,7 @@ function buildPrintNode(title: string, content: string): HTMLElement {
   const body = document.createElement("div");
   // textContent, not innerHTML — the deed body is user-authored text.
   body.textContent = content;
-  body.style.cssText = "margin:0;white-space:pre-wrap;overflow-wrap:break-word";
+  body.style.cssText = "margin:0;white-space:pre-wrap;overflow-wrap:break-word;text-align:justify";
 
   page.append(heading, body);
   return page;
