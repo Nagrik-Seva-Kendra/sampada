@@ -19,8 +19,7 @@ export const strings = {
 
   navHome: { en: "Home", hi: "होम" },
   navContact: { en: "Contact Us", hi: "संपर्क करें" },
-  navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
-    navPartners: { en: "Partner With Us", hi: "पार्टनर बनें" },
+    navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
     en: "Official guideline rates · 52 districts",
