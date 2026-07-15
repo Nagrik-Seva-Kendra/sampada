@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  BadRequestException,
   ForbiddenException,
   Get,
   NotFoundException,
@@ -82,4 +83,23 @@ export class SampleDeedsController {
     await this.service.remove(id, req.user);
     return { deleted: true };
   }
+
+  /**
+   * AI-assisted drafting for this deed's content — generates a fresh draft
+   * if empty, or corrects/completes the existing one, per free-text
+   * instructions. Same permission model as update().
+   */
+  @Post(":id/ai-draft")
+  aiDraft(@Param("id") id: string, @Body() body: unknown, @Req() req: StaffRequest) {
+    const { instructions, deedTypeName } = (body ?? {}) as { instructions?: unknown; deedTypeName?: unknown };
+    if (typeof instructions !== "string" || !instructions.trim()) {
+      throw new BadRequestException("Instructions are required.");
+    }
+    return this.service.aiDraft(
+      id,
+      { instructions, deedTypeName: typeof deedTypeName === "string" ? deedTypeName : undefined },
+      req.user,
+    );
+  }
+
 }
