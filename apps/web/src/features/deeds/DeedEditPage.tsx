@@ -4,10 +4,11 @@ import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
-import { useSampleDeed, useSaveSampleDeed } from "./useSampleDeeds";
+import { useSampleDeed, useSaveSampleDeed, useAiDraftDeed } from "./useSampleDeeds";
 import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
+import { apiErrorMessage } from "../../lib/api";
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
@@ -25,6 +26,10 @@ export function DeedEditPage() {
   const record = useSampleDeed(id);
   const saveDeed = useSaveSampleDeed(type);
   const item = record.data;
+  const aiDraft = useAiDraftDeed();
+  const [aiInstructions, setAiInstructions] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -82,6 +87,24 @@ export function DeedEditPage() {
     }
   }
 
+  async function onAiDraft() {
+    if (!aiInstructions.trim()) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const updated = await aiDraft.mutateAsync({
+        id,
+        instructions: aiInstructions,
+        deedTypeName: deed?.name.en,
+      });
+      setContent(updated.content);
+    } catch (e) {
+      setAiError(await apiErrorMessage(e, t("deedsAiFailed")));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   if (record.isLoading) {
     return (
       <section className="page">
@@ -136,6 +159,27 @@ export function DeedEditPage() {
               maxLength={40000}
             />
           </label>
+          <label className="modal-field">
+            {t("deedsAiHelp")}
+            <textarea
+              rows={4}
+              value={aiInstructions}
+              onChange={(e) => setAiInstructions(e.target.value)}
+              placeholder={t("deedsAiPlaceholder")}
+              maxLength={4000}
+            />
+          </label>
+          {aiError && <p className="modal-error">{aiError}</p>}
+          <div className="deed-edit-actions">
+            <button
+              type="button"
+              className="doc-btn"
+              onClick={() => void onAiDraft()}
+              disabled={aiBusy || !aiInstructions.trim()}
+            >
+              {aiBusy ? t("deedsAiGenerating") : content.trim() ? t("deedsAiFix") : t("deedsAiGenerate")}
+            </button>
+          </div>
           {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
           <div className="deed-edit-actions">
             <button className="btn-calc" type="submit" disabled={status === "saving"}>
