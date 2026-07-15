@@ -12,8 +12,9 @@ import { useChangePassword } from "../profile/useProfile";
 // Buy/Sell intentionally omitted — feature dropped from scope.
 const NAV_ITEMS: { key: StringKey; to: string }[] = [
   { key: "navHome", to: "/" },
+  { key: "navGuideline", to: "/guideline" },
   { key: "navContact", to: "/contact" },
-  ];
+];
 
 const LANGS: Language[] = ["en", "hi"];
 
@@ -119,6 +120,15 @@ export function Nav() {
                       onClick={() => setAccountOpen(false)}
                     >
                       {t("navManageTeam")}
+                    </Link>
+                  )}
+                  {isAdmin && (
+                    <Link
+                      to="/manage-guideline"
+                      className={pathname === "/manage-guideline" ? "active" : ""}
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      {t("navManageGuideline")}
                     </Link>
                   )}
                   <a
