@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { newGuidelineKey, r2Configured, r2Get, r2Put } from "./r2.js";
 
 export interface GuidelineDocMeta {
   id: string;
@@ -22,6 +23,12 @@ interface UploadedDoc {
 
 /** Bytes column value; cast through the exact create-input field type (see DeedDocumentsService for why). */
 type GuidelineBytes = Prisma.GuidelineDocumentCreateInput["data"];
+
+// When R2 is configured, the actual PDF lives in R2 and the `data` column holds
+// a tiny pointer of the form "r2:<object-key>" instead of the file bytes. Real
+// PDFs start with "%PDF", so this marker never collides with legacy rows whose
+// `data` holds the actual bytes.
+const R2_MARKER = "r2:";
 
 const META = {
   id: true,
@@ -53,10 +60,12 @@ function toMeta(r: {
  * Guideline documents (official circulars/rate PDFs), uploaded by admins via
  * the Manage Guideline admin page. List/download are public so the site-wide
  * Guideline page works without login; only upload/delete require admin auth
- * (enforced in the controller via JwtAdminGuard). Bytes live in Postgres for
- * the same reason as Party/DeedNaxa: the API host has no persistent disk.
- * Each document is filed under a district (52 MP districts) and a session
- * (registration session's starting year — e.g. 2015 means "2015-2016").
+ * (enforced in the controller via JwtAdminGuard). When R2 env vars are set the
+ * PDF bytes live in Cloudflare R2 (the `data` column stores an "r2:<key>"
+ * pointer); otherwise they fall back to Postgres bytes (legacy behavior), so
+ * old rows keep working unchanged. Each document is filed under a district (52
+ * MP districts) and a session (registration session's starting year — e.g.
+ * 2015 means "2015-2016").
  */
 @Injectable()
 export class GuidelineService {
@@ -80,7 +89,13 @@ export class GuidelineService {
       select: { fileName: true, mimeType: true, data: true },
     });
     if (!row) throw new NotFoundException("Document not found.");
-    return { fileName: row.fileName, mimeType: row.mimeType, data: Buffer.from(row.data) };
+    const stored = Buffer.from(row.data);
+    if (stored.subarray(0, R2_MARKER.length).toString("latin1") === R2_MARKER) {
+      const key = stored.toString("utf8").slice(R2_MARKER.length);
+      const data = await r2Get(key);
+      return { fileName: row.fileName, mimeType: row.mimeType, data };
+    }
+    return { fileName: row.fileName, mimeType: row.mimeType, data: stored };
   }
 
   async add(input: {
@@ -91,15 +106,30 @@ export class GuidelineService {
     uploadedById?: string;
     uploadedByName?: string;
   }): Promise<GuidelineDocMeta> {
+    const mimeType = input.file.mimetype ?? "application/pdf";
+    const size = input.file.buffer.length;
+
+    // Store the actual bytes in R2 when configured; otherwise keep them in
+    // Postgres (legacy). Either way `size` records the real file size so the
+    // listing shows it correctly.
+    let stored: Buffer;
+    if (r2Configured()) {
+      const key = newGuidelineKey();
+      await r2Put(key, input.file.buffer, mimeType);
+      stored = Buffer.from(R2_MARKER + key);
+    } else {
+      stored = input.file.buffer;
+    }
+
     const row = await this.prisma.guidelineDocument.create({
       data: {
         title: input.title,
         district: input.district,
         session: input.session,
         fileName: input.file.originalname ?? "guideline.pdf",
-        mimeType: input.file.mimetype ?? "application/pdf",
-        size: input.file.buffer.length,
-        data: input.file.buffer as unknown as GuidelineBytes,
+        mimeType,
+        size,
+        data: stored as unknown as GuidelineBytes,
         uploadedById: input.uploadedById ?? null,
         uploadedByName: input.uploadedByName ?? null,
       },
