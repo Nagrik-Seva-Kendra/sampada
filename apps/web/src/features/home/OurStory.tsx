@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useLang } from "../../stores/uiStore";
+import { api } from "../../lib/api";
 
 type Bi = { en: string; hi: string };
 
@@ -144,6 +146,34 @@ const CLOSING: Bi = {
 
 export function OurStory() {
   const lang = useLang();
+  const [deeds, setDeeds] = useState<number | null>(null);
+
+  // Live "documents completed" figure (total DeedTemplate rows), fetched from
+  // the API so the stat card and the narrative lines below all stay in sync
+  // and grow automatically as staff draft deeds. Until it loads (or on error)
+  // the original static "7,000+" copy is shown unchanged.
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("stats/deeds-count")
+      .json<{ count: number }>()
+      .then((d) => {
+        if (alive) setDeeds(d.count);
+      })
+      .catch(() => {
+        /* keep the static fallback on error */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const docs = deeds != null ? deeds.toLocaleString("en-IN") : null;
+  // Swap the hard-coded figure for the live one in narrative text, once loaded.
+  const withDocs = (text: string): string => {
+    if (docs == null) return text;
+    return lang === "en" ? text.replace(/7,000/g, docs) : text.replace(/सात हज़ार/g, docs);
+  };
 
   return (
     <section className="story">
@@ -153,8 +183,10 @@ export function OurStory() {
 
         <div className="about-stats" style={{ marginBottom: 34 }}>
           {STATS.map((s) => (
-            <div className="about-stat" key={s.value}>
-              <div className="about-stat-value">{s.value}</div>
+            <div className="about-stat" key={s.label.en}>
+              <div className="about-stat-value">
+                {docs != null && s.label.en === "Documents completed" ? `${docs}+` : s.value}
+              </div>
               <div className="about-stat-label">{s.label[lang]}</div>
             </div>
           ))}
@@ -163,7 +195,7 @@ export function OurStory() {
         <h3 className="er-section" style={{ marginTop: 0 }}>
           {STORY_TITLE[lang]}
         </h3>
-        <p className="deed-about">{STORY_BODY[lang]}</p>
+        <p className="deed-about">{withDocs(STORY_BODY[lang])}</p>
 
         <ul className="er-steps">
           {TIMELINE.map((t) => (
@@ -201,7 +233,7 @@ export function OurStory() {
           {WHY_LIST.map((item, i) => (
             <li key={i}>
               <span className="er-check">✓</span>
-              {item[lang]}
+              {withDocs(item[lang])}
             </li>
           ))}
         </ul>
