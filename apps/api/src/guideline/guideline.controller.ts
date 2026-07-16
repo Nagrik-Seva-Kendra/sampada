@@ -18,6 +18,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request, Response } from "express";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { GuidelineService } from "./guideline.service.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 interface UploadedDoc {
   buffer: Buffer;
@@ -29,6 +30,13 @@ const MAX_FILE = 15 * 1024 * 1024;
 
 type AuthedRequest = Request & { user?: { id: string; name: string } };
 
+interface ImportItem {
+  district?: string;
+  session?: number | string;
+  title?: string;
+  url?: string;
+}
+
 /**
  * Guideline documents (official circulars/rate PDFs), filed under a district
  * (52 MP districts) and a session (registration session's starting year, e.g.
@@ -38,7 +46,10 @@ type AuthedRequest = Request & { user?: { id: string; name: string } };
  */
 @Controller("guideline-documents")
 export class GuidelineController {
-  constructor(private readonly service: GuidelineService) {}
+  constructor(
+    private readonly service: GuidelineService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   list(@Query("district") district?: string, @Query("session") sessionRaw?: string) {
@@ -91,6 +102,57 @@ export class GuidelineController {
       uploadedById: req.user?.id,
       uploadedByName: req.user?.name,
     });
+  }
+
+  /**
+   * Admin bulk import: downloads each PDF (e.g. from MPIGR) server-side and
+   * stores it via the normal add() path (so it lands in R2). Pass
+   * deleteExisting:true on the first batch to clear old documents. Keep each
+   * batch small (~15 items) to stay within the free-tier request timeout.
+   */
+  @Post("import")
+  @UseGuards(JwtAdminGuard)
+  async import(
+    @Req() req: AuthedRequest,
+    @Body() body: { items?: ImportItem[]; deleteExisting?: boolean },
+  ) {
+    if (body?.deleteExisting) await this.prisma.guidelineDocument.deleteMany({});
+    const items = Array.isArray(body?.items) ? body.items : [];
+    const results: Array<{ url?: string; district?: string; ok: boolean; error?: string }> = [];
+    for (const it of items) {
+      const url = (it.url || "").toString();
+      const district = (it.district || "").toString().trim();
+      try {
+        const session = Number(it.session);
+        if (!district || !session || Number.isNaN(session) || !url) {
+          throw new Error("district, session and url are required");
+        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("download HTTP " + res.status);
+        const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.length < 100) throw new Error("empty/too-small file");
+        await this.service.add({
+          title: (it.title || district + " Guideline").toString().trim(),
+          district,
+          session,
+          file: {
+            buffer,
+            originalname: (it.title || district + "-guideline") + ".pdf",
+            mimetype: "application/pdf",
+          },
+          uploadedById: req.user?.id,
+          uploadedByName: req.user?.name,
+        });
+        results.push({ url, district, ok: true });
+      } catch (e) {
+        results.push({ url, district, ok: false, error: (e as Error).message });
+      }
+    }
+    return {
+      imported: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
   }
 
   @Delete(":id")
