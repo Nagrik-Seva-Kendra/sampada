@@ -16,6 +16,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request, Response } from "express";
+import { get as httpsGet } from "node:https";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { GuidelineService } from "./guideline.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -35,6 +36,41 @@ interface ImportItem {
   session?: number | string;
   title?: string;
   url?: string;
+}
+
+/**
+ * Download a URL to a Buffer using Node's https module. TLS verification is
+ * relaxed and a browser User-Agent is sent because some government sites (e.g.
+ * MPIGR) present an incomplete certificate chain / block non-browser agents,
+ * which makes the global fetch() reject with "fetch failed". Follows a single
+ * redirect. Used only by the admin bulk-import endpoint below.
+ */
+function downloadPdf(url: string, redirects = 0): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const req = httpsGet(
+      url,
+      { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (status >= 300 && status < 400 && res.headers.location && redirects < 3) {
+          res.resume();
+          downloadPdf(res.headers.location, redirects + 1).then(resolve, reject);
+          return;
+        }
+        if (status !== 200) {
+          res.resume();
+          reject(new Error("download HTTP " + status));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(90000, () => req.destroy(new Error("download timeout")));
+  });
 }
 
 /**
@@ -108,7 +144,7 @@ export class GuidelineController {
    * Admin bulk import: downloads each PDF (e.g. from MPIGR) server-side and
    * stores it via the normal add() path (so it lands in R2). Pass
    * deleteExisting:true on the first batch to clear old documents. Keep each
-   * batch small (~15 items) to stay within the free-tier request timeout.
+   * batch small (~6 items) to stay within the free-tier request timeout.
    */
   @Post("import")
   @UseGuards(JwtAdminGuard)
@@ -127,9 +163,7 @@ export class GuidelineController {
         if (!district || !session || Number.isNaN(session) || !url) {
           throw new Error("district, session and url are required");
         }
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("download HTTP " + res.status);
-        const buffer = Buffer.from(await res.arrayBuffer());
+        const buffer = await downloadPdf(url);
         if (buffer.length < 100) throw new Error("empty/too-small file");
         await this.service.add({
           title: (it.title || district + " Guideline").toString().trim(),
