@@ -1,10 +1,9 @@
 import type { JSX } from "react";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { IconGuideline, IconEregistry, IconDeed } from "../../components/icons";
+import { IconEregistry, IconDeed } from "../../components/icons";
 
 const CARDS: { icon: () => JSX.Element; title: StringKey; desc: StringKey }[] = [
-  { icon: IconGuideline, title: "svcGuideline", desc: "svcGuidelineDesc" },
   { icon: IconEregistry, title: "svcDeeds", desc: "svcDeedsDesc" },
   { icon: IconDeed, title: "svcDeed", desc: "svcDeedDesc" },
 ];
