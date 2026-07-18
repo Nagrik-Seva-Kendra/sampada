@@ -18,21 +18,20 @@ export const strings = {
   },
 
   navHome: { en: "Home", hi: "होम" },
-  navGuideline: { en: "Guideline", hi: "गाइडलाइन" },
   navContact: { en: "Contact Us", hi: "संपर्क करें" },
     navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
-    en: "Official guideline rates · 52 districts",
-    hi: "सरकारी गाइडलाइन दरें · 52 जिले",
+    en: "Property deeds & e-registry · Gwalior",
+    hi: "संपत्ति विलेख व ई-रजिस्ट्री · ग्वालियर",
   },
   heroTitle: {
-    en: "Official guideline rates & property deeds — in one trusted portal.",
-    hi: "सरकारी गाइडलाइन दरें और संपत्ति विलेख — एक विश्वसनीय पोर्टल पर।",
+    en: "Property deeds & e-registry — in one trusted portal.",
+    hi: "संपत्ति विलेख और ई-रजिस्ट्री — एक विश्वसनीय पोर्टल पर।",
   },
   heroSub: {
-    en: "Find official collector guideline rates for every district and understand every major deed — clearly and bilingually.",
-    hi: "हर जिले के लिए सरकारी कलेक्टर गाइडलाइन दरें पाएँ और हर प्रमुख विलेख को समझें — स्पष्ट और द्विभाषी।",
+    en: "Understand every major deed and get your property registered — clearly and bilingually.",
+    hi: "हर प्रमुख विलेख को समझें और अपनी संपत्ति की रजिस्ट्री कराएं — स्पष्ट और द्विभाषी।",
   },
 
   captionTitle: { en: "Verified property records", hi: "सत्यापित संपत्ति रिकॉर्ड" },
@@ -42,8 +41,6 @@ export const strings = {
     en: "Everything you need for property & registry",
     hi: "संपत्ति और रजिस्ट्री के लिए सब कुछ",
   },
-  svcGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
-  svcGuidelineDesc: { en: "Official rates 2016–2026.", hi: "सरकारी दरें 2016–2026।" },
   svcDeeds: { en: "Deeds & Instruments", hi: "विलेख व दस्तावेज़" },
   svcDeedsDesc: {
     en: "Sale, lease, partition & more — explained.",
@@ -57,8 +54,8 @@ export const strings = {
 
   testimonialsTitle: { en: "What our clients say", hi: "हमारे क्लाइंट्स क्या कहते हैं" },
   testimonialsSub: {
-    en: "Real experiences from citizens who used our guideline-rate and deed services.",
-    hi: "गाइडलाइन दरों और विलेख सेवाओं का उपयोग करने वाले नागरिकों के असली अनुभव।",
+    en: "Real experiences from citizens who used our deed services.",
+    hi: "हमारी विलेख सेवाओं का उपयोग करने वाले नागरिकों के असली अनुभव।",
   },
 
   authUsername: { en: "Username", hi: "यूज़रनेम" },
@@ -118,7 +115,6 @@ export const strings = {
 
   // Manage Team (admin)
   navManageTeam: { en: "Manage Team", hi: "टीम प्रबंधन" },
-  navManageGuideline: { en: "Manage Guideline", hi: "गाइडलाइन प्रबंधन" },
   teamTabRequests: { en: "Requests", hi: "अनुरोध" },
   teamTabUsers: { en: "User Management", hi: "उपयोगकर्ता प्रबंधन" },
   teamCreateUser: { en: "Add User", hi: "+ उपयोगकर्ता जोड़ें" },
@@ -303,15 +299,15 @@ export const strings = {
   // About
   aboutTitle: { en: "About Nagrik Seva Kendra", hi: "नागरिक सेवा केंद्र के बारे में" },
   aboutP1: {
-    en: "Nagrik Seva Kendra is a citizen-service portal for official guideline rates and property deed information across Madhya Pradesh.",
-    hi: "नागरिक सेवा केंद्र मध्य प्रदेश में सरकारी गाइडलाइन दरों और संपत्ति विलेख जानकारी के लिए एक नागरिक सेवा पोर्टल है।",
+    en: "Nagrik Seva Kendra is a citizen-service portal for property deed information and registration help across Madhya Pradesh.",
+    hi: "नागरिक सेवा केंद्र मध्य प्रदेश में संपत्ति विलेख जानकारी और रजिस्ट्री सहायता के लिए एक नागरिक सेवा पोर्टल है।",
   },
   aboutP2: {
-    en: "We bring official collector guideline rates and every major deed into one trusted, bilingual place — so property registration is faster and clearer for every citizen.",
-    hi: "हम सरकारी कलेक्टर गाइडलाइन दरें और हर प्रमुख विलेख को एक विश्वसनीय, द्विभाषी स्थान पर लाते हैं — ताकि हर नागरिक के लिए संपत्ति पंजीकरण तेज़ और स्पष्ट हो।",
+    en: "We bring every major deed and complete registration support into one trusted, bilingual place — so property registration is faster and clearer for every citizen.",
+    hi: "हम हर प्रमुख विलेख और पूरी रजिस्ट्री सहायता को एक विश्वसनीय, द्विभाषी स्थान पर लाते हैं — ताकि हर नागरिक के लिए संपत्ति पंजीकरण तेज़ और स्पष्ट हो।",
   },
   aboutStat1: { en: "Districts covered", hi: "कवर किए गए जिले" },
-  aboutStat2: { en: "Guideline years", hi: "गाइडलाइन वर्ष" },
+  aboutStat2: { en: "Years of experience", hi: "वर्षों का अनुभव" },
   aboutStat3: { en: "Citizens served", hi: "सेवित नागरिक" },
 } as const;
 
