@@ -18,8 +18,8 @@ const TESTIMONIALS: Testimonial[] = [
     rating: 5,
     deedType: { en: "Sale Deed", hi: "विक्रय विलेख" },
     text: {
-      en: "Got my sale deed guideline rate checked and the deed prepared within a day. Very clear process, no running around offices.",
-      hi: "मेरी सेल डीड की गाइडलाइन रेट चेक होकर एक ही दिन में डीड तैयार हो गई। बहुत साफ प्रक्रिया, दफ्तरों के चक्कर नहीं लगाने पड़े।",
+      en: "Got my sale deed prepared and registered within a day. Very clear process, no running around offices.",
+      hi: "मेरी सेल डीड एक ही दिन में तैयार होकर रजिस्टर हो गई। बहुत साफ प्रक्रिया, दफ्तरों के चक्कर नहीं लगाने पड़े।",
     },
   },
   {
@@ -38,8 +38,8 @@ const TESTIMONIALS: Testimonial[] = [
     rating: 4,
     deedType: { en: "Partition Deed", hi: "विभाजन विलेख" },
     text: {
-      en: "Partition deed between three brothers, handled cleanly. Guideline rate lookup saved us a trip to the tehsil office.",
-      hi: "तीन भाइयों के बीच विभाजन विलेख आसानी से हो गया। गाइडलाइन रेट यहीं मिल जाने से तहसील कार्यालय नहीं जाना पड़ा।",
+      en: "Partition deed between three brothers, handled cleanly. All the paperwork was done without a single trip to the tehsil office.",
+      hi: "तीन भाइयों के बीच विभाजन विलेख आसानी से हो गया। सारा काम बिना तहसील कार्यालय जाए पूरा हो गया।",
     },
   },
   {
@@ -56,10 +56,10 @@ const TESTIMONIALS: Testimonial[] = [
     name: "मोहन लाल तिवारी",
     city: { en: "Datia", hi: "दतिया" },
     rating: 5,
-    deedType: { en: "Guideline Rate Check", hi: "गाइडलाइन दर जांच" },
+    deedType: { en: "Mortgage Deed", hi: "बंधक विलेख" },
     text: {
-      en: "Needed the exact collector rate before a bank loan application — got it verified here in minutes.",
-      hi: "बैंक लोन के लिए सही कलेक्टर रेट चाहिए थी — यहां कुछ ही मिनट में सत्यापित हो गई।",
+      en: "Needed urgent property documents before a bank loan application — everything was prepared and verified within a day.",
+      hi: "बैंक लोन के लिए संपत्ति दस्तावेज़ जल्दी चाहिए थे — यहां एक ही दिन में सब तैयार और सत्यापित हो गया।",
     },
   },
   {
