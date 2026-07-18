@@ -9,8 +9,8 @@ type FaqItem = {
 };
 
 // Keep answers general/directional on exact rates — they vary by district,
-// deed type, and change over time. Point people to our staff for the
-// authoritative number rather than hard-coding a figure here.
+// deed type, and change over time. Point people to the live Guideline Rates
+// tool for the authoritative number rather than hard-coding a figure here.
 const FAQS: FaqItem[] = [
   {
     q: {
@@ -18,8 +18,8 @@ const FAQS: FaqItem[] = [
       hi: "स्टाम्प ड्यूटी और रजिस्ट्रेशन फीस कितनी लगती है?",
     },
     a: {
-      en: "In Madhya Pradesh, stamp duty is charged on the property's government (collector) rate or the transaction value — whichever is higher — plus a separate registration fee on top. The exact percentage depends on the deed type (sale, gift, lease, etc.) and can change over time. Ask our staff for an exact calculation for your document.",
-      hi: "मध्य प्रदेश में स्टाम्प ड्यूटी संपत्ति की सरकारी (कलेक्टर) दर या लेन-देन मूल्य — जो भी ज़्यादा हो — पर लगती है, साथ में अलग से रजिस्ट्रेशन फीस भी लगती है। सही प्रतिशत विलेख के प्रकार (सेल, गिफ्ट, लीज़ आदि) पर निर्भर करता है और समय-समय पर बदलता रहता है। सटीक calculation के लिए हमारे स्टाफ से पूछें।",
+      en: "In Madhya Pradesh, stamp duty is charged on the property's guideline (collector) rate or the transaction value — whichever is higher — plus a separate registration fee on top. The exact percentage depends on the deed type (sale, gift, lease, etc.) and can change over time. Check our Guideline Rates section for your district's current rate, or ask our staff for an exact calculation for your document.",
+      hi: "मध्य प्रदेश में स्टाम्प ड्यूटी संपत्ति की गाइडलाइन (कलेक्टर) दर या लेन-देन मूल्य — जो भी ज़्यादा हो — पर लगती है, साथ में अलग से रजिस्ट्रेशन फीस भी लगती है। सही प्रतिशत विलेख के प्रकार (सेल, गिफ्ट, लीज़ आदि) पर निर्भर करता है और समय-समय पर बदलता रहता है। अपने जिले की मौजूदा दर के लिए हमारा Guideline Rates सेक्शन देखें, या सटीक calculation के लिए हमारे स्टाफ से पूछें।",
     },
   },
   {
@@ -50,6 +50,16 @@ const FAQS: FaqItem[] = [
     a: {
       en: "Yes. We offer home service — our team can visit you to collect and prepare documents, and complete the signing process on SAMPADA 2.0 from your doorstep. Documents like mortgage, lease, power of attorney, and agreements can be fully handled this way.",
       hi: "जी हां। हम गृह सेवा (home service) देते हैं — हमारी टीम खुद आपके घर आकर दस्तावेज़ इकट्ठा और तैयार करती है, और SAMPADA 2.0 पर हस्ताक्षर प्रक्रिया भी घर से पूरी करती है। बंधक, पट्टा, मुख़्तारनामा और अनुबंध जैसे दस्तावेज़ इस तरह पूरी तरह संभव हैं।",
+    },
+  },
+  {
+    q: {
+      en: "Are guideline rates the same across all districts?",
+      hi: "क्या गाइडलाइन दरें सभी जिलों में एक जैसी होती हैं?",
+    },
+    a: {
+      en: "No — guideline (collector) rates are set separately for each of Madhya Pradesh's 52 districts, and often vary by colony, road, or locality within a district too. Use our Guideline Rates tool and select your specific district to see the correct rate for your property.",
+      hi: "नहीं — गाइडलाइन (कलेक्टर) दरें मध्य प्रदेश के हर 52 जिलों के लिए अलग-अलग तय होती हैं, और अक्सर एक ही जिले में कॉलोनी, रोड या इलाके के हिसाब से भी अलग होती हैं। अपनी संपत्ति की सही दर देखने के लिए हमारा Guideline Rates टूल इस्तेमाल करें और अपना ज़िला चुनें।",
     },
   },
   {
