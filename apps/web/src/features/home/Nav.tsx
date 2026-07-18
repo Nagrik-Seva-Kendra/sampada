@@ -66,12 +66,6 @@ export function Nav() {
             >
               {t(item.key)}
             </Link>
-            {/* Guideline sits right after Home, before Contact Us. */}
-            {item.key === "navHome" && !isAdmin && (
-              <Link to="/guideline" activeProps={{ className: "active" }}>
-                {t("navGuideline")}
-              </Link>
-            )}
           </Fragment>
         ))}
 
@@ -126,15 +120,6 @@ export function Nav() {
                       onClick={() => setAccountOpen(false)}
                     >
                       {t("navManageTeam")}
-                    </Link>
-                  )}
-                  {isAdmin && (
-                    <Link
-                      to="/manage-guideline"
-                      className={pathname === "/manage-guideline" ? "active" : ""}
-                      onClick={() => setAccountOpen(false)}
-                    >
-                      {t("navManageGuideline")}
                     </Link>
                   )}
                   <a
