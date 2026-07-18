@@ -27,8 +27,8 @@ export function ContactPage() {
         <h2 className="page-title">{L("Contact Us", "हमसे संपर्क करें")}</h2>
         <p className="er-sub">
           {L(
-            "Questions about a deed, a guideline rate, or your registration? Reach us any of the ways below — or simply walk in to the office.",
-            "किसी विलेख, गाइडलाइन दर या रजिस्ट्रेशन से जुड़ा सवाल है? नीचे दिए किसी भी तरीके से हमसे संपर्क करें — या सीधे हमारे ऑफिस आ जाएं।",
+            "Questions about a deed or your registration? Reach us any of the ways below — or simply walk in to the office.",
+            "किसी विलेख या रजिस्ट्रेशन से जुड़ा सवाल है? नीचे दिए किसी भी तरीके से हमसे संपर्क करें — या सीधे हमारे ऑफिस आ जाएं।",
           )}
         </p>
 
