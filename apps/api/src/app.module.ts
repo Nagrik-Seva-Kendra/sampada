@@ -6,6 +6,7 @@ import { AuthModule } from "./auth/auth.module.js";
 import { DeedsModule } from "./deeds/deeds.module.js";
 import { EmployeesModule } from "./employees/employees.module.js";
 import { OtpModule } from "./otp/otp.module.js";
+import { GuidelineModule } from "./guideline/guideline.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
 
 @Module({
@@ -16,6 +17,7 @@ import { PrismaModule } from "./prisma/prisma.module.js";
     DeedsModule,
     EmployeesModule,
     OtpModule,
+    GuidelineModule,
   ],
   controllers: [HealthController, StatsController],
 })
