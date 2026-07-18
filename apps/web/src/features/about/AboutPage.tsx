@@ -3,7 +3,7 @@ import { translate, type StringKey } from "../../i18n/strings";
 
 const STATS: { value: string; label: StringKey }[] = [
   { value: "52", label: "aboutStat1" },
-  { value: "2015–2026", label: "aboutStat2" },
+  { value: "15+", label: "aboutStat2" },
   { value: "2.4L+", label: "aboutStat3" },
 ];
 
