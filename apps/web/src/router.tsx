@@ -22,6 +22,7 @@ import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { TeamPage } from "./features/employees/TeamPage";
+import { GuidelinePage } from "./features/guideline/GuidelinePage";
 import { useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
@@ -81,6 +82,7 @@ function GuardedAllDeedsPage() {
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
   // Old route — superseded by the tabbed /team page.
   createRoute({
     getParentRoute: () => rootRoute,
