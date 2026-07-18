@@ -14,14 +14,6 @@ export function ChevronDown({ size = 14 }: { size?: number }) {
   );
 }
 
-export function IconGuideline() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 24 24" {...base}>
-      <path d="M4 4h16v16H4zM4 9h16M9 9v11" />
-    </svg>
-  );
-}
-
 export function IconEregistry() {
   return (
     <svg width={20} height={20} viewBox="0 0 24 24" {...base}>
