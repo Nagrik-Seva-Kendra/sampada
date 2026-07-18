@@ -5,8 +5,8 @@ import { useUiStore } from "../../stores/uiStore";
 const WHATSAPP_NUMBER = "917898475648";
 
 const PREFILL: Record<"en" | "hi", string> = {
-  en: "Hi! I'd like help with property registration / guideline rates.",
-  hi: "नमस्ते! मुझे संपत्ति रजिस्ट्रेशन / गाइडलाइन दरों के बारे में मदद चाहिए।",
+  en: "Hi! I'd like help with property registration / deeds.",
+  hi: "नमस्ते! मुझे संपत्ति रजिस्ट्रेशन / विलेख के बारे में मदद चाहिए।",
 };
 
 const LABEL: Record<"en" | "hi", string> = {
