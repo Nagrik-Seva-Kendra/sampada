@@ -1352,5 +1352,180 @@ wrapWithVoice($('plotEast'), 'hi-IN');
 wrapWithVoice($('plotWest'), 'hi-IN');
 
 </script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var deedId = params.get('deedId');
+  if (!deedId) return;
+
+  var API_BASE = 'https://sampada-api.onrender.com/api/v1';
+
+  function textOf(sel) {
+    var el = document.querySelector(sel);
+    return el ? (el.value || '').trim() : '';
+  }
+  function selText(sel) {
+    var el = document.querySelector(sel);
+    if (!el || !el.options) return '';
+    var o = el.options[el.selectedIndex];
+    return o ? o.textContent.trim() : '';
+  }
+  function fieldOf(box, cls) {
+    return box.querySelector('.' + cls);
+  }
+  function partyDisplayName(box) {
+    var name = fieldOf(box, 'party-name-input');
+    var nameVal = name ? name.value.trim() : '';
+    if (!nameVal) return '';
+    var title = fieldOf(box, 'party-title-input');
+    var relation = fieldOf(box, 'party-relation-input');
+    var relative = fieldOf(box, 'party-relative-input');
+    var titleTxt = title && title.options ? (title.options[title.selectedIndex] || {}).textContent : '';
+    var relTxt = relation && relation.options ? (relation.options[relation.selectedIndex] || {}).textContent : '';
+    var relativeVal = relative ? relative.value.trim() : '';
+    var s = (titleTxt ? titleTxt.trim() + ' ' : '') + nameVal;
+    if (relTxt && relativeVal) s += ', ' + relTxt.trim() + ' ' + relativeVal;
+    return s;
+  }
+  function buildRoleBlock(role) {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.party-box[data-role="' + role + '"]'));
+    return boxes.map(partyDisplayName).filter(Boolean).join('; ');
+  }
+  function buildPropertyDetails() {
+    var parts = [];
+    var typeLabel = selText('#deedType');
+    if (typeLabel) parts.push('संपत्ति प्रकार: ' + typeLabel);
+    var addr = textOf('#plotAddress');
+    if (addr) parts.push('पता: ' + addr);
+    var w = textOf('#plotWidth'), l = textOf('#plotLength'), unit = selText('#plotUnit');
+    if (w || l) parts.push('माप: ' + [w, l].filter(Boolean).join(' x ') + (unit ? ' ' + unit : ''));
+    var bounds = [];
+    var n = textOf('#plotNorth'), s = textOf('#plotSouth'), e = textOf('#plotEast'), we = textOf('#plotWest');
+    if (n) bounds.push('उत्तर: ' + n);
+    if (s) bounds.push('दक्षिण: ' + s);
+    if (e) bounds.push('पूर्व: ' + e);
+    if (we) bounds.push('पश्चिम: ' + we);
+    if (bounds.length) parts.push('सीमाएँ - ' + bounds.join(', '));
+    var usage = selText('#buildingUsage'); if (usage) parts.push('उपयोग: ' + usage);
+    var floor = selText('#flatFloor'); if (floor) parts.push('मंजिल: ' + floor);
+    var corner = selText('#plotCorner'); if (corner) parts.push('कॉर्नर: ' + corner);
+    var foundation = selText('#plotFoundation'); if (foundation) parts.push('नींव: ' + foundation);
+    var surveyVals = Array.prototype.slice.call(document.querySelectorAll('#surveyRowsContainer input, #surveyRowsContainer select'))
+      .map(function (e) { return (e.value || '').trim(); }).filter(Boolean);
+    if (surveyVals.length) parts.push('सर्वे/खसरा नंबर: ' + surveyVals.join(', '));
+    return parts.join('; ');
+  }
+
+  function fileSig(f) { return f ? (f.name + ':' + f.size) : ''; }
+  function pickFile(box, uploadCls, cameraCls) {
+    var u = fieldOf(box, uploadCls), c = fieldOf(box, cameraCls);
+    if (u && u.files && u.files[0]) return u.files[0];
+    if (c && c.files && c.files[0]) return c.files[0];
+    return null;
+  }
+
+  function savePartyBox(box) {
+    var nameVal = partyDisplayName(box);
+    if (!nameVal) return;
+    var role = box.dataset.role === 'buyer' ? 'buyer' : 'seller';
+    var frontFile = pickFile(box, 'party-aadhar-front-upload', 'party-aadhar-front-camera');
+    var backFile = pickFile(box, 'party-aadhar-back-upload', 'party-aadhar-back-camera');
+    var panFileEl = pickFile(box, 'party-pan-upload', 'party-pan-camera');
+    var aadhaarNumber = (fieldOf(box, 'party-aadhar-input') || {}).value || '';
+    var panNumber = (fieldOf(box, 'party-pan-input') || {}).value || '';
+
+    var frontSig = fileSig(frontFile), backSig = fileSig(backFile), panSig = fileSig(panFileEl);
+
+    if (!box.dataset.savedPartyId) {
+      var fd = new FormData();
+      fd.append('role', role);
+      fd.append('name', nameVal);
+      fd.append('partyType', 'individual');
+      if (aadhaarNumber) fd.append('aadhaarNumber', aadhaarNumber);
+      if (panNumber) fd.append('panNumber', panNumber);
+      if (frontFile) fd.append('file', frontFile);
+      if (backFile) fd.append('aadhaarBackFile', backFile);
+      if (panFileEl) fd.append('panFile', panFileEl);
+      fetch(API_BASE + '/public/deeds/' + deedId + '/parties', { method: 'POST', body: fd })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.party && data.party.id) {
+            box.dataset.savedPartyId = data.party.id;
+            box.dataset.savedLinkId = data.linkId || '';
+            box.dataset.frontSig = frontSig;
+            box.dataset.backSig = backSig;
+            box.dataset.panSig = panSig;
+          }
+        })
+        .catch(function () {});
+    } else {
+      var changed = {};
+      if (frontFile && frontSig !== box.dataset.frontSig) changed.file = frontFile;
+      if (backFile && backSig !== box.dataset.backSig) changed.aadhaarBackFile = backFile;
+      if (panFileEl && panSig !== box.dataset.panSig) changed.panFile = panFileEl;
+      var keys = Object.keys(changed);
+      if (!keys.length) return;
+      var fd2 = new FormData();
+      keys.forEach(function (k) { fd2.append(k, changed[k]); });
+      fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/files', { method: 'POST', body: fd2 })
+        .then(function () {
+          box.dataset.frontSig = frontSig;
+          box.dataset.backSig = backSig;
+          box.dataset.panSig = panSig;
+        })
+        .catch(function () {});
+    }
+  }
+
+  var savedNaxaSigs = {};
+  function saveNaxaFiles() {
+    var input = document.querySelector('#docUpload');
+    if (!input || !input.files) return;
+    Array.prototype.forEach.call(input.files, function (f) {
+      var sig = fileSig(f);
+      if (savedNaxaSigs[sig]) return;
+      savedNaxaSigs[sig] = true;
+      var fd = new FormData();
+      fd.append('file', f);
+      fetch(API_BASE + '/public/deeds/' + deedId + '/naxa', { method: 'POST', body: fd }).catch(function () {
+        delete savedNaxaSigs[sig];
+      });
+    });
+  }
+
+  var lastFieldsSent = '';
+  function saveContentFields() {
+    var fields = {
+      sellerName: buildRoleBlock('seller'),
+      buyerName: buildRoleBlock('buyer'),
+      propertyDetails: buildPropertyDetails(),
+    };
+    var key = JSON.stringify(fields);
+    if (key === lastFieldsSent) return;
+    lastFieldsSent = key;
+    fetch(API_BASE + '/public/deeds/' + deedId + '/party-fields', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    }).catch(function () {});
+  }
+
+  function runAutoSave() {
+    Array.prototype.forEach.call(document.querySelectorAll('.party-box'), savePartyBox);
+    saveNaxaFiles();
+    saveContentFields();
+  }
+
+  var timer = null;
+  function scheduleSave() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(runAutoSave, 1200);
+  }
+
+  document.addEventListener('input', scheduleSave, true);
+  document.addEventListener('change', scheduleSave, true);
+  scheduleSave();
+})();
+</script>
 </body>
 </html>
