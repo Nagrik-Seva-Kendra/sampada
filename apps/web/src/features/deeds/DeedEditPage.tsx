@@ -10,6 +10,7 @@ import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { apiErrorMessage } from "../../lib/api";
+import { DeedHistoryModal } from "./DeedHistoryModal";
 
 /** Group a 12-digit Aadhaar as "1234 5678 9012" for readability; returns other values as-is. */
 function formatAadhaarGrouped(a: string | null): string {
@@ -73,6 +74,9 @@ export function DeedEditPage() {
   const [content, setContent] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [linkCopyFailed, setLinkCopyFailed] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const draft = useMemo(() => ({ title, content }), [title, content]);
 
@@ -122,6 +126,18 @@ export function DeedEditPage() {
       setPdfFailed(true);
     } finally {
       setPdfBusy(false);
+    }
+  }
+
+  async function onCopyShareLink() {
+    setLinkCopyFailed(false);
+    const url = `${window.location.origin}/d/${id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      setLinkCopyFailed(true);
     }
   }
 
@@ -235,6 +251,7 @@ export function DeedEditPage() {
             </button>
           </div>
           {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
+          {linkCopyFailed && <p className="modal-error">{t("deedsLinkCopyFailed")}</p>}
           <div className="deed-edit-actions">
             <button className="btn-calc" type="submit" disabled={status === "saving"}>
               {status === "saving" ? "…" : t("deedsSave")}
@@ -249,6 +266,12 @@ export function DeedEditPage() {
               disabled={pdfBusy}
             >
               {pdfBusy ? "…" : t("deedsDownloadPdf")}
+            </button>
+            <button type="button" className="doc-btn" onClick={() => void onCopyShareLink()}>
+              {linkCopied ? t("deedsLinkCopied") : t("deedsCopyLink")}
+            </button>
+            <button type="button" className="doc-btn" onClick={() => setShowHistory(true)}>
+              {t("deedsHistoryBtn")}
             </button>
             <button
               type="button"
@@ -265,6 +288,8 @@ export function DeedEditPage() {
           </div>
         </form>
       </div>
+
+      {showHistory && <DeedHistoryModal deedId={id} onClose={() => setShowHistory(false)} />}
     </section>
   );
 }
