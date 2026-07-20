@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
@@ -115,6 +115,21 @@ export function DeedEditPage() {
     }
   }
 
+  // Renders a highlighted slice of content as one <mark> per line: a single
+  // <mark> whose text contains a line break makes browsers stretch that
+  // line's highlight background all the way to the container's edge, well
+  // past the actual (often short, manually wrapped) line of deed text --
+  // splitting on "\n" keeps each highlight sized to just its own line.
+  function renderHighlightedRange(text: string) {
+    const lines = text.split("\n");
+    return lines.map((line, i) => (
+      <Fragment key={i}>
+        {i > 0 && "\n"}
+        {line && <mark style={{ backgroundColor: "#ffe58a", color: "transparent" }}>{line}</mark>}
+      </Fragment>
+    ));
+  }
+
   if (record.isLoading) {
     return (
       <section className="page">
@@ -185,9 +200,7 @@ export function DeedEditPage() {
                 {remoteSelection ? (
                   <>
                     {content.slice(0, remoteSelection.start)}
-                    <mark style={{ backgroundColor: "#ffe58a", color: "transparent" }}>
-                      {content.slice(remoteSelection.start, remoteSelection.end)}
-                    </mark>
+                    {renderHighlightedRange(content.slice(remoteSelection.start, remoteSelection.end))}
                     {content.slice(remoteSelection.end)}
                   </>
                 ) : (
