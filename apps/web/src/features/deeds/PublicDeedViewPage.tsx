@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { useParams } from "@tanstack/react-router";
 import { usePublicDeed } from "./useSampleDeeds";
+import { usePublishSelection } from "./useDeedLiveSelection";
 import { printDeed } from "./printDeed";
 
 /**
@@ -12,6 +14,11 @@ import { printDeed } from "./printDeed";
 export function PublicDeedViewPage() {
   const { id } = useParams({ from: "/d/$id" });
   const deed = usePublicDeed(id);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Whenever the party highlights text in the deed body below, staff editing
+  // this same deed see the highlight live -- see useDeedLiveSelection.ts.
+  usePublishSelection(id, contentRef);
 
   if (deed.isLoading) {
     return (
@@ -58,6 +65,7 @@ export function PublicDeedViewPage() {
           Last updated {new Date(updatedAt).toLocaleString()}
         </p>
         <div
+          ref={contentRef}
           style={{
             fontSize: "1.05rem",
             lineHeight: 1.8,
