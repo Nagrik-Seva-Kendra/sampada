@@ -20,7 +20,7 @@ export const strings = {
   navHome: { en: "Home", hi: "होम" },
   navGuideline: { en: "Guideline", hi: "गाइडलाइन" },
   navContact: { en: "Contact Us", hi: "संपर्क करें" },
-    navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
+  navDeeds: { en: "My All Deeds", hi: "मेरे सभी विलेख" },
 
   heroKicker: {
     en: "Official guideline rates · 52 districts",
@@ -230,6 +230,18 @@ export const strings = {
     hi: "इस विलेख में पहले से जुड़े पक्षों का विवरण (नाम, आधार/पेन) अपने आप AI को भेजा जाएगा।",
   },
   deedsBackAll: { en: "← All deeds", hi: "← सभी विलेख" },
+
+  // Party-facing share link + staff version history
+  deedsCopyLink: { en: "Copy Share Link", hi: "शेयर लिंक कॉपी करें" },
+  deedsLinkCopied: { en: "Link copied!", hi: "लिंक कॉपी हो गया!" },
+  deedsLinkCopyFailed: { en: "Couldn't copy the link.", hi: "लिंक कॉपी नहीं हो सका।" },
+  deedsHistoryBtn: { en: "History", hi: "इतिहास" },
+  deedHistoryTitle: { en: "Version History", hi: "संस्करण इतिहास" },
+  deedHistoryLoading: { en: "Loading history…", hi: "इतिहास लोड हो रहा है…" },
+  deedHistoryError: { en: "Could not load history.", hi: "इतिहास लोड नहीं हो सका।" },
+  deedHistoryEmpty: { en: "No corrections yet.", hi: "अभी तक कोई सुधार नहीं।" },
+  deedHistoryVersion: { en: "Version", hi: "संस्करण" },
+  deedHistoryClose: { en: "Close", hi: "बंद करें" },
 
   // Auto-save status (deed editor)
   deedsAutoSaving: { en: "Saving…", hi: "सहेजा जा रहा है…" },

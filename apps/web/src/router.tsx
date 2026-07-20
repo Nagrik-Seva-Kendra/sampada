@@ -18,6 +18,7 @@ import { DeedsPage } from "./features/deeds/DeedsPage";
 import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
+import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
 import { AboutPage } from "./features/about/AboutPage";
 import { ContactPage } from "./features/contact/ContactPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
@@ -59,7 +60,7 @@ function GuardedDeedsPage() {
 function GuardedDeedDetailPage() {
   return useIsStaff() ? <DeedDetailPage /> : <Navigate to="/" />;
 }
-// Deed drafting: own sample deed, or — for ADMIN/EMPLOYEE — anyone's.
+// Deed drafting: own sample deed, or, for ADMIN/EMPLOYEE, anyone's.
 function GuardedDeedEditPage() {
   return useIsStaff() ? <DeedEditPage /> : <Navigate to="/" />;
 }
@@ -83,7 +84,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
-  // Old route — superseded by the tabbed /team page.
+  // Old route, superseded by the tabbed /team page.
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/employee-requests",
@@ -94,7 +95,10 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: GuardedDeedsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug", component: GuardedDeedDetailPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug/edit/$id", component: GuardedDeedEditPage }),
-  // Old e-Registry URL — feature replaced by the Deeds section.
+  // Party-facing share link: no auth, keyed by the deed's own id. Deliberately
+  // outside the staff-only /deeds tree and its Guarded* wrappers above.
+  createRoute({ getParentRoute: () => rootRoute, path: "/d/$id", component: PublicDeedViewPage }),
+  // Old e-Registry URL, feature replaced by the Deeds section.
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/eregistry",

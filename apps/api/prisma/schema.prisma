@@ -11,9 +11,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
   // Pooled connection (e.g. Neon's PgBouncer endpoint) for the app at runtime.
-  url       = env("DATABASE_URL")
+  url = env("DATABASE_URL")
   // Direct (unpooled) connection for `prisma migrate` — its advisory locks
   // and DDL don't work reliably through transaction-mode pooling. Locally,
   // where there's no pooler, this is just the same value as DATABASE_URL.
@@ -42,48 +42,71 @@ enum UserStatus {
 // `createdById` is not a User foreign key: legacy-imported rows carry
 // synthetic ids ("legacy", "admin") that don't correspond to real users.
 model DeedTemplate {
-  id            String   @id
-  type          String
-  title         String
-  content       String   @db.Text
-  status        String   @default("active")
-  createdById   String
+  id String @id
+  type String
+  title String
+  content String @db.Text
+  status String @default("active")
+  createdById String
   createdByName String
   createdByRole String?
-  createdAt     DateTime
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime
+  updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([createdById])
 }
 
+/// Immutable snapshot of a DeedTemplate taken right before each correction
+/// that changes its body. This is what makes the party-facing share link
+/// (which always resolves to the current DeedTemplate row — see
+/// PublicDeedsController) safe to hand out while corrections are ongoing:
+/// nothing here is ever mutated after being written, so it doubles as the
+/// audit trail of "what changed, when, by whom" for staff. Written by
+/// SampleDeedsService.update() / aiDraft() immediately before the row's
+/// content changes.
+model DeedTemplateRevision {
+  id String @id @default(cuid())
+  deedId String
+  versionNo Int
+  title String
+  content String @db.Text
+  status String
+  editedById String?
+  editedByName String?
+  createdAt DateTime @default(now())
+
+  @@unique([deedId, versionNo])
+  @@index([deedId])
+}
+
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
+  id String @id @default(cuid())
+  email String @unique
   /**
    * Login handle the employee sets themselves; null until they do.
    */
-  username      String?    @unique
-  passwordHash  String
+  username String? @unique
+  passwordHash String
   /**
    * AES-256-GCM reversible copy so the admin can look up what the user set: `<iv-hex>:<tag-hex>:<ciphertext-hex>`.
    */
-  passwordEnc   String?
-  role          Role       @default(PUBLIC)
-  status        UserStatus @default(ACTIVE)
-  fname         String
-  lname         String
-  mobile        String?
+  passwordEnc String?
+  role Role @default(PUBLIC)
+  status UserStatus @default(ACTIVE)
+  fname String
+  lname String
+  mobile String?
   /**
    * Sequential admin-facing id, e.g. "EMP-0007"; only assigned to EMPLOYEE accounts.
    */
-  employeeCode  String?    @unique
+  employeeCode String? @unique
   /**
    * Stored profile-photo filename (under uploads/profile-photos/); null if none.
    */
   photoFileName String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// A person on deeds (buyer/seller). Their Aadhaar card is stored once here,
@@ -91,31 +114,31 @@ model User {
 /// so the same card is never uploaded twice. Bytes live in Postgres because the
 /// API host has no persistent disk.
 model Party {
-  id                  String      @id @default(cuid())
-  name                String
-  partyType           String      @default("individual")
+  id String @id @default(cuid())
+  name String
+  partyType String @default("individual")
   /**
    * Date of birth as free text (e.g. "01/01/1990" or just a year), typically
    * OCR'd off the Aadhaar card; optional.
    */
-  dob                 String?
-  aadhaarNumber       String?     @unique
-  fileName            String?
-  mimeType            String?
-  size                Int?
-  data                Bytes?
+  dob String?
+  aadhaarNumber String? @unique
+  fileName String?
+  mimeType String?
+  size Int?
+  data Bytes?
   aadhaarBackFileName String?
   aadhaarBackMimeType String?
-  aadhaarBackSize     Int?
-  aadhaarBackData     Bytes?
-  panNumber           String?     @unique
-  panFileName         String?
-  panMimeType         String?
-  panSize             Int?
-  panData             Bytes?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-  deedLinks           DeedParty[]
+  aadhaarBackSize Int?
+  aadhaarBackData Bytes?
+  panNumber String? @unique
+  panFileName String?
+  panMimeType String?
+  panSize Int?
+  panData Bytes?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deedLinks DeedParty[]
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
@@ -123,12 +146,12 @@ model Party {
 /// `deedId` is the DeedTemplate id, kept as a plain column (the codebase does
 /// not FK to DeedTemplate because of legacy synthetic ids).
 model DeedParty {
-  id        String   @id @default(cuid())
-  deedId    String
-  partyId   String
-  role      String
+  id String @id @default(cuid())
+  deedId String
+  partyId String
+  role String
   createdAt DateTime @default(now())
-  party     Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  party Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
   @@unique([deedId, partyId, role])
   @@index([deedId])
@@ -138,12 +161,12 @@ model DeedParty {
 /// The property map ("naxa") for a deed. Per-deed (not shared); multiple pages
 /// allowed. Bytes stored in Postgres for the same persistence reason.
 model DeedNaxa {
-  id        String   @id @default(cuid())
-  deedId    String
-  fileName  String
-  mimeType  String
-  size      Int
-  data      Bytes
+  id String @id @default(cuid())
+  deedId String
+  fileName String
+  mimeType String
+  size Int
+  data Bytes
   createdAt DateTime @default(now())
 
   @@index([deedId])
@@ -154,17 +177,17 @@ model DeedNaxa {
 /// list/download endpoints are public, only upload/delete require admin auth.
 /// Bytes stored in Postgres for the same persistence reason as Party/DeedNaxa.
 model GuidelineDocument {
-  id             String   @id @default(cuid())
-  title          String
-  district       String
-  session        Int
-  fileName       String
-  mimeType       String
-  size           Int
-  data           Bytes
-  uploadedById   String?
+  id String @id @default(cuid())
+  title String
+  district String
+  session Int
+  fileName String
+  mimeType String
+  size Int
+  data Bytes
+  uploadedById String?
   uploadedByName String?
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([district, session])
