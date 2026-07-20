@@ -34,8 +34,8 @@ function readSelectionOffsets(container: HTMLElement): DeedSelection | null {
  * Public share-link page: publishes the party's current text selection so
  * staff editing the same deed see it live. Debounced fire-and-forget POSTs
  * to the (unauthenticated) selection endpoint -- failures are silently
- * ignored, since a missed highlight update is never worth surfacing an
- * error to the party.
+ * ignored (beyond retrying), since a missed highlight update is never worth
+ * surfacing an error to the party.
  */
 export function usePublishSelection(deedId: string | undefined, containerRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
@@ -46,15 +46,23 @@ export function usePublishSelection(deedId: string | undefined, containerRef: Re
     function send(selection: DeedSelection | null) {
       const key = selection ? `${selection.start}:${selection.end}` : "null";
       if (key === lastSentKey) return;
+      const previousKey = lastSentKey;
       lastSentKey = key;
       void api
         .post(`public/deeds/${deedId}/selection`, {
           json: selection ?? { start: null, end: null },
         })
-        .catch(() => {});
+        .catch(() => {
+          // The party's browser doesn't need to know this failed, but staff
+          // shouldn't be stuck seeing a stale highlight forever -- letting
+          // the next selection change (even an identical one) retry keeps
+          // one dropped request from wedging things until something new
+          // gets highlighted.
+          lastSentKey = previousKey;
+        });
     }
 
-    function onSelectionChange() {
+    function checkSelection() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         const container = containerRef.current;
@@ -62,9 +70,15 @@ export function usePublishSelection(deedId: string | undefined, containerRef: Re
       }, 200);
     }
 
-    document.addEventListener("selectionchange", onSelectionChange);
+    // "selectionchange" alone should cover every case, but it has known gaps
+    // across browsers for some deselect interactions -- mouseup is a cheap,
+    // reliable fallback that re-checks right after any click or drag ends,
+    // so a highlight the party clears away always clears for staff too.
+    document.addEventListener("selectionchange", checkSelection);
+    document.addEventListener("mouseup", checkSelection);
     return () => {
-      document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("selectionchange", checkSelection);
+      document.removeEventListener("mouseup", checkSelection);
       if (timer) clearTimeout(timer);
       send(null); // Clear the highlight for staff once the party navigates away.
     };
