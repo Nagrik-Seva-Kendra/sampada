@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Subject } from "rxjs";
+import { BehaviorSubject } from "rxjs";
 
 export interface DeedSelection {
   start: number;
@@ -15,17 +15,22 @@ export interface DeedSelection {
  * instance, so an in-memory Map is visible to every connection without
  * needing Redis or similar.
  *
+ * BehaviorSubject (not plain Subject): a staff member can open the editor
+ * *after* the party already highlighted something, and should see that
+ * current state immediately rather than waiting for the next change --
+ * BehaviorSubject replays its latest value to every new subscriber.
+ *
  * If this API is ever scaled to multiple instances, this class is the one
  * place that would need to move to a shared pub/sub (e.g. Redis) instead.
  */
 @Injectable()
 export class DeedLiveService {
-  private readonly subjects = new Map<string, Subject<DeedSelection | null>>();
+  private readonly subjects = new Map<string, BehaviorSubject<DeedSelection | null>>();
 
-  private subjectFor(deedId: string): Subject<DeedSelection | null> {
+  private subjectFor(deedId: string): BehaviorSubject<DeedSelection | null> {
     let subject = this.subjects.get(deedId);
     if (!subject) {
-      subject = new Subject<DeedSelection | null>();
+      subject = new BehaviorSubject<DeedSelection | null>(null);
       this.subjects.set(deedId, subject);
     }
     return subject;
