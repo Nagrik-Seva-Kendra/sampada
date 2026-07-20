@@ -35,6 +35,22 @@ export class PublicDeedsController {
    * viewing the same deed via the SSE stream below. Not persisted anywhere:
    * this is transient "what are they looking at right now" state.
    */
+  /**
+   * Called by the legacy paper-form share link when the party fills in
+   * seller/buyer names and property details. Replaces the matching
+   * {{token}} placeholders (that staff typed into the deed's own content
+   * when drafting it) with the submitted values -- see
+   * SampleDeedsService.applyPartyFields for the exact semantics.
+   */
+  @Post(":id/party-fields")
+  async applyPartyFields(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    const fields: Record<string, string> = {};
+    for (const [k, v] of Object.entries(body ?? {})) {
+      if (typeof v === "string") fields[k] = v;
+    }
+    return this.service.applyPartyFields(id, fields);
+  }
+
   @Post(":id/selection")
   publishSelection(@Param("id") id: string, @Body() body: unknown) {
     const input = DeedSelectionInput.parse(body);
