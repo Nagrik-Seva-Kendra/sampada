@@ -160,7 +160,7 @@ export function DeedEditPage() {
           </label>
           <label className="modal-field">
             {t("deedsContentLabel")}
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", width: "100%" }}>
               <div
                 ref={backdropRef}
                 aria-hidden
@@ -204,6 +204,9 @@ export function DeedEditPage() {
                   textAlign: "justify",
                   position: "relative",
                   background: "transparent",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  display: "block",
                 }}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
