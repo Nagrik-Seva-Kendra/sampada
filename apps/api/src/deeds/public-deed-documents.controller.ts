@@ -109,4 +109,17 @@ export class PublicDeedDocumentsController {
       file: { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype },
     });
   }
+
+  /**
+   * Structured field extraction from a photographed Aadhaar/PAN card, used
+   * by the legacy paper-form page's auto-fill (name/DOB/Aadhaar/PAN off the
+   * card photo). No auth -- same trust model as the rest of this controller;
+   * this route does not touch any deed, it only forwards an image + prompt
+   * to Claude's vision API and returns whatever JSON fields it reads back.
+   */
+  @Post("extract-document")
+  extractDocument(@Body() body: { imageBase64?: string; mediaType?: string; prompt?: string }) {
+    return this.service.extractDocumentFields(body.imageBase64 ?? "", body.mediaType ?? "image/jpeg", body.prompt ?? "");
+  }
+
 }
