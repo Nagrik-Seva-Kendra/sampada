@@ -125,7 +125,7 @@ export function DeedEditPage() {
     return lines.map((line, i) => (
       <Fragment key={i}>
         {i > 0 && "\n"}
-        {line && <mark style={{ backgroundColor: "#ffe58a", color: "transparent" }}>{line}</mark>}
+        {line && <mark style={{ backgroundColor: "rgba(255, 196, 0, 0.35)", color: "transparent" }}>{line}</mark>}
       </Fragment>
     ));
   }
