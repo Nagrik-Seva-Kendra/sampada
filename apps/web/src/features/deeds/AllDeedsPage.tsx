@@ -427,7 +427,7 @@ export function AllDeedsPage() {
                               type="button"
                               aria-label="Legacy deed form"
                               title={lang === "hi" ? "पुराना डीड फॉर्म खोलें" : "Open legacy deed form"}
-                              onClick={() => window.open("/legacy-deed-form.html", "_blank")}
+                              onClick={() => window.open(`/legacy-deed-form.html?deedId=${d.id}`, "_blank")}
                               className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none"
                             >
                               <ExternalLink className="size-4 opacity-80" />
