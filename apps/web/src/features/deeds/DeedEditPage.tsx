@@ -9,6 +9,7 @@ import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
+import { useLiveSelection } from "./useDeedLiveSelection";
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
@@ -34,6 +35,13 @@ export function DeedEditPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [linkCopyFailed, setLinkCopyFailed] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Live view of whatever text range the party is currently highlighting on
+  // the public share-link page (/d/:id), pushed over SSE — lets staff see
+  // what the party is looking at while both sides have the deed open.
+  const remoteSelection = useLiveSelection(id);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
   const draft = useMemo(() => ({ title, content }), [title, content]);
 
@@ -98,6 +106,15 @@ export function DeedEditPage() {
     }
   }
 
+  // Keep the invisible highlight backdrop scrolled to the same position as
+  // the textarea on top of it, so the <mark> lines up with the real text.
+  function onTextareaScroll(e: React.UIEvent<HTMLTextAreaElement>) {
+    if (backdropRef.current) {
+      backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+      backdropRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }
+
   if (record.isLoading) {
     return (
       <section className="page">
@@ -143,14 +160,58 @@ export function DeedEditPage() {
           </label>
           <label className="modal-field">
             {t("deedsContentLabel")}
-            <textarea
-              rows={34}
-              style={{ fontSize: "1.05rem", lineHeight: 1.8, minHeight: "65vh", textAlign: "justify" }}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              required
-              maxLength={40000}
-            />
+            <div style={{ position: "relative" }}>
+              <div
+                ref={backdropRef}
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  overflow: "hidden",
+                  boxSizing: "border-box",
+                  padding: "10px 12px",
+                  border: "1px solid transparent",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: "1.05rem",
+                  lineHeight: 1.8,
+                  textAlign: "justify",
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "break-word",
+                  color: "transparent",
+                  pointerEvents: "none",
+                  minHeight: "65vh",
+                }}
+              >
+                {remoteSelection ? (
+                  <>
+                    {content.slice(0, remoteSelection.start)}
+                    <mark style={{ backgroundColor: "#ffe58a", color: "transparent" }}>
+                      {content.slice(remoteSelection.start, remoteSelection.end)}
+                    </mark>
+                    {content.slice(remoteSelection.end)}
+                  </>
+                ) : (
+                  content
+                )}
+              </div>
+              <textarea
+                ref={textareaRef}
+                rows={34}
+                style={{
+                  fontSize: "1.05rem",
+                  lineHeight: 1.8,
+                  minHeight: "65vh",
+                  textAlign: "justify",
+                  position: "relative",
+                  background: "transparent",
+                }}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onScroll={onTextareaScroll}
+                required
+                maxLength={40000}
+              />
+            </div>
           </label>
           {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
           {linkCopyFailed && <p className="modal-error">{t("deedsLinkCopyFailed")}</p>}
