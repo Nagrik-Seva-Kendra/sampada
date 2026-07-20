@@ -235,6 +235,63 @@ export class DeedDocumentsService {
     }
   }
 
+  /**
+   * Structured field extraction from a photographed Aadhaar/PAN card via
+   * Claude's vision (same raw-HTTP pattern as SampleDeedsService.draftWithClaude
+   * -- no SDK dependency). The caller (the party-facing legacy paper-form page)
+   * supplies its own prompt describing exactly which fields to read and what
+   * JSON shape to reply with; this method is a thin, generic passthrough that
+   * just calls Claude and parses whatever JSON text it returns, so it works
+   * for the Aadhaar-front, Aadhaar-back, and PAN prompts alike without needing
+   * to know their field names. Returns { error: "..." } on any failure so the
+   * frontend can show it instead of leaving fields silently blank.
+   */
+  async extractDocumentFields(imageBase64: string, mediaType: string, prompt: string): Promise<Record<string, unknown>> {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return { error: "Document reading is not set up on the server yet." };
+    if (!imageBase64) return { error: "An image is required." };
+    if (!prompt) return { error: "A prompt is required." };
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-5",
+          max_tokens: 1024,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+                { type: "text", text: prompt },
+              ],
+            },
+          ],
+        }),
+      });
+      const raw = await res.text();
+      if (!res.ok) return { error: "HTTP " + res.status + ": " + raw.slice(0, 300) };
+      const data = JSON.parse(raw) as { content?: Array<{ type?: string; text?: string }> };
+      const text = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
+      const cleaned = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/, "")
+        .trim();
+      try {
+        return JSON.parse(cleaned) as Record<string, unknown>;
+      } catch {
+        return { error: "Could not parse the extracted fields." };
+      }
+    } catch (e) {
+      return { error: (e as Error).message || "Document reading request failed." };
+    }
+  }
+
   // ---- Deed <-> Party links ----
 
   async listDeedParties(deedId: string): Promise<DeedPartyItem[]> {
