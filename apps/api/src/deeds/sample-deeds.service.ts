@@ -402,4 +402,46 @@ function truncateExample(content: string, maxLen = 6000): string {
         if (!text) throw new BadRequestException("AI drafting returned no content.");
         return text;
   }
+
+  /**
+   * Party-facing auto-fill: replaces {{token}} placeholders (e.g.
+   * {{sellerName}}, {{buyerName}}, {{propertyDetails}}) that staff typed into
+   * the deed's content with values submitted from the legacy paper-form
+   * share link. No auth -- gated only by the deed's own unguessable id, same
+   * as getPublic(). A token that's already been replaced (or was never
+   * present) is left alone, so a later resubmission of the same field is a
+   * harmless no-op rather than an error -- edits made by the party AFTER a
+   * token has been consumed won't retroactively update the deed.
+   */
+  async applyPartyFields(id: string, fields: Record<string, string>): Promise<{ changed: boolean }> {
+    const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+    if (!existing || existing.status !== "active") throw new NotFoundException("Deed not found.");
+    let content = existing.content;
+    for (const [key, value] of Object.entries(fields)) {
+      if (!value) continue;
+      const token = `{{${key}}}`;
+      if (content.includes(token)) {
+        content = content.split(token).join(value);
+      }
+    }
+    if (content === existing.content) return { changed: false };
+    const last = await this.prisma.deedTemplateRevision.findFirst({
+      where: { deedId: existing.id },
+      orderBy: { versionNo: "desc" },
+      select: { versionNo: true },
+    });
+    await this.prisma.deedTemplateRevision.create({
+      data: {
+        deedId: existing.id,
+        versionNo: (last?.versionNo ?? 0) + 1,
+        title: existing.title,
+        content: existing.content,
+        status: existing.status,
+        editedById: null,
+        editedByName: "Party (form submission)",
+      },
+    });
+    await this.prisma.deedTemplate.update({ where: { id }, data: { content } });
+    return { changed: true };
+  }
 }
