@@ -1360,6 +1360,12 @@ wrapWithVoice($('plotWest'), 'hi-IN');
 
   var API_BASE = 'https://sampada-api.onrender.com/api/v1';
 
+  function notify(msg) {
+    if (typeof showToast === 'function') {
+      try { showToast(msg); } catch (e) {}
+    }
+  }
+
   function textOf(sel) {
     var el = document.querySelector(sel);
     return el ? (el.value || '').trim() : '';
@@ -1426,7 +1432,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
 
   function savePartyBox(box) {
     var nameVal = partyDisplayName(box);
-    if (!nameVal) return;
+    if (!nameVal) return Promise.resolve();
     var role = box.dataset.role === 'buyer' ? 'buyer' : 'seller';
     var frontFile = pickFile(box, 'party-aadhar-front-upload', 'party-aadhar-front-camera');
     var backFile = pickFile(box, 'party-aadhar-back-upload', 'party-aadhar-back-camera');
@@ -1446,7 +1452,8 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       if (frontFile) fd.append('file', frontFile);
       if (backFile) fd.append('aadhaarBackFile', backFile);
       if (panFileEl) fd.append('panFile', panFileEl);
-      fetch(API_BASE + '/public/deeds/' + deedId + '/parties', { method: 'POST', body: fd })
+      var hadFiles = !!(frontFile || backFile || panFileEl);
+      return fetch(API_BASE + '/public/deeds/' + deedId + '/parties', { method: 'POST', body: fd })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (data && data.party && data.party.id) {
@@ -1455,6 +1462,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
             box.dataset.frontSig = frontSig;
             box.dataset.backSig = backSig;
             box.dataset.panSig = panSig;
+            notify(hadFiles ? 'दस्तावेज़ अपलोड हो गया / Document uploaded' : 'जानकारी सेव हो गई / Details saved');
           }
         })
         .catch(function () {});
@@ -1464,14 +1472,17 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       if (backFile && backSig !== box.dataset.backSig) changed.aadhaarBackFile = backFile;
       if (panFileEl && panSig !== box.dataset.panSig) changed.panFile = panFileEl;
       var keys = Object.keys(changed);
-      if (!keys.length) return;
+      if (!keys.length) return Promise.resolve();
       var fd2 = new FormData();
       keys.forEach(function (k) { fd2.append(k, changed[k]); });
-      fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/files', { method: 'POST', body: fd2 })
-        .then(function () {
-          box.dataset.frontSig = frontSig;
-          box.dataset.backSig = backSig;
-          box.dataset.panSig = panSig;
+      return fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/files', { method: 'POST', body: fd2 })
+        .then(function (r) {
+          if (r.ok) {
+            box.dataset.frontSig = frontSig;
+            box.dataset.backSig = backSig;
+            box.dataset.panSig = panSig;
+            notify('दस्तावेज़ अपलोड हो गया / Document uploaded');
+          }
         })
         .catch(function () {});
     }
@@ -1480,17 +1491,24 @@ wrapWithVoice($('plotWest'), 'hi-IN');
   var savedNaxaSigs = {};
   function saveNaxaFiles() {
     var input = document.querySelector('#docUpload');
-    if (!input || !input.files) return;
+    if (!input || !input.files || !input.files.length) return Promise.resolve();
+    var jobs = [];
     Array.prototype.forEach.call(input.files, function (f) {
       var sig = fileSig(f);
       if (savedNaxaSigs[sig]) return;
       savedNaxaSigs[sig] = true;
       var fd = new FormData();
       fd.append('file', f);
-      fetch(API_BASE + '/public/deeds/' + deedId + '/naxa', { method: 'POST', body: fd }).catch(function () {
-        delete savedNaxaSigs[sig];
-      });
+      jobs.push(
+        fetch(API_BASE + '/public/deeds/' + deedId + '/naxa', { method: 'POST', body: fd })
+          .then(function (r) {
+            if (r.ok) notify('नक्शा / दस्तावेज़ अपलोड हो गया / Map uploaded');
+            else delete savedNaxaSigs[sig];
+          })
+          .catch(function () { delete savedNaxaSigs[sig]; })
+      );
     });
+    return Promise.all(jobs);
   }
 
   var lastFieldsSent = '';
@@ -1501,9 +1519,9 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       propertyDetails: buildPropertyDetails(),
     };
     var key = JSON.stringify(fields);
-    if (key === lastFieldsSent) return;
+    if (key === lastFieldsSent) return Promise.resolve();
     lastFieldsSent = key;
-    fetch(API_BASE + '/public/deeds/' + deedId + '/party-fields', {
+    return fetch(API_BASE + '/public/deeds/' + deedId + '/party-fields', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fields),
@@ -1511,9 +1529,11 @@ wrapWithVoice($('plotWest'), 'hi-IN');
   }
 
   function runAutoSave() {
-    Array.prototype.forEach.call(document.querySelectorAll('.party-box'), savePartyBox);
-    saveNaxaFiles();
-    saveContentFields();
+    var jobs = [saveContentFields(), saveNaxaFiles()];
+    Array.prototype.forEach.call(document.querySelectorAll('.party-box'), function (box) {
+      jobs.push(savePartyBox(box));
+    });
+    return Promise.all(jobs);
   }
 
   var timer = null;
@@ -1522,9 +1542,47 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     timer = setTimeout(runAutoSave, 1200);
   }
 
+  function isFileInput(el) {
+    return !!(el && el.tagName === 'INPUT' && el.type === 'file');
+  }
+
   document.addEventListener('input', scheduleSave, true);
-  document.addEventListener('change', scheduleSave, true);
+  document.addEventListener('change', function (e) {
+    if (isFileInput(e.target)) {
+      // Upload immediately on file selection, no debounce wait.
+      var box = e.target.closest('.party-box');
+      if (box) {
+        savePartyBox(box);
+      } else if (e.target.id === 'docUpload') {
+        saveNaxaFiles();
+      }
+    }
+    scheduleSave();
+  }, true);
+
+  function addSaveButton() {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'डेटा सेव करें / Save';
+    btn.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:99999;padding:12px 22px;border-radius:999px;border:none;background:#A24E39;color:#fff;font-weight:600;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,0.28);cursor:pointer;';
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      var prevText = btn.textContent;
+      btn.textContent = 'सेव हो रहा है... / Saving...';
+      runAutoSave().then(function () {
+        notify('सब कुछ सेव हो गया / Everything saved');
+        btn.textContent = prevText;
+        btn.disabled = false;
+      }).catch(function () {
+        btn.textContent = prevText;
+        btn.disabled = false;
+      });
+    });
+    document.body.appendChild(btn);
+  }
+
   scheduleSave();
+  addSaveButton();
 })();
 </script>
 </body>
