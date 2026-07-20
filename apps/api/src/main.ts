@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import helmet from "helmet";
+import { json } from "express";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { AppModule } from "./app.module.js";
@@ -12,6 +13,10 @@ async function bootstrap() {
 
   // CSP off: the built SPA loads its own bundled JS/CSS from this same origin.
   app.use(helmet({ contentSecurityPolicy: false }));
+// Raises Express/body-parser's default 100kb JSON limit so the party-facing OCR
+// endpoint (which sends a photographed Aadhaar/PAN card as base64 JSON, not a
+// multipart file) can accept real phone-camera photos instead of 413ing on them.
+app.use(json({ limit: "15mb" }));
   app.useGlobalFilters(new ZodExceptionFilter(app.getHttpAdapter()));
   app.setGlobalPrefix("api/v1");
   // Comma-separated allowlist. Surrounding spaces and trailing slashes are
