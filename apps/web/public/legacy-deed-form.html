@@ -689,6 +689,7 @@ function applyFrontFields(block, data){
   if(data.dob && dobInput && !dobInput.value) dobInput.value = data.dob;
   const titleInput = block.querySelector('.party-title-input');
   if(data.gender === 'F' && titleInput && titleInput.value === 'श्री') titleInput.value = 'श्रीमती';
+  block.querySelector('.party-aadhar-input').dispatchEvent(new Event('input', {bubbles:true}));
 }
 function applyBackFields(block, data){
   if(data.aadharNumber) block.querySelector('.party-aadhar-input').value = data.aadharNumber;
@@ -696,6 +697,7 @@ function applyBackFields(block, data){
   const addr = (lang === 'hi' && data.addressHi) ? data.addressHi : (data.addressEn || data.addressHi || '');
   const addrInput = block.querySelector('.party-address-input');
   if(addr && addrInput && !addrInput.value) addrInput.value = addr;
+  block.querySelector('.party-aadhar-input').dispatchEvent(new Event('input', {bubbles:true}));
 }
 
 async function handleAadharFrontFiles(files, block, statusEl){
@@ -749,6 +751,7 @@ async function runPanOCR(file, block, statusEl){
     const fatherToUse = (panLang === 'hi' && data.fatherNameHi) ? data.fatherNameHi : (data.fatherNameEn || data.fatherNameHi || '');
     const relativeInput = block.querySelector('.party-relative-input');
     if(fatherToUse && relativeInput && !relativeInput.value) relativeInput.value = fatherToUse;
+    block.querySelector('.party-pan-input').dispatchEvent(new Event('input', {bubbles:true}));
     statusEl.innerHTML = '✅ PAN नंबर भर दिया गया है — कृपया जांच लें।';
   } catch(err){
     statusEl.innerHTML = '❌ PAN कार्ड नहीं पढ़ा जा सका: ' + esc(err.message || String(err)) + ' — कृपया जानकारी स्वयं भरें।';
