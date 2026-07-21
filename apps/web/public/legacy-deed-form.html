@@ -750,7 +750,7 @@ async function runPanOCR(file, block, statusEl){
     if(panNameToUse && panNameInput && !panNameInput.value) panNameInput.value = panNameToUse;
     const fatherToUse = (panLang === 'hi' && data.fatherNameHi) ? data.fatherNameHi : (data.fatherNameEn || data.fatherNameHi || '');
     const relativeInput = block.querySelector('.party-relative-input');
-    if(fatherToUse && relativeInput && !relativeInput.value) relativeInput.value = fatherToUse;
+    if(fatherToUse && relativeInput && !relativeInput.value) relativeInput.value = /^श्री/.test(fatherToUse.trim()) ? fatherToUse : ('श्री ' + fatherToUse);
     block.querySelector('.party-pan-input').dispatchEvent(new Event('input', {bubbles:true}));
     statusEl.innerHTML = '✅ PAN नंबर भर दिया गया है — कृपया जांच लें।';
   } catch(err){
@@ -1224,7 +1224,7 @@ function gatherPartyList(containerId){
     const motherVal = box.querySelector('.party-mother-input')?.value.trim() || '';
     list.push({
       name: nameVal ? (title + ' ' + nameVal) : '',
-      relative: relativeVal ? (relation + ' ' + relativeVal) : '',
+      relative: relativeVal ? (relation + ' ' + (/^श्री/.test(relativeVal) ? relativeVal : ('श्री ' + relativeVal))) : '',
       mother: motherVal ? (motherTitle + ' ' + motherVal) : '',
       email: box.querySelector('.party-email-input')?.value.trim() || '',
       address: box.querySelector('.party-address-input')?.value.trim() || '',
@@ -1423,7 +1423,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     var relTxt = relation && relation.options ? (relation.options[relation.selectedIndex] || {}).textContent : '';
     var relativeVal = relative ? relative.value.trim() : '';
     var s = (titleTxt ? titleTxt.trim() + ' ' : '') + nameVal;
-    if (relTxt && relativeVal) s += ', ' + relTxt.trim() + ' ' + relativeVal;
+    if (relTxt && relativeVal) s += ', ' + relTxt.trim() + ' ' + (/^श्री/.test(relativeVal) ? relativeVal : ('श्री ' + relativeVal));
     return s;
   }
   function buildRoleBlock(role) {
@@ -1629,6 +1629,15 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       } else if (e.target.id === 'docUpload') {
         saveNaxaFiles();
       }
+    }
+    if (e.target.classList && e.target.classList.contains('party-title-input') && e.target.value === 'श्री') {
+      var titleBox = e.target.closest('.party-box');
+      var relEl = titleBox ? titleBox.querySelector('.party-relation-input') : null;
+      if (relEl) relEl.value = 'पुत्र';
+    }
+    if (e.target.classList && e.target.classList.contains('party-relative-input')) {
+      var relVal = e.target.value.trim();
+      if (relVal && !/^श्री/.test(relVal)) e.target.value = 'श्री ' + relVal;
     }
     scheduleSave();
   }, true);
