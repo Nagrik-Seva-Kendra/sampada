@@ -1473,6 +1473,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     var aadhaarNumber = (fieldOf(box, 'party-aadhar-input') || {}).value || '';
     var panNumber = (fieldOf(box, 'party-pan-input') || {}).value || '';
     var dobVal = (fieldOf(box, 'party-dob-input') || {}).value || '';
+    var addressVal = (fieldOf(box, 'party-address-input') || {}).value || '';
 
     var frontSig = fileSig(frontFile), backSig = fileSig(backFile), panSig = fileSig(panFileEl);
 
@@ -1484,6 +1485,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       if (aadhaarNumber) fd.append('aadhaarNumber', aadhaarNumber);
       if (panNumber) fd.append('panNumber', panNumber);
       if (dobVal) fd.append('dob', dobVal);
+      if (addressVal) fd.append('address', addressVal);
       if (frontFile) fd.append('file', frontFile);
       if (backFile) fd.append('aadhaarBackFile', backFile);
       if (panFileEl) fd.append('panFile', panFileEl);
@@ -1499,6 +1501,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
             box.dataset.panSig = panSig;
             box.dataset.savedName = nameVal;
             box.dataset.savedDob = dobVal;
+            box.dataset.savedAddress = addressVal;
             box.dataset.savedAadhaar = aadhaarNumber;
             box.dataset.savedPan = panNumber;
             notify(hadFiles ? 'दस्तावेज़ अपलोड हो गया / Document uploaded' : 'जानकारी सेव हो गई / Details saved');
@@ -1513,6 +1516,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       var keys = Object.keys(changed);
       var fieldsChanged = (nameVal !== (box.dataset.savedName || '')) ||
         (dobVal !== (box.dataset.savedDob || '')) ||
+        (addressVal !== (box.dataset.savedAddress || '')) ||
         (aadhaarNumber !== (box.dataset.savedAadhaar || '')) ||
         (panNumber !== (box.dataset.savedPan || ''));
       if (!keys.length && !fieldsChanged) return Promise.resolve();
@@ -1537,12 +1541,13 @@ wrapWithVoice($('plotWest'), 'hi-IN');
           fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/fields', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: nameVal, dob: dobVal, aadhaarNumber: aadhaarNumber, panNumber: panNumber })
+            body: JSON.stringify({ name: nameVal, dob: dobVal, address: addressVal, aadhaarNumber: aadhaarNumber, panNumber: panNumber })
           })
             .then(function (r) {
               if (r.ok) {
                 box.dataset.savedName = nameVal;
                 box.dataset.savedDob = dobVal;
+                box.dataset.savedAddress = addressVal;
                 box.dataset.savedAadhaar = aadhaarNumber;
                 box.dataset.savedPan = panNumber;
               }
