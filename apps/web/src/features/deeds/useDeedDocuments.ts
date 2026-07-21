@@ -10,6 +10,7 @@ export interface PartyMeta {
   name: string;
   partyType: string;
   dob: string | null;
+  address: string | null;
   aadhaarNumber: string | null;
   fileName: string | null;
   mimeType: string | null;
