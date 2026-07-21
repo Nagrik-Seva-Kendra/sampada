@@ -49,6 +49,7 @@ export class PublicDeedDocumentsController {
       name?: string;
       partyType?: unknown;
       dob?: string;
+      address?: string;
       aadhaarNumber?: string;
       panNumber?: string;
     },
@@ -63,6 +64,7 @@ export class PublicDeedDocumentsController {
       name: body.name,
       partyType: parsePartyType(body.partyType),
       dob: body.dob,
+      address: body.address,
       aadhaarNumber: body.aadhaarNumber,
       panNumber: body.panNumber,
       file: file ? { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype } : undefined,
@@ -109,7 +111,7 @@ export class PublicDeedDocumentsController {
     @Post("parties/:id/fields")
     updatePartyFields(
           @Param("id") id: string,
-          @Body() body: { name?: string; dob?: string; aadhaarNumber?: string; panNumber?: string },
+          @Body() body: { name?: string; address?: string; dob?: string; aadhaarNumber?: string; panNumber?: string },
         ) {
           return this.service.updatePartyFields(id, body);
     }
