@@ -418,10 +418,10 @@ function truncateExample(content: string, maxLen = 6000): string {
     if (!existing || existing.status !== "active") throw new NotFoundException("Deed not found.");
     let content = existing.content;
     for (const [key, value] of Object.entries(fields)) {
-      if (!value) continue;
+      
       const token = `{{${key}}}`;
       if (content.includes(token)) {
-        content = content.split(token).join(value);
+        content = content.split(token).join(value || '..................');
       }
     }
     if (content === existing.content) return { changed: false };
