@@ -100,6 +100,20 @@ export class PublicDeedDocumentsController {
     });
   }
 
+    /**
+       * Update a saved person/company's own fields (name, DOB, Aadhaar/PAN
+          * number) -- the text-field counterpart to updatePartyFiles above. The
+             * party form's auto-save re-checks these on every field edit and only
+                * calls this when something actually changed.
+                   */
+    @Post("parties/:id/fields")
+    updatePartyFields(
+          @Param("id") id: string,
+          @Body() body: { name?: string; dob?: string; aadhaarNumber?: string; panNumber?: string },
+        ) {
+          return this.service.updatePartyFields(id, body);
+    }
+
   @Post("deeds/:deedId/naxa")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
   addNaxa(@Param("deedId") deedId: string, @UploadedFile() file?: UploadedDoc) {
