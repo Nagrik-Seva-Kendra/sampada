@@ -184,8 +184,19 @@ function truncateExample(content: string, maxLen = 6000): string {
                 title: row.title,
                 content: row.content,
                 updatedAt: row.updatedAt.toISOString(),
+            formData: (row.formData ?? null) as PublicDeedItem["formData"],
         };
   }
+
+    async saveFormState(id: string, formData: unknown): Promise<{ ok: boolean }> {
+        const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+        if (!existing || existing.status !== "active") throw new NotFoundException("Deed not found.");
+        await this.prisma.deedTemplate.update({
+            where: { id },
+            data: { formData: formData as Prisma.InputJsonValue },
+        });
+        return { ok: true };
+    }
 
   /** Draft a new deed for a type, owned by the caller. */
   async create(input: CreateSampleDeedInput, user: StaffUser): Promise<SampleDeedItem> {
