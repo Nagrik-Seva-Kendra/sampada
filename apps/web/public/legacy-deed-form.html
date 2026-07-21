@@ -1410,7 +1410,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     var el = document.querySelector(sel);
     if (!el || !el.options) return '';
     var o = el.options[el.selectedIndex];
-    return o ? o.textContent.trim() : '';
+    return (o && o.value) ? o.textContent.trim() : '';
   }
   function fieldOf(box, cls) {
     return box.querySelector('.' + cls);
