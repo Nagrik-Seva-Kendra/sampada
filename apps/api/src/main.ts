@@ -2,7 +2,6 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import helmet from "helmet";
-import { json } from "express";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { AppModule } from "./app.module.js";
@@ -13,10 +12,14 @@ async function bootstrap() {
 
   // CSP off: the built SPA loads its own bundled JS/CSS from this same origin.
   app.use(helmet({ contentSecurityPolicy: false }));
-// Raises Express/body-parser's default 100kb JSON limit so the party-facing OCR
-// endpoint (which sends a photographed Aadhaar/PAN card as base64 JSON, not a
-// multipart file) can accept real phone-camera photos instead of 413ing on them.
-app.use(json({ limit: "15mb" }));
+  // Raises the default 100kb JSON body limit so the party-facing OCR endpoint
+  // (which sends a photographed Aadhaar/PAN card as base64 JSON, not a
+  // multipart file) can accept real phone-camera photos instead of 413ing on
+  // them. Uses Nest's own useBodyParser (available since Nest v9) rather than
+  // importing "express" directly -- a direct "express" import isn't resolvable
+  // by this project's esbuild bundle step (nest build && bundle.mjs), since
+  // nothing else here imports it as a real (non-type-only) module.
+  app.useBodyParser("json", { limit: "15mb" });
   app.useGlobalFilters(new ZodExceptionFilter(app.getHttpAdapter()));
   app.setGlobalPrefix("api/v1");
   // Comma-separated allowlist. Surrounding spaces and trailing slashes are
@@ -33,7 +36,7 @@ app.use(json({ limit: "15mb" }));
   // Production: serve the built React SPA from the same origin as the API, so
   // the app's relative "/api/v1" calls work with no CORS and a single URL.
   // WEB_DIST defaults to a "public" folder next to the running server. Always
-  // resolved to an absolute path — res.sendFile() rejects relative ones, and
+  // resolved to an absolute path -- res.sendFile() rejects relative ones, and
   // WEB_DIST is set as a repo-root-relative value on hosts like Render.
   const webDist = resolve(process.env.WEB_DIST ?? "public");
   const hasSpa = existsSync(join(webDist, "index.html"));
