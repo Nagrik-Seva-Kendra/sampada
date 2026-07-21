@@ -450,6 +450,45 @@ export class DeedDocumentsService {
     return toPartyMeta(updated);
   }
 
+    /**
+       * Update the text fields (name, DOB, Aadhaar/PAN number) of an
+          * already-saved person/company. Until this existed, edits made to a
+             * party's fields after the first save (see addDeedParty) were silently
+                * dropped -- the party form's auto-save only ever re-sent changed card
+                   * images via updatePartyFiles, never text fields. Only fields actually
+                      * provided are touched; omit a field to leave it as-is.
+                         */
+    async updatePartyFields(id: string, input: {
+          name?: string;
+          dob?: string;
+          aadhaarNumber?: string;
+          panNumber?: string;
+    }): Promise<PartyMeta> {
+          const found = await this.prisma.party.findUnique({ where: { id }, select: { id: true } });
+          if (!found) throw new NotFoundException("Person not found.");
+          const name = input.name?.trim();
+          const dob = input.dob?.trim();
+          const aadhaar = input.aadhaarNumber ? normalizeAadhaar(input.aadhaarNumber) : undefined;
+          if (aadhaar && aadhaar.length !== 12) {
+                  throw new BadRequestException("A valid 12-digit Aadhaar number is required.");
+          }
+          const pan = input.panNumber ? normalizePan(input.panNumber) : undefined;
+          if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+                  throw new BadRequestException("A valid 10-character PAN number is required.");
+          }
+          const updated = await this.prisma.party.update({
+                  where: { id },
+                  data: {
+                            name: name || undefined,
+                            dob: dob || undefined,
+                            aadhaarNumber: aadhaar || undefined,
+                            panNumber: pan || undefined,
+                  },
+                  select: PARTY_META,
+          });
+          return toPartyMeta(updated);
+    }
+
   /**
    * Remove a person from a deed. If they are not linked to any other deed
    * afterwards, their Aadhaar/PAN/photo record is erased entirely; if they
