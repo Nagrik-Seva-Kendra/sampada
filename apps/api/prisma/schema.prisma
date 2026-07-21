@@ -122,6 +122,7 @@ model Party {
    * OCR'd off the Aadhaar card; optional.
    */
   dob String?
+  address String?
   aadhaarNumber String? @unique
   fileName String?
   mimeType String?
