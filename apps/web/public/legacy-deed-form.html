@@ -662,14 +662,16 @@ async function extractFieldsFromImage(file, promptText){
   return data;
 }
 
-const AADHAR_FRONT_PROMPT = 'This is the FRONT side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber": ""}. "aadharNumber" is the 12-digit Aadhaar number printed in large font (formatted as printed, e.g. "1234 5678 9012") — do NOT confuse this with the 16-digit VID number if present. If not clearly visible, use an empty string.';
+const AADHAR_FRONT_PROMPT = 'This is the FRONT side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber":"", "name":"", "dob":""}. "aadharNumber" is the 12-digit Aadhaar number printed in large font (formatted as printed, e.g. "1234 5678 9012") — do NOT confuse this with the 16-digit VID number if present. "name" is the full name printed on the card in English. "dob" is the date of birth in DD/MM/YYYY format if printed. If any field is not clearly visible, use an empty string.';
 
 const AADHAR_BACK_PROMPT = 'This is the BACK side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber": ""}. "aadharNumber" is the 12-digit Aadhaar number printed (formatted as printed, e.g. "1234 5678 9012") — do NOT confuse this with the 16-digit VID number if present. If not clearly visible, use an empty string.';
 
-const PAN_PROMPT = 'This is an Indian PAN card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"panNumber": ""}. "panNumber" is the 10-character PAN (5 letters, 4 digits, 1 letter, e.g. "ABCDE1234F"). If not clearly visible, use an empty string.';
+const PAN_PROMPT = 'This is an Indian PAN card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"panNumber": "", "name": "", "fatherName": ""}. "panNumber" is the 10-character PAN (5 letters, 4 digits, 1 letter, e.g. "ABCDE1234F"). "name" is the full name printed on the card. "fatherName" is the fathers name printed on the card, if present. If any field is not clearly visible, use an empty string.';
 
 function applyFrontFields(block, data){
   if(data.aadharNumber) block.querySelector('.party-aadhar-input').value = data.aadharNumber;
+      const frontNameInput = block.querySelector('.party-name-input');
+      if(data.name && frontNameInput && !frontNameInput.value) frontNameInput.value = data.name;
 }
 function applyBackFields(block, data){
   if(data.aadharNumber) block.querySelector('.party-aadhar-input').value = data.aadharNumber;
@@ -719,6 +721,8 @@ async function runPanOCR(file, block, statusEl){
   try{
     const data = await extractFieldsFromImage(file, PAN_PROMPT);
     if(data.panNumber) block.querySelector('.party-pan-input').value = data.panNumber;
+          const panNameInput = block.querySelector('.party-name-input');
+          if(data.name && panNameInput && !panNameInput.value) panNameInput.value = data.name;
     statusEl.innerHTML = '✅ PAN नंबर भर दिया गया है — कृपया जांच लें।';
   } catch(err){
     statusEl.innerHTML = '❌ PAN कार्ड नहीं पढ़ा जा सका: ' + esc(err.message || String(err)) + ' — कृपया जानकारी स्वयं भरें।';
