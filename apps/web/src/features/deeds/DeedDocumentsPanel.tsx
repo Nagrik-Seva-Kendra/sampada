@@ -768,6 +768,9 @@ function PartyGroup({
                       <b>{T("Name", "नाम")}:</b> {p.name}
                     </div>
                     <div>
+                    <b>{T('Address', 'पता')}:</b> {p.address || '—'}
+                    </div>
+                    <div>
                       <b>{T("DOB", "जन्म तिथि")}:</b> {p.dob || "—"}
                     </div>
                     <div>
