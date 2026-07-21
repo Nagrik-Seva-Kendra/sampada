@@ -1450,21 +1450,21 @@ var boxes = Array.prototype.slice.call(document.querySelectorAll('.party-box[dat
     if (addr) parts.push('पता: ' + addr);
     var w = textOf('#plotWidth'), l = textOf('#plotLength'), unit = selText('#plotUnit');
     if (w || l) parts.push('माप: ' + [w, l].filter(Boolean).join(' x ') + (unit ? ' ' + unit : ''));
-    var bounds = [];
     var n = textOf('#plotNorth'), s = textOf('#plotSouth'), e = textOf('#plotEast'), we = textOf('#plotWest');
-    if (n) bounds.push('उत्तर: ' + n);
-    if (s) bounds.push('दक्षिण: ' + s);
-    if (e) bounds.push('पूर्व: ' + e);
-    if (we) bounds.push('पश्चिम: ' + we);
-    if (bounds.length) parts.push('सीमाएँ - ' + bounds.join(', '));
-    var usage = selText('#buildingUsage'); if (usage) parts.push('उपयोग: ' + usage);
+          if (n || s || e || we) {
+                    parts.push('चतुःसीमा -');
+                    if (n) parts.push('उत्तर: ' + n);
+                    if (s) parts.push('दक्षिण: ' + s);
+                    if (e) parts.push('पूर्व: ' + e);
+                    if (we) parts.push('पश्चिम: ' + we);
+          }var usage = selText('#buildingUsage'); if (usage) parts.push('उपयोग: ' + usage);
     var floor = selText('#flatFloor'); if (floor) parts.push('मंजिल: ' + floor);
     var corner = selText('#plotCorner'); if (corner) parts.push('कॉर्नर: ' + corner);
     var foundation = selText('#plotFoundation'); if (foundation) parts.push('नींव: ' + foundation);
     var surveyVals = Array.prototype.slice.call(document.querySelectorAll('#surveyRowsContainer input, #surveyRowsContainer select'))
       .map(function (e) { return (e.value || '').trim(); }).filter(Boolean);
     if (surveyVals.length) parts.push('सर्वे/खसरा नंबर: ' + surveyVals.join(', '));
-    return parts.join('; ');
+    return parts.join('\n');
   }
   function buildPaymentDetails() {
     var amt = textOf('#saleAmount');
