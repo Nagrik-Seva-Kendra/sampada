@@ -381,6 +381,11 @@
 
       <div class="card" id="partyDetailsCard" style="display:none;">
         <div class="section-title"><span class="section-num">2</span><span style="font-size:28px;line-height:1;">&#128101;</span> Party details <span class="req">*</span></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;font-size:13px;background:var(--maroon-light);padding:8px 10px;border-radius:8px;">
+          <span style="color:var(--text-secondary);font-weight:600;">भाषा चुनें / Auto-fill language:</span>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="formLang" value="hi" class="form-lang-input" checked> हिंदी / Hindi</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="formLang" value="en" class="form-lang-input"> English</label>
+        </div>
         <p class="section-sub">Details of the seller (first party) and buyer (second party). एक से अधिक होने पर जोड़ें।</p>
         <div class="party-columns">
           <div id="sellerColumnWrap" style="display:none;">
@@ -486,6 +491,7 @@ function addPartyBlock(role){
         <input type="text" class="party-name-input" placeholder="Full name" autocomplete="off" style="flex:1;min-width:0;">
       </div>
     </div>
+    <div class="field"><label>जन्म तिथि / Date of birth</label><input type="text" class="party-dob-input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
     <div class="field">
       <label>पिता / पति का नाम / Father's / Husband's name</label>
       <div style="display:flex;gap:8px;">
@@ -662,19 +668,34 @@ async function extractFieldsFromImage(file, promptText){
   return data;
 }
 
-const AADHAR_FRONT_PROMPT = 'This is the FRONT side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber":"", "name":"", "dob":""}. "aadharNumber" is the 12-digit Aadhaar number printed in large font (formatted as printed, e.g. "1234 5678 9012") — do NOT confuse this with the 16-digit VID number if present. "name" is the full name printed on the card in English. "dob" is the date of birth in DD/MM/YYYY format if printed. If any field is not clearly visible, use an empty string.';
+const AADHAR_FRONT_PROMPT = 'This is the FRONT side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber":"", "nameEn":"", "nameHi":"", "dob":"", "gender":""}. "aadharNumber" is the 12-digit Aadhaar number printed in large font (formatted as printed, e.g. "1234 5678 9012") - do NOT confuse this with the 16-digit VID number if present. "nameEn" is the full name printed in English/Roman letters. "nameHi" is the same name printed in Hindi/Devanagari script if it appears on the card, else an empty string. "dob" is the date of birth in DD/MM/YYYY format if printed. "gender" is exactly "M" or "F" based on Male/Female or Purush/Mahila printed on the card. If any field is not clearly visible, use an empty string.';
 
-const AADHAR_BACK_PROMPT = 'This is the BACK side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber": ""}. "aadharNumber" is the 12-digit Aadhaar number printed (formatted as printed, e.g. "1234 5678 9012") — do NOT confuse this with the 16-digit VID number if present. If not clearly visible, use an empty string.';
+const AADHAR_BACK_PROMPT = 'This is the BACK side of an Indian Aadhaar card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"aadharNumber":"", "addressEn":"", "addressHi":""}. "aadharNumber" is the 12-digit Aadhaar number printed (formatted as printed, e.g. "1234 5678 9012") - do NOT confuse this with the 16-digit VID number if present. "addressEn" is the full residential address printed in English/Roman letters. "addressHi" is the same address printed in Hindi/Devanagari script if it appears on the card, else an empty string. If any field is not clearly visible, use an empty string.';
 
-const PAN_PROMPT = 'This is an Indian PAN card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"panNumber": "", "name": "", "fatherName": ""}. "panNumber" is the 10-character PAN (5 letters, 4 digits, 1 letter, e.g. "ABCDE1234F"). "name" is the full name printed on the card. "fatherName" is the fathers name printed on the card, if present. If any field is not clearly visible, use an empty string.';
+const PAN_PROMPT = 'This is an Indian PAN card. Read the printed text carefully and respond with ONLY a raw JSON object (no markdown fences, no explanation) in this exact shape: {"panNumber":"", "nameEn":"", "nameHi":"", "fatherNameEn":"", "fatherNameHi":""}. "panNumber" is the 10-character PAN (5 letters, 4 digits, 1 letter, e.g. "ABCDE1234F"). "nameEn" is the full name printed on the card in English. "nameHi" is the same name in Hindi/Devanagari script if it appears on the card, else an empty string. "fatherNameEn" is the fathers name printed on the card in English, if present. "fatherNameHi" is the same fathers name in Hindi/Devanagari script if it appears, else an empty string. If any field is not clearly visible, use an empty string.';
+
+function getFormLang(){
+  const checked = document.querySelector('input[name="formLang"]:checked');
+  return checked ? checked.value : 'hi';
+}
 
 function applyFrontFields(block, data){
   if(data.aadharNumber) block.querySelector('.party-aadhar-input').value = data.aadharNumber;
-      const frontNameInput = block.querySelector('.party-name-input');
-      if(data.name && frontNameInput && !frontNameInput.value) frontNameInput.value = data.name;
+  const lang = getFormLang();
+  const nameToUse = (lang === 'hi' && data.nameHi) ? data.nameHi : (data.nameEn || data.nameHi || '');
+  const frontNameInput = block.querySelector('.party-name-input');
+  if(nameToUse && frontNameInput && !frontNameInput.value) frontNameInput.value = nameToUse;
+  const dobInput = block.querySelector('.party-dob-input');
+  if(data.dob && dobInput && !dobInput.value) dobInput.value = data.dob;
+  const titleInput = block.querySelector('.party-title-input');
+  if(data.gender === 'F' && titleInput && titleInput.value === 'श्री') titleInput.value = 'श्रीमती';
 }
 function applyBackFields(block, data){
   if(data.aadharNumber) block.querySelector('.party-aadhar-input').value = data.aadharNumber;
+  const lang = getFormLang();
+  const addr = (lang === 'hi' && data.addressHi) ? data.addressHi : (data.addressEn || data.addressHi || '');
+  const addrInput = block.querySelector('.party-address-input');
+  if(addr && addrInput && !addrInput.value) addrInput.value = addr;
 }
 
 async function handleAadharFrontFiles(files, block, statusEl){
@@ -721,8 +742,13 @@ async function runPanOCR(file, block, statusEl){
   try{
     const data = await extractFieldsFromImage(file, PAN_PROMPT);
     if(data.panNumber) block.querySelector('.party-pan-input').value = data.panNumber;
-          const panNameInput = block.querySelector('.party-name-input');
-          if(data.name && panNameInput && !panNameInput.value) panNameInput.value = data.name;
+    const panLang = getFormLang();
+    const panNameToUse = (panLang === 'hi' && data.nameHi) ? data.nameHi : (data.nameEn || data.nameHi || '');
+    const panNameInput = block.querySelector('.party-name-input');
+    if(panNameToUse && panNameInput && !panNameInput.value) panNameInput.value = panNameToUse;
+    const fatherToUse = (panLang === 'hi' && data.fatherNameHi) ? data.fatherNameHi : (data.fatherNameEn || data.fatherNameHi || '');
+    const relativeInput = block.querySelector('.party-relative-input');
+    if(fatherToUse && relativeInput && !relativeInput.value) relativeInput.value = fatherToUse;
     statusEl.innerHTML = '✅ PAN नंबर भर दिया गया है — कृपया जांच लें।';
   } catch(err){
     statusEl.innerHTML = '❌ PAN कार्ड नहीं पढ़ा जा सका: ' + esc(err.message || String(err)) + ' — कृपया जानकारी स्वयं भरें।';
@@ -1443,6 +1469,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     var panFileEl = pickFile(box, 'party-pan-upload', 'party-pan-camera');
     var aadhaarNumber = (fieldOf(box, 'party-aadhar-input') || {}).value || '';
     var panNumber = (fieldOf(box, 'party-pan-input') || {}).value || '';
+    var dobVal = (fieldOf(box, 'party-dob-input') || {}).value || '';
 
     var frontSig = fileSig(frontFile), backSig = fileSig(backFile), panSig = fileSig(panFileEl);
 
@@ -1453,6 +1480,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       fd.append('partyType', 'individual');
       if (aadhaarNumber) fd.append('aadhaarNumber', aadhaarNumber);
       if (panNumber) fd.append('panNumber', panNumber);
+      if (dobVal) fd.append('dob', dobVal);
       if (frontFile) fd.append('file', frontFile);
       if (backFile) fd.append('aadhaarBackFile', backFile);
       if (panFileEl) fd.append('panFile', panFileEl);
@@ -1466,6 +1494,10 @@ wrapWithVoice($('plotWest'), 'hi-IN');
             box.dataset.frontSig = frontSig;
             box.dataset.backSig = backSig;
             box.dataset.panSig = panSig;
+            box.dataset.savedName = nameVal;
+            box.dataset.savedDob = dobVal;
+            box.dataset.savedAadhaar = aadhaarNumber;
+            box.dataset.savedPan = panNumber;
             notify(hadFiles ? 'दस्तावेज़ अपलोड हो गया / Document uploaded' : 'जानकारी सेव हो गई / Details saved');
           }
         })
@@ -1476,19 +1508,48 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       if (backFile && backSig !== box.dataset.backSig) changed.aadhaarBackFile = backFile;
       if (panFileEl && panSig !== box.dataset.panSig) changed.panFile = panFileEl;
       var keys = Object.keys(changed);
-      if (!keys.length) return Promise.resolve();
-      var fd2 = new FormData();
-      keys.forEach(function (k) { fd2.append(k, changed[k]); });
-      return fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/files', { method: 'POST', body: fd2 })
-        .then(function (r) {
-          if (r.ok) {
-            box.dataset.frontSig = frontSig;
-            box.dataset.backSig = backSig;
-            box.dataset.panSig = panSig;
-            notify('दस्तावेज़ अपलोड हो गया / Document uploaded');
-          }
-        })
-        .catch(function () {});
+      var fieldsChanged = (nameVal !== (box.dataset.savedName || '')) ||
+        (dobVal !== (box.dataset.savedDob || '')) ||
+        (aadhaarNumber !== (box.dataset.savedAadhaar || '')) ||
+        (panNumber !== (box.dataset.savedPan || ''));
+      if (!keys.length && !fieldsChanged) return Promise.resolve();
+      var jobs = [];
+      if (keys.length) {
+        var fd2 = new FormData();
+        keys.forEach(function (k) { fd2.append(k, changed[k]); });
+        jobs.push(
+          fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/files', { method: 'POST', body: fd2 })
+            .then(function (r) {
+              if (r.ok) {
+                box.dataset.frontSig = frontSig;
+                box.dataset.backSig = backSig;
+                box.dataset.panSig = panSig;
+              }
+            })
+            .catch(function () {})
+        );
+      }
+      if (fieldsChanged) {
+        jobs.push(
+          fetch(API_BASE + '/public/parties/' + box.dataset.savedPartyId + '/fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: nameVal, dob: dobVal, aadhaarNumber: aadhaarNumber, panNumber: panNumber })
+          })
+            .then(function (r) {
+              if (r.ok) {
+                box.dataset.savedName = nameVal;
+                box.dataset.savedDob = dobVal;
+                box.dataset.savedAadhaar = aadhaarNumber;
+                box.dataset.savedPan = panNumber;
+              }
+            })
+            .catch(function () {})
+        );
+      }
+      return Promise.all(jobs).then(function () {
+        notify('जानकारी सेव हो गई / Details saved');
+      });
     }
   }
 
