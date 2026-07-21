@@ -365,6 +365,9 @@
             <div class="field"><label>पश्चिम / West</label><input type="text" id="plotWest"></div>
           </div>
         </div>
+        <div class="field" style="margin-top:4px;">
+          <label>विक्रय मूल्य / Sale Amount (Rs.)</label><input type="number" id="saleAmount">
+        </div>
         <div style="display:flex;justify-content:flex-end;margin-top:8px;">
           <button type="button" id="detailsNextBtn" class="btn-primary">आगे बढ़ें / Next &#8594;</button>
         </div>
@@ -1427,9 +1430,18 @@ wrapWithVoice($('plotWest'), 'hi-IN');
     return s;
   }
   function buildRoleBlock(role) {
-    var boxes = Array.prototype.slice.call(document.querySelectorAll('.party-box[data-role="' + role + '"]'));
-    return boxes.map(partyDisplayName).filter(Boolean).join('; ');
-  }
+var boxes = Array.prototype.slice.call(document.querySelectorAll('.party-box[data-role="' + role + '"]'));
+        return boxes.map(function (box) {
+                  var nameLine = partyDisplayName(box);
+                  if (!nameLine) return '';
+                  var aadhaar = (fieldOf(box, 'party-aadhar-input') || {}).value || '';
+                  var address = (fieldOf(box, 'party-address-input') || {}).value || '';
+                  var line = nameLine;
+                  if (aadhaar) line += ' (आ.नं. ' + aadhaar + ')';
+                  if (address) line += ', निवासी - ' + address;
+                  return line;
+        }).filter(Boolean).join('\n');
+        }
   function buildPropertyDetails() {
     var parts = [];
     var typeLabel = selText('#deedType');
@@ -1453,6 +1465,10 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       .map(function (e) { return (e.value || '').trim(); }).filter(Boolean);
     if (surveyVals.length) parts.push('सर्वे/खसरा नंबर: ' + surveyVals.join(', '));
     return parts.join('; ');
+  }
+  function buildPaymentDetails() {
+    var amt = textOf('#saleAmount');
+      return amt ? ('विक्रय मूल्य: Rs. ' + amt) : '';
   }
 
   function fileSig(f) { return f ? (f.name + ':' + f.size) : ''; }
@@ -1590,6 +1606,7 @@ wrapWithVoice($('plotWest'), 'hi-IN');
       sellerName: buildRoleBlock('seller'),
       buyerName: buildRoleBlock('buyer'),
       propertyDetails: buildPropertyDetails(),
+      paymentDetails: buildPaymentDetails(),
     };
     var key = JSON.stringify(fields);
     if (key === lastFieldsSent) return Promise.resolve();
