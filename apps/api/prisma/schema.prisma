@@ -52,6 +52,7 @@ model DeedTemplate {
   createdByRole String?
   createdAt DateTime
   updatedAt DateTime @updatedAt
+  formData Json?
 
   @@index([type])
   @@index([createdById])
