@@ -10,6 +10,7 @@ export interface PartyMeta {
   name: string;
   partyType: string;
   dob: string | null;
+  address: string | null;
   aadhaarNumber: string | null;
   fileName: string | null;
   mimeType: string | null;
@@ -50,6 +51,7 @@ const PARTY_META = {
   name: true,
   partyType: true,
   dob: true,
+  address: true,
   aadhaarNumber: true,
   fileName: true,
   mimeType: true,
@@ -69,6 +71,7 @@ function toPartyMeta(r: {
   name: string;
   partyType: string;
   dob: string | null;
+  address: string | null;
   aadhaarNumber: string | null;
   fileName: string | null;
   mimeType: string | null;
@@ -92,6 +95,7 @@ function toPartyMeta(r: {
     mimeType: r.mimeType,
     size: r.size,
     aadhaarBackFileName: r.aadhaarBackFileName,
+    address: r.address,
     aadhaarBackMimeType: r.aadhaarBackMimeType,
     aadhaarBackSize: r.aadhaarBackSize,
     panNumber: r.panNumber,
@@ -323,6 +327,7 @@ export class DeedDocumentsService {
     name?: string;
     partyType?: PartyType;
     dob?: string;
+    address?: string;
     aadhaarNumber?: string;
     panNumber?: string;
     file?: UploadedDoc;
@@ -370,6 +375,7 @@ export class DeedDocumentsService {
             name,
             partyType,
             dob: input.dob?.trim() || null,
+            address: input.address?.trim() || null,
             aadhaarNumber: aadhaar || null,
             fileName: input.file ? (input.file.originalname ?? "aadhaar") : null,
             mimeType: input.file ? (input.file.mimetype ?? "application/octet-stream") : null,
@@ -461,6 +467,7 @@ export class DeedDocumentsService {
     async updatePartyFields(id: string, input: {
           name?: string;
           dob?: string;
+      address?: string;
           aadhaarNumber?: string;
           panNumber?: string;
     }): Promise<PartyMeta> {
@@ -468,6 +475,7 @@ export class DeedDocumentsService {
           if (!found) throw new NotFoundException("Person not found.");
           const name = input.name?.trim();
           const dob = input.dob?.trim();
+      const address = input.address?.trim();
           const aadhaar = input.aadhaarNumber ? normalizeAadhaar(input.aadhaarNumber) : undefined;
           if (aadhaar && aadhaar.length !== 12) {
                   throw new BadRequestException("A valid 12-digit Aadhaar number is required.");
@@ -481,6 +489,7 @@ export class DeedDocumentsService {
                   data: {
                             name: name || undefined,
                             dob: dob || undefined,
+                    address: address || undefined,
                             aadhaarNumber: aadhaar || undefined,
                             panNumber: pan || undefined,
                   },
