@@ -196,3 +196,18 @@ model GuidelineDocument {
   @@index([createdAt])
   @@index([district, session])
 }
+
+/// Single-use, 1-hour password-reset tokens minted by an admin ("send reset
+/// link") for a user. Only the SHA-256 hash of the raw token is stored; the raw
+/// value lives only in the emailed / handed-out link. Consuming a token sets
+/// usedAt so it can never be replayed.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}

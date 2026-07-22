@@ -15,6 +15,7 @@ import {
   usePendingEmployees,
   useReactivateEmployee,
   useRejectEmployee,
+  useSendResetLink,
   useStaffList,
   useUpdateUser,
 } from "./useEmployees";
@@ -148,7 +149,7 @@ function RequestsTab({ t }: { t: (k: StringKey) => string }) {
                 </button>
               </div>
             </div>
-            {expandedId === req.id && <StaffDetails username={req.username} t={t} />}
+            {expandedId === req.id && <StaffDetails id={req.id} username={req.username} t={t} />}
           </div>
         ))}
       </div>
@@ -250,7 +251,7 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
                   )}
                 </div>
               </div>
-              {expandedId === u.id && <StaffDetails username={u.username} t={t} />}
+              {expandedId === u.id && <StaffDetails id={u.id} username={u.username} t={t} />}
             </div>
           );
         })}
@@ -262,19 +263,68 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
   );
 }
 
-/** Expandable row: shows the login username. Passwords are never recoverable. */
+/**
+ * Expandable row: shows the login username and lets an admin generate a
+ * single-use password reset link. Passwords are never recoverable.
+ */
 function StaffDetails({
+  id,
   username,
   t,
 }: {
+  id: string;
   username: string | null;
   t: (k: StringKey) => string;
 }) {
+  const sendLink = useSendResetLink();
+  const [copied, setCopied] = useState(false);
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable — the URL is visible for manual copy anyway.
+    }
+  }
+
   return (
     <div className="doc-sub" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
       <div>
         {t("empUsername")}: {username ?? "—"}
       </div>
+      <div style={{ marginTop: 10 }}>
+        <button
+          className="doc-btn"
+          onClick={() => {
+            setCopied(false);
+            sendLink.mutate(id);
+          }}
+          disabled={sendLink.isPending}
+        >
+          {sendLink.isPending ? t("resetSending") : t("resetSendLink")}
+        </button>
+      </div>
+      {sendLink.isError && <p className="modal-error">{t("resetLinkFailed")}</p>}
+      {sendLink.data && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              readOnly
+              value={sendLink.data.resetUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button className="doc-btn" onClick={() => copy(sendLink.data!.resetUrl)}>
+              {copied ? t("resetLinkCopied") : t("resetLinkCopy")}
+            </button>
+          </div>
+          <small>
+            {sendLink.data.emailed ? t("resetLinkEmailed") : t("resetLinkNotEmailed")} {t("resetLinkExpiry")}
+          </small>
+        </div>
+      )}
     </div>
   );
 }

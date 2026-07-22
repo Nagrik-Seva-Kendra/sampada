@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateUserInput, EmployeeItem, UpdateUserInput } from "@sampada/shared";
+import type { CreateUserInput, EmployeeItem, PasswordResetLink, UpdateUserInput } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -118,3 +118,12 @@ export function useReactivateEmployee() {
   });
 }
 
+
+/** Admin: mint a single-use, 1-hour password reset link for a staff member. */
+export function useSendResetLink() {
+  const token = useAuthStore((s) => s.token);
+  return useMutation<PasswordResetLink, Error, string>({
+    mutationFn: (id) =>
+      api.post(`employees/${id}/reset-link`, { headers: authHeaders(token) }).json<PasswordResetLink>(),
+  });
+}

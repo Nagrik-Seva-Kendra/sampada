@@ -81,6 +81,16 @@ export class UsersService {
     return ok;
   }
 
+  /** Set a users password via the reset-link flow and revoke existing sessions. */
+  async resetPassword(userId: string, newPassword: string): Promise<void> {
+    const existing = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!existing) throw new NotFoundException("User not found.");
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(newPassword), tokenVersion: { increment: 1 } },
+    });
+  }
+
   async list(): Promise<StoredUser[]> {
     const rows = await this.prisma.user.findMany({
       where: { role: { in: STAFF_ROLES } },

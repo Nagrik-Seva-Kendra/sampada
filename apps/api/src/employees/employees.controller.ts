@@ -3,10 +3,12 @@ import {
   CreateEmployeeInput,
   EmployeeSignupInput,
   type EmployeeItem,
+  type PasswordResetLink,
   type StaffRole,
 } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
 import { UsersService, type StoredUser } from "../users/users.service.js";
+import { PasswordResetService } from "../users/password-reset.service.js";
 import { OtpService } from "../otp/otp.service.js";
 
 function toItem(user: StoredUser): EmployeeItem {
@@ -29,6 +31,7 @@ export class EmployeesController {
   constructor(
     private readonly users: UsersService,
     private readonly otp: OtpService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   /** Public: employee self-signup. Requires a verified email OTP. Stays PENDING until the admin approves it. */
@@ -98,4 +101,13 @@ export class EmployeesController {
     return toItem(user);
   }
 
+  /**
+   * Admin-only: mint a single-use, 1-hour password reset link for a staff
+   * member. Best-effort emails it and always returns a copyable link.
+   */
+  @Post(":id/reset-link")
+  @UseGuards(JwtAdminGuard)
+  async resetLink(@Param("id") id: string): Promise<PasswordResetLink> {
+    return this.passwordReset.createLink(id);
+  }
 }

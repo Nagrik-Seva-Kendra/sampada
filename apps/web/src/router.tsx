@@ -24,6 +24,7 @@ import { ContactPage } from "./features/contact/ContactPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { TeamPage } from "./features/employees/TeamPage";
 import { GuidelinePage } from "./features/guideline/GuidelinePage";
+import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
@@ -104,6 +105,8 @@ const routes = [
     path: "/eregistry",
     component: () => <Navigate to="/deeds" />,
   }),
+  // Public: admin-issued password reset link lands here (?token=...).
+  createRoute({ getParentRoute: () => rootRoute, path: "/reset-password", component: ResetPasswordPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/about", component: AboutPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/contact", component: ContactPage }),
 ];

@@ -55,3 +55,18 @@ export const RefreshInput = z.object({
   refreshToken: z.string().min(1),
 });
 export type RefreshInput = z.infer<typeof RefreshInput>;
+
+/** Public: consume an admin-issued reset link and set a new password. */
+export const ResetPasswordInput = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+export type ResetPasswordInput = z.infer<typeof ResetPasswordInput>;
+
+/** Admin "send reset link" result: the link to copy plus whether it was emailed. */
+export const PasswordResetLink = z.object({
+  resetUrl: z.string(),
+  emailed: z.boolean(),
+  expiresAt: z.string(),
+});
+export type PasswordResetLink = z.infer<typeof PasswordResetLink>;
