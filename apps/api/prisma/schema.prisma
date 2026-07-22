@@ -89,10 +89,6 @@ model User {
    */
   username String? @unique
   passwordHash String
-  /**
-   * AES-256-GCM reversible copy so the admin can look up what the user set: `<iv-hex>:<tag-hex>:<ciphertext-hex>`.
-   */
-  passwordEnc String?
   role Role @default(PUBLIC)
   status UserStatus @default(ACTIVE)
   fname String
