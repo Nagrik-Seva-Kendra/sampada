@@ -3,9 +3,8 @@ import { useUiStore } from "../../stores/uiStore";
 import {
   MP_DISTRICTS,
   formatSession,
-  guidelineFileUrl,
   guidelineSessions,
-  guidelineViewUrl,
+  useGuidelineFileOpener,
   useGuidelineList,
 } from "./useGuideline";
 import { Download, Eye, FileText } from "lucide-react";
@@ -23,6 +22,7 @@ export function GuidelinePage() {
     session: session ? Number(session) : undefined,
   });
   const docs = data ?? [];
+  const openFile = useGuidelineFileOpener();
 
   return (
     <section className="page">
@@ -100,25 +100,29 @@ export function GuidelinePage() {
                     {d.uploadedByName ? " · " + d.uploadedByName : ""}
                   </div>
                 </div>
-                <a
+                <button
+                  type="button"
                   className="doc-btn"
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}
-                  href={guidelineViewUrl(d.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => openFile(d.id).then((url) => window.open(url, "_blank"))}
                 >
                   <Eye size={15} /> {T("View", "देखें")}
-                </a>
-                <a
+                </button>
+                <button
+                  type="button"
                   className="btn-calc"
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}
-                  href={guidelineFileUrl(d.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
+                  onClick={() =>
+                    openFile(d.id).then((url) => {
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.download = d.fileName;
+                      link.click();
+                    })
+                  }
                 >
                   <Download size={15} /> {T("Download", "डाउनलोड करें")}
-                </a>
+                </button>
               </div>
             ))}
           </div>
