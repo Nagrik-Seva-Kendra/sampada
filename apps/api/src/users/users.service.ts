@@ -81,6 +81,23 @@ export class UsersService {
     return ok;
   }
 
+  /** The membership the user acts under at login: their most recent ACTIVE one (null if none yet). */
+  async resolveActiveMembership(userId: string) {
+    return this.prisma.membership.findFirst({
+      where: { userId, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, organizationId: true, role: true },
+    });
+  }
+
+  /** Per-request re-verification that a membership is still ACTIVE (used by the guards). */
+  async getActiveMembership(userId: string, organizationId: string) {
+    return this.prisma.membership.findFirst({
+      where: { userId, organizationId, status: "ACTIVE" },
+      select: { id: true, role: true },
+    });
+  }
+
   /** Set a users password via the reset-link flow and revoke existing sessions. */
   async resetPassword(userId: string, newPassword: string): Promise<void> {
     const existing = await this.prisma.user.findUnique({ where: { id: userId } });

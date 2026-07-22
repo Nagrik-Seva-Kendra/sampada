@@ -1,8 +1,9 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Sse } from "@nestjs/common";
+import { Body, Controller, Get, NotFoundException, Param, Post, Sse, UseInterceptors } from "@nestjs/common";
 import { map, type Observable } from "rxjs";
 import { DeedSelectionInput } from "@sampada/shared";
 import { SampleDeedsService } from "./sample-deeds.service.js";
 import { DeedLiveService } from "./deed-live.service.js";
+import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
 
 /**
  * The party-facing "open this deed" link: no auth, keyed by the deed's own
@@ -16,6 +17,7 @@ import { DeedLiveService } from "./deed-live.service.js";
  * moment it's saved.
  */
 @Controller("public/deeds")
+@UseInterceptors(PublicDeedTenantInterceptor)
 export class PublicDeedsController {
   constructor(
     private readonly service: SampleDeedsService,

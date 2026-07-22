@@ -12,7 +12,8 @@ export class StatsController {
    */
   @Get("deeds-count")
   async deedsCount(): Promise<{ count: number }> {
-    const count = await this.prisma.deedTemplate.count();
+    // Platform-wide total across all orgs -> explicit unscoped bypass.
+    const count = await this.prisma.$unscoped.deedTemplate.count();
     return { count };
   }
 }

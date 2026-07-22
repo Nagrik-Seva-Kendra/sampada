@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Param, Post, UploadedFile, UploadedFiles, UseInterceptors } from "@nestjs/common";
 import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import { DeedDocumentsService, type PartyRole, type PartyType } from "./deed-documents.service.js";
+import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
 
 interface UploadedDoc {
   buffer: Buffer;
@@ -27,6 +28,7 @@ function parsePartyType(raw: unknown): PartyType {
  * already use for this deed, not a separate document store.
  */
 @Controller("public")
+@UseInterceptors(PublicDeedTenantInterceptor)
 export class PublicDeedDocumentsController {
   constructor(private readonly service: DeedDocumentsService) {}
 

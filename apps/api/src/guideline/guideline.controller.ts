@@ -18,6 +18,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request, Response } from "express";
 import { get as httpsGet } from "node:https";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
+import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { GuidelineService } from "./guideline.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -88,6 +89,7 @@ export class GuidelineController {
   ) {}
 
   @Get()
+  @UseGuards(JwtStaffGuard)
   list(@Query("district") district?: string, @Query("session") sessionRaw?: string) {
     const session = sessionRaw ? Number(sessionRaw) : undefined;
     return this.service.list({
@@ -99,6 +101,7 @@ export class GuidelineController {
   /** Public: stream the PDF. Pass ?view=1 to preview inline in the browser tab
    * instead of forcing a download (the default). */
   @Get(":id/file")
+  @UseGuards(JwtStaffGuard)
   async file(
     @Param("id") id: string,
     @Query("view") view: string | undefined,

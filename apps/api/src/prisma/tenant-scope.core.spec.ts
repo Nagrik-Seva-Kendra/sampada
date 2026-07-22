@@ -81,7 +81,7 @@ describe("tenant scope (deny-by-default)", () => {
 
   it("throws on update when the target is not in the caller's org", async () => {
     const h = harness(ORG);
-    h.baseModel.findFirst.mockResolvedValueOnce(null); // target not found in org
+    h.baseModel.findFirst.mockResolvedValueOnce(null as any); // target not found in org
     await expect(
       applyTenantScope({ model: "DeedTemplate", operation: "update", args: { where: { id: "other" }, data: {} }, ...h }),
     ).rejects.toThrow(/not found in the current organization/);

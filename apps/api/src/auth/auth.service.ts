@@ -63,6 +63,8 @@ export class AuthService {
       lname: stored.lname,
       role: stored.role,
     };
+    // Org context for tenant scoping: the users active membership (if any).
+    const membership = await this.users.resolveActiveMembership(stored.id);
     const accessToken = await this.jwt.signAsync(
       {
         sub: stored.id,
@@ -71,6 +73,13 @@ export class AuthService {
         name: `${stored.fname} ${stored.lname}`.trim(),
         tokenVersion: stored.tokenVersion,
         typ: "access",
+        ...(membership
+          ? {
+              organizationId: membership.organizationId,
+              membershipId: membership.id,
+              orgRole: membership.role,
+            }
+          : {}),
       },
       { expiresIn: ACCESS_TTL },
     );

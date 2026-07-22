@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ClsModule } from "nestjs-cls";
 import { HealthController } from "./health/health.controller.js";
 import { StatsController } from "./stats/stats.controller.js";
 import { AuthModule } from "./auth/auth.module.js";
@@ -12,6 +13,9 @@ import { PrismaModule } from "./prisma/prisma.module.js";
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Request-scoped store holding the tenant context (populated by the JWT
+    // guards / public interceptor). mount:true wraps every request.
+    ClsModule.forRoot({ global: true, middleware: { mount: true } }),
     PrismaModule,
     AuthModule,
     DeedsModule,

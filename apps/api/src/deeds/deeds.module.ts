@@ -6,10 +6,11 @@ import { DeedDocumentsService } from "./deed-documents.service.js";
 import { PublicDeedsController } from "./public-deeds.controller.js";
 import { PublicDeedDocumentsController } from "./public-deed-documents.controller.js";
 import { DeedLiveService } from "./deed-live.service.js";
+import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
 
 @Module({
   controllers: [SampleDeedsController, DeedDocumentsController, PublicDeedsController, PublicDeedDocumentsController],
-  providers: [SampleDeedsService, DeedDocumentsService, DeedLiveService],
+  providers: [SampleDeedsService, DeedDocumentsService, DeedLiveService, PublicDeedTenantInterceptor],
   exports: [SampleDeedsService],
 })
 export class DeedsModule {}

@@ -81,8 +81,8 @@ model DeedTemplate {
   createdAt DateTime
   updatedAt DateTime @updatedAt
   formData Json?
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([type])
   @@index([createdById])
@@ -107,8 +107,8 @@ model DeedTemplateRevision {
   editedById String?
   editedByName String?
   createdAt DateTime @default(now())
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([deedId, versionNo])
   @@index([deedId])
@@ -209,7 +209,7 @@ model Party {
    */
   dob String?
   address String?
-  aadhaarNumber String? @unique
+  aadhaarNumber String?
   fileName String?
   mimeType String?
   size Int?
@@ -218,18 +218,20 @@ model Party {
   aadhaarBackMimeType String?
   aadhaarBackSize Int?
   aadhaarBackData Bytes?
-  panNumber String? @unique
+  panNumber String?
   panFileName String?
   panMimeType String?
   panSize Int?
   panData Bytes?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
   deedLinks DeedParty[]
 
   @@index([organizationId])
+  @@unique([organizationId, aadhaarNumber])
+  @@unique([organizationId, panNumber])
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
@@ -242,8 +244,8 @@ model DeedParty {
   partyId String
   role String
   createdAt DateTime @default(now())
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
   party Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
   @@unique([deedId, partyId, role])
@@ -262,8 +264,8 @@ model DeedNaxa {
   size Int
   data Bytes
   createdAt DateTime @default(now())
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([deedId])
   @@index([organizationId, deedId])
@@ -285,8 +287,8 @@ model GuidelineDocument {
   uploadedById String?
   uploadedByName String?
   createdAt DateTime @default(now())
-  organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([createdAt])
   @@index([district, session])
