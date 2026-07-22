@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import type { AuthResponse, AuthUser, LoginInput } from "@sampada/shared";
-import { UsersService, verifyPassword } from "../users/users.service.js";
+import { UsersService } from "../users/users.service.js";
 
 /** ADMIN and EMPLOYEE both authenticate the same way: a User row + scrypt password hash. */
 @Injectable()
@@ -28,7 +28,7 @@ export class AuthService {
   private async tryLogin(input: LoginInput): Promise<AuthUser | null> {
     const stored = await this.users.findByLogin(input.login);
     if (!stored || stored.role !== input.role) return null;
-    if (!verifyPassword(input.password, stored.passwordHash)) return null;
+    if (!(await this.users.verifyCredentials(stored, input.password))) return null;
     if (stored.status === "PENDING") {
       throw new ForbiddenException("Your signup is awaiting admin approval.");
     }

@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { scryptSync, timingSafeEqual } from "node:crypto";
+import { hash as argon2Hash, verify as argon2Verify, Algorithm } from "@node-rs/argon2";
 import type { User } from "@prisma/client";
 import type {
   CreateEmployeeInput,
@@ -62,6 +63,21 @@ const LOGIN_ROLES: Role[] = ["EMPLOYEE", "ADMIN"];
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Verify a login password against the stored hash and, on success, transparently
+   * re-hash a legacy scrypt password to argon2id so no user is ever forced to reset.
+   */
+  async verifyCredentials(user: StoredUser, password: string): Promise<boolean> {
+    const ok = await verifyPassword(password, user.passwordHash);
+    if (ok && isLegacyHash(user.passwordHash)) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hashPassword(password) },
+      });
+    }
+    return ok;
+  }
+
   async list(): Promise<StoredUser[]> {
     const rows = await this.prisma.user.findMany({
       where: { role: { in: STAFF_ROLES } },
@@ -109,7 +125,7 @@ export class UsersService {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("User not found.");
 
-    if (input.password && !verifyPassword(input.currentPassword ?? "", existing.passwordHash)) {
+    if (input.password && !(await verifyPassword(input.currentPassword ?? "", existing.passwordHash))) {
       throw new ForbiddenException("Current password is incorrect.");
     }
 
@@ -134,7 +150,7 @@ export class UsersService {
         ...(email !== undefined ? { email } : {}),
         ...(username !== undefined ? { username } : {}),
         ...(input.password !== undefined
-          ? { passwordHash: hashPassword(input.password) }
+          ? { passwordHash: await hashPassword(input.password) }
           : {}),
       },
     });
@@ -205,7 +221,7 @@ export class UsersService {
     }
 
     if (input.password !== undefined) {
-      data.passwordHash = hashPassword(input.password);
+      data.passwordHash = await hashPassword(input.password);
     }
 
     const row = await this.prisma.user.update({ where: { id }, data });
@@ -292,7 +308,7 @@ export class UsersService {
       data: {
         email,
         username,
-        passwordHash: hashPassword(input.password),
+        passwordHash: await hashPassword(input.password),
         role,
         fname: input.fname,
         lname: input.lname,
@@ -318,15 +334,32 @@ export class UsersService {
   }
 }
 
-function hashPassword(password: string): string {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 32);
-  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+/** Hash a new or changed password with argon2id. */
+export async function hashPassword(password: string): Promise<string> {
+  return argon2Hash(password, { algorithm: Algorithm.Argon2id });
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
+/** True for a legacy scrypt hash ("<salt-hex>:<hash-hex>") — i.e. not yet argon2. */
+export function isLegacyHash(stored: string): boolean {
+  return !stored.startsWith("$argon2");
+}
+
+/**
+ * Verify a password against either an argon2id hash (new) or a legacy scrypt
+ * hash ("<salt-hex>:<hash-hex>"). Returns false on any malformed input rather
+ * than throwing, so a bad stored value can never crash a login.
+ */
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (!isLegacyHash(stored)) {
+    try {
+      return await argon2Verify(stored, password);
+    } catch {
+      return false;
+    }
+  }
   const [saltHex, hashHex] = stored.split(":");
   if (!saltHex || !hashHex) return false;
-  const hash = scryptSync(password, Buffer.from(saltHex, "hex"), 32);
-  return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
+  const expected = Buffer.from(hashHex, "hex");
+  const actual = scryptSync(password, Buffer.from(saltHex, "hex"), 32);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
