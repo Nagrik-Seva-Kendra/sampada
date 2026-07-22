@@ -35,6 +35,34 @@ enum UserStatus {
   INACTIVE
 }
 
+// ─── Multi-tenancy (Phase 1) ──────────────────────────────────────────────
+// Lifecycle of an organization (customer). Distinct from Subscription.status
+// (Phase 3): this gates access to the org itself.
+enum OrgStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+// A person's role *within one organization* (lives on Membership, not User).
+// Replaces the global User.role for tenant purposes. OWNER is billing/ownership;
+// ADMIN manages members + content; EMPLOYEE creates/edits deeds.
+enum OrgRole {
+  OWNER
+  ADMIN
+  EMPLOYEE
+}
+
+// A membership's state within its org. PENDING = join-request/invite awaiting
+// approval; INACTIVE = removed (deactivated, never hard-deleted).
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
 // Draft/example deeds shown on a deed-type's public info page (view/print
 // only) — matches @sampada/shared's SampleDeedItem exactly. `type` and
 // `status` stay plain strings (not enums) because the API validates them via
@@ -53,9 +81,12 @@ model DeedTemplate {
   createdAt DateTime
   updatedAt DateTime @updatedAt
   formData Json?
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([type])
   @@index([createdById])
+  @@index([organizationId, type])
 }
 
 /// Immutable snapshot of a DeedTemplate taken right before each correction
@@ -76,9 +107,12 @@ model DeedTemplateRevision {
   editedById String?
   editedByName String?
   createdAt DateTime @default(now())
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@unique([deedId, versionNo])
   @@index([deedId])
+  @@index([organizationId, deedId])
 }
 
 model User {
@@ -108,8 +142,57 @@ model User {
    * Stored profile-photo filename (under uploads/profile-photos/); null if none.
    */
   photoFileName String?
+  /**
+   * Platform staff (me/my team) — NOT a customer role. Gates the Phase 5
+   * back-office. Independent of any Membership.
+   */
+  isPlatformAdmin Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  memberships Membership[]
+}
+
+/// An organization (customer tenant). Every tenant-scoped row belongs to one.
+/// `nextEmployeeCode` is a per-org counter incremented inside a transaction on
+/// member creation — never count()+1, which races and duplicates.
+model Organization {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  status           OrgStatus @default(TRIALING)
+  joinCode         String    @unique
+  nextEmployeeCode Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  memberships        Membership[]
+  deeds              DeedTemplate[]
+  deedRevisions      DeedTemplateRevision[]
+  parties            Party[]
+  deedParties        DeedParty[]
+  deedNaxas          DeedNaxa[]
+  guidelineDocuments GuidelineDocument[]
+}
+
+/// A user's place in one organization. Carries the role, status, and per-org
+/// employee code that used to live on User (a person may belong to more than
+/// one org). employeeCode is unique *within* an org, not globally.
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgRole
+  status         MemberStatus @default(PENDING)
+  employeeCode   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId, status])
 }
 
 /// A person on deeds (buyer/seller). Their Aadhaar card is stored once here,
@@ -142,7 +225,11 @@ model Party {
   panData Bytes?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
   deedLinks DeedParty[]
+
+  @@index([organizationId])
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
@@ -155,11 +242,14 @@ model DeedParty {
   partyId String
   role String
   createdAt DateTime @default(now())
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
   party Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
   @@unique([deedId, partyId, role])
   @@index([deedId])
   @@index([partyId])
+  @@index([organizationId, deedId])
 }
 
 /// The property map ("naxa") for a deed. Per-deed (not shared); multiple pages
@@ -172,8 +262,11 @@ model DeedNaxa {
   size Int
   data Bytes
   createdAt DateTime @default(now())
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([deedId])
+  @@index([organizationId, deedId])
 }
 
 /// Guideline documents (official circulars/rate PDFs) uploaded by admins via
@@ -192,9 +285,12 @@ model GuidelineDocument {
   uploadedById String?
   uploadedByName String?
   createdAt DateTime @default(now())
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([createdAt])
   @@index([district, session])
+  @@index([organizationId, district, session])
 }
 
 /// Single-use, 1-hour password-reset tokens minted by an admin ("send reset
