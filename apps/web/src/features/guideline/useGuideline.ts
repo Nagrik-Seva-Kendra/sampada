@@ -96,7 +96,7 @@ export function formatSession(year: number): string {
   return `${year}-${year + 1}`;
 }
 
-/** Direct download URL for a guideline document — public, no auth needed. */
+/** Direct download URL for a guideline document — used internally by the authenticated file-opener below. */
 export function guidelineFileUrl(id: string): string {
   return `${import.meta.env.VITE_API_URL ?? ""}/api/v1/guideline-documents/${id}/file`;
 }
@@ -106,7 +106,21 @@ export function guidelineViewUrl(id: string): string {
   return `${guidelineFileUrl(id)}?view=1`;
 }
 
-/** Public: list of guideline documents, optionally filtered by district and/or session. Visible to everyone (no login needed). */
+/**
+ * Fetch a guideline file with the auth token and return a blob URL for
+ * preview/download. The file endpoint is staff-only, so a plain anchor tag
+ * can't reach it -- we fetch the bytes and objectURL them instead.
+ */
+export function useGuidelineFileOpener() {
+  const token = useAuthStore((s) => s.token);
+  return (id: string) =>
+    api
+      .get(`guideline-documents/${id}/file`, { headers: authHeaders(token) })
+      .blob()
+      .then((b) => URL.createObjectURL(b));
+}
+
+/** Staff-only: list of guideline documents, optionally filtered by district and/or session. */
 export function useGuidelineList(filters?: { district?: string; session?: number }) {
   const district = filters?.district;
   const session = filters?.session;
