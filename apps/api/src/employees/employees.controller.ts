@@ -98,10 +98,4 @@ export class EmployeesController {
     return toItem(user);
   }
 
-  /** Admin-only: reveal the password an employee set at signup. */
-  @Get(":id/password")
-  @UseGuards(JwtAdminGuard)
-  async password(@Param("id") id: string): Promise<{ password: string }> {
-    return { password: await this.users.getPassword(id) };
-  }
 }

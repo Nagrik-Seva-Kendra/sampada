@@ -118,11 +118,3 @@ export function useReactivateEmployee() {
   });
 }
 
-/** Admin: reveal the password an employee set at signup (fetched on demand, not preloaded with the list). */
-export function useEmployeePassword() {
-  const token = useAuthStore((s) => s.token);
-  return useMutation<{ password: string }, Error, string>({
-    mutationFn: (id) =>
-      api.get(`employees/${id}/password`, { headers: authHeaders(token) }).json<{ password: string }>(),
-  });
-}

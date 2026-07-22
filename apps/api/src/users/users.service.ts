@@ -1,12 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  scryptSync,
-  timingSafeEqual,
-} from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { User } from "@prisma/client";
 import type {
   CreateEmployeeInput,
@@ -25,8 +18,6 @@ export interface StoredUser {
   username: string | null;
   /** scrypt: `<salt-hex>:<hash-hex>` */
   passwordHash: string;
-  /** AES-256-GCM reversible copy so the admin can look up what the user set: `<iv-hex>:<tag-hex>:<ciphertext-hex>`. */
-  passwordEnc: string;
   role: Role;
   fname: string;
   lname: string;
@@ -47,7 +38,6 @@ function toStoredUser(row: User): StoredUser {
     email: row.email,
     username: row.username,
     passwordHash: row.passwordHash,
-    passwordEnc: row.passwordEnc ?? "",
     role: row.role as Role,
     fname: row.fname,
     lname: row.lname,
@@ -91,16 +81,6 @@ export class UsersService {
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toStoredUser);
-  }
-
-  /** Admin: decrypt the password an employee set at signup (for support/recovery use). */
-  async getPassword(id: string): Promise<string> {
-    const user = await this.findById(id);
-    if (!user) throw new NotFoundException("User not found.");
-    if (!user.passwordEnc) {
-      throw new NotFoundException("No recoverable password stored for this account.");
-    }
-    return decryptPassword(user.passwordEnc);
   }
 
   async findByEmail(email: string): Promise<StoredUser | undefined> {
@@ -154,7 +134,7 @@ export class UsersService {
         ...(email !== undefined ? { email } : {}),
         ...(username !== undefined ? { username } : {}),
         ...(input.password !== undefined
-          ? { passwordHash: hashPassword(input.password), passwordEnc: encryptPassword(input.password) }
+          ? { passwordHash: hashPassword(input.password) }
           : {}),
       },
     });
@@ -226,7 +206,6 @@ export class UsersService {
 
     if (input.password !== undefined) {
       data.passwordHash = hashPassword(input.password);
-      data.passwordEnc = encryptPassword(input.password);
     }
 
     const row = await this.prisma.user.update({ where: { id }, data });
@@ -314,7 +293,6 @@ export class UsersService {
         email,
         username,
         passwordHash: hashPassword(input.password),
-        passwordEnc: encryptPassword(input.password),
         role,
         fname: input.fname,
         lname: input.lname,
@@ -351,32 +329,4 @@ export function verifyPassword(password: string, stored: string): boolean {
   if (!saltHex || !hashHex) return false;
   const hash = scryptSync(password, Buffer.from(saltHex, "hex"), 32);
   return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
-}
-
-/**
- * Reversible AES-256-GCM copy of the password so the admin can look it up.
- * Interim only — a real deployment shouldn't keep recoverable passwords at
- * all; this exists because the admin asked to be able to view what employees
- * set. Key is derived from JWT_SECRET so no extra env var is needed.
- */
-function encKey(): Buffer {
-  const secret = process.env.JWT_SECRET ?? "";
-  return createHash("sha256").update(secret).digest();
-}
-
-function encryptPassword(password: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encKey(), iv);
-  const ciphertext = Buffer.concat([cipher.update(password, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString("hex")}:${tag.toString("hex")}:${ciphertext.toString("hex")}`;
-}
-
-function decryptPassword(stored: string): string {
-  const [ivHex, tagHex, ciphertextHex] = stored.split(":");
-  if (!ivHex || !tagHex || !ciphertextHex) throw new Error("Malformed encrypted password.");
-  const decipher = createDecipheriv("aes-256-gcm", encKey(), Buffer.from(ivHex, "hex"));
-  decipher.setAuthTag(Buffer.from(tagHex, "hex"));
-  const plain = Buffer.concat([decipher.update(Buffer.from(ciphertextHex, "hex")), decipher.final()]);
-  return plain.toString("utf8");
 }

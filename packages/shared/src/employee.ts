@@ -68,7 +68,7 @@ export const UpdateUserInput = z.object({
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
 
-/** Employee as listed to the admin (never exposes the password itself — see the separate reveal endpoint). */
+/** Employee as listed to the admin (passwords are never exposed — hashes are write-only). */
 export const EmployeeItem = z.object({
   id: z.string(),
   employeeCode: z.string().nullable(),

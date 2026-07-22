@@ -98,13 +98,6 @@ export const strings = {
   empViewDetails: { en: "View Details", hi: "विवरण देखें" },
   empHideDetails: { en: "Hide Details", hi: "विवरण छुपाएं" },
   empUsername: { en: "Username", hi: "यूज़रनेम" },
-  empPassword: { en: "Password", hi: "पासवर्ड" },
-  empShowPassword: { en: "Show password", hi: "पासवर्ड दिखाएं" },
-  empHidePassword: { en: "Hide password", hi: "पासवर्ड छुपाएं" },
-  empPasswordFailed: {
-    en: "Couldn't load the password — please retry.",
-    hi: "पासवर्ड लोड नहीं हो सका — पुनः प्रयास करें।",
-  },
   reqActiveEmployees: { en: "Active Employees", hi: "सक्रिय कर्मचारी" },
   reqActiveEmpty: { en: "None yet.", hi: "अभी कोई नहीं।" },
   reqDiscontinue: { en: "Discontinue", hi: "सेवा बंद करें" },

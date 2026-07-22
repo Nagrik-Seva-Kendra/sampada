@@ -12,7 +12,6 @@ import {
   useApproveEmployee,
   useCreateUser,
   useDeactivateEmployee,
-  useEmployeePassword,
   usePendingEmployees,
   useReactivateEmployee,
   useRejectEmployee,
@@ -149,7 +148,7 @@ function RequestsTab({ t }: { t: (k: StringKey) => string }) {
                 </button>
               </div>
             </div>
-            {expandedId === req.id && <StaffDetails id={req.id} username={req.username} t={t} />}
+            {expandedId === req.id && <StaffDetails username={req.username} t={t} />}
           </div>
         ))}
       </div>
@@ -251,7 +250,7 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
                   )}
                 </div>
               </div>
-              {expandedId === u.id && <StaffDetails id={u.id} username={u.username} t={t} />}
+              {expandedId === u.id && <StaffDetails username={u.username} t={t} />}
             </div>
           );
         })}
@@ -263,36 +262,19 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
   );
 }
 
-/** Expandable row: shows the login username and (on demand) the recoverable password. */
+/** Expandable row: shows the login username. Passwords are never recoverable. */
 function StaffDetails({
-  id,
   username,
   t,
 }: {
-  id: string;
   username: string | null;
   t: (k: StringKey) => string;
 }) {
-  const reveal = useEmployeePassword();
-
   return (
     <div className="doc-sub" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
       <div>
         {t("empUsername")}: {username ?? "—"}
       </div>
-      <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
-        <span>
-          {t("empPassword")}: {reveal.data ? reveal.data.password : "••••••••"}
-        </span>
-        <button
-          className="doc-btn"
-          onClick={() => (reveal.data ? reveal.reset() : reveal.mutate(id))}
-          disabled={reveal.isPending}
-        >
-          {reveal.data ? t("empHidePassword") : t("empShowPassword")}
-        </button>
-      </div>
-      {reveal.isError && <p className="modal-error">{t("empPasswordFailed")}</p>}
     </div>
   );
 }
