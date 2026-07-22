@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronDownIcon, ExternalLink, FilePlus2, FileText, MoreVertical } from "lucide-react";
+import { ChevronDownIcon, FilePlus2, FileText, MoreVertical } from "lucide-react";
 import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
@@ -422,15 +422,6 @@ export function AllDeedsPage() {
                               }
                             >
                               <FileText className="size-4 opacity-80" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Legacy deed form"
-                              title={lang === "hi" ? "पुराना डीड फॉर्म खोलें" : "Open legacy deed form"}
-                              onClick={() => window.open(`/legacy-deed-form.html?deedId=${d.id}`, "_blank")}
-                              className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none"
-                            >
-                              <ExternalLink className="size-4 opacity-80" />
                             </button>
                           </div>
                         </td>
