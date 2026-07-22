@@ -80,11 +80,15 @@ function GuardedAllDeedsPage() {
   const role = useAuthStore((s) => s.user?.role);
   return role === "ADMIN" || role === "EMPLOYEE" ? <AllDeedsPage /> : <Navigate to="/" />;
 }
+// Guideline documents are staff-only (the API now guards list + file routes).
+function GuardedGuidelinePage() {
+  return useIsStaff() ? <GuidelinePage /> : <Navigate to="/" />;
+}
 
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuidelinePage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuardedGuidelinePage }),
   // Old route, superseded by the tabbed /team page.
   createRoute({
     getParentRoute: () => rootRoute,
