@@ -11,12 +11,12 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { JwtService } from "@nestjs/jwt";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { Request } from "express";
 import { UpdateProfileInput, type AuthResponse } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "./jwt-staff.guard.js";
+import { AuthService } from "./auth.service.js";
 import { UsersService } from "../users/users.service.js";
 
 type StaffRequest = Request & { user: StaffUser };
@@ -41,7 +41,7 @@ export const PHOTO_DIR =
 export class ProfileController {
   constructor(
     private readonly users: UsersService,
-    private readonly jwt: JwtService,
+    private readonly auth: AuthService,
   ) {}
 
   @Patch()
@@ -104,23 +104,14 @@ export class ProfileController {
     );
   }
 
-  /** Reissue the token so the JWT's embedded name/email stay in sync. */
+  /**
+   * Reissue a full session (access + refresh) so the JWT's embedded name/email
+   * stay in sync and the pair carries the updated tokenVersion — critical after
+   * a password change, which bumps tokenVersion and would otherwise invalidate
+   * the very token we hand back.
+   */
   private async reissue(updated: Awaited<ReturnType<UsersService["updateProfile"]>>) {
-    const user = {
-      id: updated.id,
-      email: updated.email,
-      username: updated.username,
-      fname: updated.fname,
-      lname: updated.lname,
-      role: updated.role,
-    };
-    const accessToken = await this.jwt.signAsync({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      name: `${user.fname} ${user.lname}`.trim(),
-    });
-    return { accessToken, user };
+    return this.auth.issueSession(updated);
   }
 }
 

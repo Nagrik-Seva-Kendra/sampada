@@ -17,8 +17,10 @@ export interface StoredUser {
   email: string;
   /** Login handle the employee sets themselves; null until they do. */
   username: string | null;
-  /** scrypt: `<salt-hex>:<hash-hex>` */
+  /** argon2id hash (legacy rows may still be scrypt "<salt-hex>:<hash-hex>" until first login). */
   passwordHash: string;
+  /** Session-revocation counter; tokens minted at an older value are rejected. */
+  tokenVersion: number;
   role: Role;
   fname: string;
   lname: string;
@@ -39,6 +41,7 @@ function toStoredUser(row: User): StoredUser {
     email: row.email,
     username: row.username,
     passwordHash: row.passwordHash,
+    tokenVersion: row.tokenVersion,
     role: row.role as Role,
     fname: row.fname,
     lname: row.lname,
@@ -150,7 +153,7 @@ export class UsersService {
         ...(email !== undefined ? { email } : {}),
         ...(username !== undefined ? { username } : {}),
         ...(input.password !== undefined
-          ? { passwordHash: await hashPassword(input.password) }
+          ? { passwordHash: await hashPassword(input.password), tokenVersion: { increment: 1 } }
           : {}),
       },
     });
@@ -222,6 +225,7 @@ export class UsersService {
 
     if (input.password !== undefined) {
       data.passwordHash = await hashPassword(input.password);
+      data.tokenVersion = { increment: 1 };
     }
 
     const row = await this.prisma.user.update({ where: { id }, data });
@@ -274,7 +278,11 @@ export class UsersService {
     if (!existing || existing.role !== "EMPLOYEE" || existing.status === "PENDING") {
       throw new NotFoundException("Account not found.");
     }
-    const row = await this.prisma.user.update({ where: { id }, data: { status } });
+    const row = await this.prisma.user.update({
+      where: { id },
+      // Deactivation revokes existing sessions immediately.
+      data: { status, ...(status === "INACTIVE" ? { tokenVersion: { increment: 1 } } : {}) },
+    });
     return toStoredUser(row);
   }
 

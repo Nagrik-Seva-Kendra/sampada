@@ -9,8 +9,11 @@ import { queryClient } from "../lib/queryClient";
  */
 interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   user: AuthUser | null;
-  setSession: (token: string, user: AuthUser) => void;
+  setSession: (token: string, refreshToken: string, user: AuthUser) => void;
+  /** Swap in a rotated token pair after a silent refresh (keeps cached queries). */
+  setTokens: (token: string, refreshToken: string) => void;
   logout: () => void;
 }
 
@@ -18,14 +21,18 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
+      refreshToken: null,
       user: null,
-      setSession: (token, user) => {
+      setSession: (token, refreshToken, user) => {
         queryClient.clear();
-        set({ token, user });
+        set({ token, refreshToken, user });
+      },
+      setTokens: (token, refreshToken) => {
+        set({ token, refreshToken });
       },
       logout: () => {
         queryClient.clear();
-        set({ token: null, user: null });
+        set({ token: null, refreshToken: null, user: null });
       },
     }),
     { name: "nsk-auth" },

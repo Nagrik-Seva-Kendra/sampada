@@ -44,6 +44,14 @@ export type AuthUser = z.infer<typeof AuthUser>;
 
 export const AuthResponse = z.object({
   accessToken: z.string(),
+  /** Long-lived, single-use-by-rotation token for POST /auth/refresh. */
+  refreshToken: z.string(),
   user: AuthUser,
 });
 export type AuthResponse = z.infer<typeof AuthResponse>;
+
+/** Body for POST /auth/refresh — exchanges a valid refresh token for a new pair. */
+export const RefreshInput = z.object({
+  refreshToken: z.string().min(1),
+});
+export type RefreshInput = z.infer<typeof RefreshInput>;

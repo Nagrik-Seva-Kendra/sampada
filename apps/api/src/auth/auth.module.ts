@@ -13,8 +13,9 @@ import { UsersModule } from "../users/users.module.js";
     UsersModule,
     JwtModule.registerAsync({
       global: true, // JwtService available app-wide (guards in other modules)
-      // No token expiry — users stay logged in until they explicitly log
-      // out (session persists in localStorage on the client).
+      // Access tokens are short-lived (expiry set per-sign in AuthService);
+      // refresh tokens (signed with JWT_REFRESH_SECRET) rotate them. This
+      // secret verifies access tokens in the guards.
       useFactory: () => ({
         secret: process.env.JWT_SECRET ?? "dev-only-change-me",
       }),

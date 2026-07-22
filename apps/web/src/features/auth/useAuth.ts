@@ -14,7 +14,7 @@ export function useLogin() {
         throw new Error(await apiErrorMessage(err, "Invalid email or password."));
       }
     },
-    onSuccess: (res) => setSession(res.accessToken, res.user),
+    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
   });
 }
 

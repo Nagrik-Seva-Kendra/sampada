@@ -12,7 +12,7 @@ export function useUpdateProfile() {
       api
         .patch("profile", { headers: authHeaders(token), json: input })
         .json<AuthResponse>(),
-    onSuccess: (res) => setSession(res.accessToken, res.user),
+    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
   });
 }
 
@@ -25,7 +25,7 @@ export function useChangePassword() {
       api
         .patch("profile/password", { headers: authHeaders(token), json: input })
         .json<AuthResponse>(),
-    onSuccess: (res) => setSession(res.accessToken, res.user),
+    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
   });
 }
 
@@ -39,6 +39,6 @@ export function useUploadProfilePhoto() {
       body.append("file", file);
       return api.post("profile/photo", { headers: authHeaders(token), body }).json<AuthResponse>();
     },
-    onSuccess: (res) => setSession(res.accessToken, res.user),
+    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
   });
 }

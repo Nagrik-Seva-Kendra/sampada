@@ -89,6 +89,12 @@ model User {
    */
   username String? @unique
   passwordHash String
+  /**
+   * Bumped to revoke all existing sessions (access + refresh tokens) for this
+   * user — on password change and on deactivation. Tokens carry the version
+   * they were minted at; guards reject any token whose version is stale.
+   */
+  tokenVersion Int @default(0)
   role Role @default(PUBLIC)
   status UserStatus @default(ACTIVE)
   fname String
