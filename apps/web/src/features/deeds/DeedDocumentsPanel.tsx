@@ -118,7 +118,7 @@ async function ocrImageText(file: File, backendOcr?: (f: File) => Promise<string
   }
   const Tesseract = await loadTesseract();
   const input = await preprocessForOcr(file);
-  const { data } = await Tesseract.recognize(input, "eng");
+  const { data } = await Tesseract.recognize(input, "eng+hin");
   return data?.text || "";
 }
 
