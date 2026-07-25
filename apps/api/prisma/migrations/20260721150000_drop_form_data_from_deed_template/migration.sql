@@ -1,0 +1,1 @@
+ALTER TABLE "DeedTemplate" DROP COLUMN IF EXISTS "formData";
