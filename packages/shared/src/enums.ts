@@ -8,6 +8,18 @@ export type Role = z.infer<typeof Role>;
 export const StaffRole = z.enum(["EMPLOYEE", "ADMIN"]);
 export type StaffRole = z.infer<typeof StaffRole>;
 
+/** A member's authorization level within an organization (tenant). Mirrors Prisma's OrgRole enum. */
+export const OrgRole = z.enum(["OWNER", "ADMIN", "EMPLOYEE"]);
+export type OrgRole = z.infer<typeof OrgRole>;
+
+/** Lifecycle status of a Membership row. Mirrors Prisma's MemberStatus enum. */
+export const MemberStatus = z.enum(["PENDING", "ACTIVE", "INACTIVE"]);
+export type MemberStatus = z.infer<typeof MemberStatus>;
+
+/** An organization's billing lifecycle. Mirrors Prisma's OrgStatus enum. */
+export const OrgStatus = z.enum(["TRIALING", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELLED"]);
+export type OrgStatus = z.infer<typeof OrgStatus>;
+
 /** Top-level property categories (mapped from legacy include/*.form.php). */
 export const PropertyType = z.enum([
   "AGRICULTURE",

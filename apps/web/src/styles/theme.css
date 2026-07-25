@@ -1826,3 +1826,309 @@ h3 {
             height: 52px;
      }
 }
+
+/* ---------- full-screen auth (onboarding + login) ---------- */
+.auth-screen {
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg);
+}
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px;
+  background: linear-gradient(160deg, var(--primary) 0%, var(--primary-2) 100%);
+  color: var(--primary-fg);
+}
+.auth-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+}
+.auth-brand-mark svg {
+  flex-shrink: 0;
+}
+.auth-brand-quote {
+  max-width: 380px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.auth-brand-foot {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+}
+.auth-card .kicker {
+  margin-bottom: 8px;
+}
+.auth-card .page-title {
+  margin-bottom: 6px;
+}
+.auth-card-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 22px;
+  line-height: 1.5;
+}
+@media (max-width: 860px) {
+  .auth-screen {
+    grid-template-columns: 1fr;
+  }
+  .auth-brand {
+    display: none;
+  }
+  .auth-panel {
+    padding: 24px 20px;
+  }
+}
+
+/* ---------- dashboard shell (sidebar + content) ---------- */
+.dashboard-shell {
+  display: flex;
+  min-height: 100svh;
+}
+.sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 18px 14px;
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow-y: auto;
+  transition: width 0.18s ease;
+}
+.sidebar.collapsed {
+  width: 72px;
+  padding-left: 10px;
+  padding-right: 10px;
+  align-items: center;
+}
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 6px 14px;
+  width: 100%;
+}
+.sidebar.collapsed .sidebar-top {
+  flex-direction: column-reverse;
+  gap: 10px;
+  padding: 0 0 14px;
+}
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sidebar-collapse-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+}
+.sidebar-brand svg {
+  flex-shrink: 0;
+}
+.sidebar-brand-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-section-label {
+  margin: 16px 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.sidebar.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 10px;
+  width: 44px;
+}
+.sidebar.collapsed .sidebar-nav {
+  align-items: center;
+}
+.sidebar.collapsed .btn-calc {
+  width: 44px !important;
+  padding-left: 0;
+  padding-right: 0;
+}
+.sidebar-link:hover {
+  background: var(--surface-2);
+}
+.sidebar-link.on {
+  background: var(--accent-soft);
+  color: var(--primary);
+}
+.sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.sidebar-spacer {
+  flex: 1;
+}
+.sidebar-content {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .dashboard-shell {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/* ---------- workspace switcher ---------- */
+.ws-switcher {
+  position: relative;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.ws-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.sidebar.collapsed .ws-switcher-trigger {
+  justify-content: center;
+  padding: 8px 0;
+}
+.ws-switcher-trigger:hover {
+  background: var(--surface-2);
+}
+.ws-switcher-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ws-switcher-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-switcher-role {
+  font-size: 11px;
+  color: var(--muted);
+}
+/* Position (fixed/left/bottom/width) is computed in JS from the trigger's
+   rect and set inline — the sidebar's own overflow would otherwise clip a
+   popover this wide, especially in the collapsed rail. */
+.ws-switcher-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  z-index: 40;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ws-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+.ws-switcher-item:hover {
+  background: var(--surface-2);
+}
+.ws-switcher-item.on {
+  background: var(--accent-soft);
+}
+.ws-switcher-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 2px;
+}

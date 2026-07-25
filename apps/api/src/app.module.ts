@@ -8,6 +8,9 @@ import { DeedsModule } from "./deeds/deeds.module.js";
 import { EmployeesModule } from "./employees/employees.module.js";
 import { OtpModule } from "./otp/otp.module.js";
 import { GuidelineModule } from "./guideline/guideline.module.js";
+import { OrganizationsModule } from "./organizations/organizations.module.js";
+import { InvitesModule } from "./invites/invites.module.js";
+import { OwnershipTransfersModule } from "./ownership-transfers/ownership-transfers.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
 
 @Module({
@@ -22,6 +25,9 @@ import { PrismaModule } from "./prisma/prisma.module.js";
     EmployeesModule,
     OtpModule,
     GuidelineModule,
+    OrganizationsModule,
+    InvitesModule,
+    OwnershipTransfersModule,
   ],
   controllers: [HealthController, StatsController],
 })

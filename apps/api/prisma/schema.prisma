@@ -11,9 +11,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Pooled connection (e.g. Neon's PgBouncer endpoint) for the app at runtime.
-  url = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
   // Direct (unpooled) connection for `prisma migrate` — its advisory locks
   // and DDL don't work reliably through transaction-mode pooling. Locally,
   // where there's no pooler, this is just the same value as DATABASE_URL.
@@ -70,19 +70,18 @@ enum MemberStatus {
 // `createdById` is not a User foreign key: legacy-imported rows carry
 // synthetic ids ("legacy", "admin") that don't correspond to real users.
 model DeedTemplate {
-  id String @id
-  type String
-  title String
-  content String @db.Text
-  status String @default("active")
-  createdById String
-  createdByName String
-  createdByRole String?
-  createdAt DateTime
-  updatedAt DateTime @updatedAt
-  formData Json?
+  id             String       @id
+  type           String
+  title          String
+  content        String       @db.Text
+  status         String       @default("active")
+  createdById    String
+  createdByName  String
+  createdByRole  String?
+  createdAt      DateTime
+  updatedAt      DateTime     @updatedAt
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([type])
   @@index([createdById])
@@ -98,17 +97,17 @@ model DeedTemplate {
 /// SampleDeedsService.update() / aiDraft() immediately before the row's
 /// content changes.
 model DeedTemplateRevision {
-  id String @id @default(cuid())
-  deedId String
-  versionNo Int
-  title String
-  content String @db.Text
-  status String
-  editedById String?
-  editedByName String?
-  createdAt DateTime @default(now())
+  id             String       @id @default(cuid())
+  deedId         String
+  versionNo      Int
+  title          String
+  content        String       @db.Text
+  status         String
+  editedById     String?
+  editedByName   String?
+  createdAt      DateTime     @default(now())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([deedId, versionNo])
   @@index([deedId])
@@ -116,40 +115,50 @@ model DeedTemplateRevision {
 }
 
 model User {
-  id String @id @default(cuid())
-  email String @unique
+  id                       String        @id @default(cuid())
+  email                    String        @unique
   /**
    * Login handle the employee sets themselves; null until they do.
    */
-  username String? @unique
-  passwordHash String
+  username                 String?       @unique
+  passwordHash             String
   /**
    * Bumped to revoke all existing sessions (access + refresh tokens) for this
    * user — on password change and on deactivation. Tokens carry the version
    * they were minted at; guards reject any token whose version is stale.
    */
-  tokenVersion Int @default(0)
-  role Role @default(PUBLIC)
-  status UserStatus @default(ACTIVE)
-  fname String
-  lname String
-  mobile String?
+  tokenVersion             Int           @default(0)
+  role                     Role          @default(PUBLIC)
+  status                   UserStatus    @default(ACTIVE)
+  fname                    String
+  lname                    String
+  mobile                   String?
   /**
    * Sequential admin-facing id, e.g. "EMP-0007"; only assigned to EMPLOYEE accounts.
+   * Legacy mirror of Membership.employeeCode — NOT globally unique: uniqueness
+   * is per-org (see Membership.@@unique([organizationId, employeeCode])), so two
+   * different orgs can both have an "EMP-0001".
    */
-  employeeCode String? @unique
+  employeeCode             String?
   /**
    * Stored profile-photo filename (under uploads/profile-photos/); null if none.
    */
-  photoFileName String?
+  photoFileName            String?
   /**
    * Platform staff (me/my team) — NOT a customer role. Gates the Phase 5
    * back-office. Independent of any Membership.
    */
-  isPlatformAdmin Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  memberships Membership[]
+  isPlatformAdmin          Boolean       @default(false)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  memberships              Membership[]
+  /**
+   * Which org this user last acted under — lets login/refresh land back in
+   * the same workspace instead of an arbitrary membership. Nulled if that
+   * org is ever deleted.
+   */
+  lastActiveOrganizationId String?
+  lastActiveOrganization   Organization? @relation("UserLastActiveOrganization", fields: [lastActiveOrganizationId], references: [id], onDelete: SetNull)
 }
 
 /// An organization (customer tenant). Every tenant-scoped row belongs to one.
@@ -162,16 +171,24 @@ model Organization {
   status           OrgStatus @default(TRIALING)
   joinCode         String    @unique
   nextEmployeeCode Int       @default(1)
+  /**
+   * True for the single-member workspace auto-created at onboarding. Drives
+   * UI copy only (e.g. a "Personal" badge) — no access-control difference
+   * from a regular org; a personal org can later gain more members like any
+   * other.
+   */
+  isPersonal       Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  memberships        Membership[]
-  deeds              DeedTemplate[]
-  deedRevisions      DeedTemplateRevision[]
-  parties            Party[]
-  deedParties        DeedParty[]
-  deedNaxas          DeedNaxa[]
-  guidelineDocuments GuidelineDocument[]
+  memberships         Membership[]
+  deeds               DeedTemplate[]
+  deedRevisions       DeedTemplateRevision[]
+  parties             Party[]
+  deedParties         DeedParty[]
+  deedNaxas           DeedNaxa[]
+  guidelineDocuments  GuidelineDocument[]
+  usersLastActiveHere User[]                 @relation("UserLastActiveOrganization")
 }
 
 /// A user's place in one organization. Carries the role, status, and per-org
@@ -200,38 +217,38 @@ model Membership {
 /// so the same card is never uploaded twice. Bytes live in Postgres because the
 /// API host has no persistent disk.
 model Party {
-  id String @id @default(cuid())
-  name String
-  partyType String @default("individual")
+  id                  String       @id @default(cuid())
+  name                String
+  partyType           String       @default("individual")
   /**
    * Date of birth as free text (e.g. "01/01/1990" or just a year), typically
    * OCR'd off the Aadhaar card; optional.
    */
-  dob String?
-  address String?
-  aadhaarNumber String?
-  fileName String?
-  mimeType String?
-  size Int?
-  data Bytes?
+  dob                 String?
+  address             String?
+  aadhaarNumber       String?
+  fileName            String?
+  mimeType            String?
+  size                Int?
+  data                Bytes?
   aadhaarBackFileName String?
   aadhaarBackMimeType String?
-  aadhaarBackSize Int?
-  aadhaarBackData Bytes?
-  panNumber String?
-  panFileName String?
-  panMimeType String?
-  panSize Int?
-  panData Bytes?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
-  deedLinks DeedParty[]
+  aadhaarBackSize     Int?
+  aadhaarBackData     Bytes?
+  panNumber           String?
+  panFileName         String?
+  panMimeType         String?
+  panSize             Int?
+  panData             Bytes?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  deedLinks           DeedParty[]
 
-  @@index([organizationId])
   @@unique([organizationId, aadhaarNumber])
   @@unique([organizationId, panNumber])
+  @@index([organizationId])
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`
@@ -239,14 +256,14 @@ model Party {
 /// `deedId` is the DeedTemplate id, kept as a plain column (the codebase does
 /// not FK to DeedTemplate because of legacy synthetic ids).
 model DeedParty {
-  id String @id @default(cuid())
-  deedId String
-  partyId String
-  role String
-  createdAt DateTime @default(now())
+  id             String       @id @default(cuid())
+  deedId         String
+  partyId        String
+  role           String
+  createdAt      DateTime     @default(now())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
-  party Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  party          Party        @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
   @@unique([deedId, partyId, role])
   @@index([deedId])
@@ -257,15 +274,15 @@ model DeedParty {
 /// The property map ("naxa") for a deed. Per-deed (not shared); multiple pages
 /// allowed. Bytes stored in Postgres for the same persistence reason.
 model DeedNaxa {
-  id String @id @default(cuid())
-  deedId String
-  fileName String
-  mimeType String
-  size Int
-  data Bytes
-  createdAt DateTime @default(now())
+  id             String       @id @default(cuid())
+  deedId         String
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  createdAt      DateTime     @default(now())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([deedId])
   @@index([organizationId, deedId])
@@ -276,19 +293,19 @@ model DeedNaxa {
 /// list/download endpoints are public, only upload/delete require admin auth.
 /// Bytes stored in Postgres for the same persistence reason as Party/DeedNaxa.
 model GuidelineDocument {
-  id String @id @default(cuid())
-  title String
-  district String
-  session Int
-  fileName String
-  mimeType String
-  size Int
-  data Bytes
-  uploadedById String?
+  id             String       @id @default(cuid())
+  title          String
+  district       String
+  session        Int
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  uploadedById   String?
   uploadedByName String?
-  createdAt DateTime @default(now())
+  createdAt      DateTime     @default(now())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([createdAt])
   @@index([district, session])
@@ -308,4 +325,41 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// Single-use, 7-day email invites minted by an org admin/owner to bring
+/// someone in with a chosen role (never OWNER — that's ownership transfer's
+/// job). Only the SHA-256 hash of the raw token is stored. usedAt marks
+/// acceptance; revokedAt marks an admin cancelling it early — both block reuse.
+model Invite {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrgRole
+  tokenHash      String    @unique
+  invitedById    String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, email])
+}
+
+/// Owner-initiated, single-use, 7-day ownership-transfer confirmation link.
+/// The owner's authenticated request to create this IS their confirmation;
+/// the nominee confirms by visiting the link. confirmedAt marks acceptance;
+/// cancelledAt marks the owner cancelling it early — both block reuse.
+model OwnershipTransfer {
+  id             String    @id @default(cuid())
+  organizationId String
+  fromUserId     String
+  toUserId       String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId])
 }

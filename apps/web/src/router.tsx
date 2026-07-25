@@ -5,114 +5,170 @@ import {
   Navigate,
   Outlet,
 } from "@tanstack/react-router";
-import { Nav } from "./features/home/Nav";
-import { Hero } from "./features/home/Hero";
-import { Services } from "./features/home/Services";
-import { OurStory } from "./features/home/OurStory";
-import { Testimonials } from "./features/home/Testimonials";
-import { FAQ } from "./features/home/FAQ";
-import { Footer } from "./features/home/Footer";
-import { WhatsAppFab } from "./features/home/WhatsAppFab";
-import { CallNowFab } from "./features/home/CallNowFab";
-import { DeedsPage } from "./features/deeds/DeedsPage";
-import { DeedDetailPage } from "./features/deeds/DeedDetailPage";
+import { hasPermission } from "@sampada/shared";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
-import { AboutPage } from "./features/about/AboutPage";
-import { ContactPage } from "./features/contact/ContactPage";
-import { ProfilePage } from "./features/profile/ProfilePage";
 import { TeamPage } from "./features/employees/TeamPage";
 import { GuidelinePage } from "./features/guideline/GuidelinePage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
-import { useAuthStore, useIsStaff } from "./stores/authStore";
+import { LoginPage } from "./features/auth/LoginPage";
+import { AcceptInvitePage } from "./features/auth/AcceptInvitePage";
+import { ConfirmOwnershipTransferPage } from "./features/auth/ConfirmOwnershipTransferPage";
+import { OnboardingPage } from "./features/onboarding/OnboardingPage";
+import { DashboardLayout } from "./features/dashboard/DashboardLayout";
+import { SettingsPage } from "./features/dashboard/SettingsPage";
+import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
-  component: () => (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Nav />
-      <div style={{ flex: 1 }}>
-        <Outlet />
-      </div>
-      <Footer />
-      <WhatsAppFab />
-      <CallNowFab />
-    </div>
-  ),
+  component: () => <Outlet />,
   notFoundComponent: () => <Navigate to="/" />,
 });
 
-function HomePage() {
-  return (
-    <>
-      <Hero />
-      <Services />
-      <OurStory />
-      <Testimonials />
-      <FAQ />
-    </>
-  );
+// Deed drafting: own sample deed, or, for ADMIN/EMPLOYEE, anyone's. Full-page
+// editor, deliberately outside the dashboard shell (focused, chromeless).
+function GuardedDeedEditPage() {
+  return useIsStaff() ? <DeedEditPage /> : <Navigate to="/login" />;
 }
 
-// Deeds are staff-only; public users bounce home (also on logout mid-view).
-function GuardedDeedsPage() {
-  return useIsStaff() ? <DeedsPage /> : <Navigate to="/" />;
-}
-function GuardedDeedDetailPage() {
-  return useIsStaff() ? <DeedDetailPage /> : <Navigate to="/" />;
-}
-// Deed drafting: own sample deed, or, for ADMIN/EMPLOYEE, anyone's.
-function GuardedDeedEditPage() {
-  return useIsStaff() ? <DeedEditPage /> : <Navigate to="/" />;
-}
-// Self-service profile is employee-only (admin has no self-edit UI).
-function GuardedProfilePage() {
-  const role = useAuthStore((s) => s.user?.role);
-  return role === "EMPLOYEE" ? <ProfilePage /> : <Navigate to="/" />;
-}
-// Team management (signup requests + user directory + add-user) is admin-only.
-function GuardedTeamPage() {
-  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
-  return isAdmin ? <TeamPage /> : <Navigate to="/" />;
-}
-// "All Deeds" management table (every user's deeds) is admin + employee only.
+const deedEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/deeds/$slug/edit/$id",
+  component: GuardedDeedEditPage,
+});
+
+// Party-facing share link: no auth, keyed by the deed's own id.
+const publicDeedViewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/d/$id",
+  component: PublicDeedViewPage,
+});
+
+const onboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/onboarding",
+  component: OnboardingPage,
+});
+const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: "/login", component: LoginPage });
+// Old org-signup URL — onboarding replaces it (every signup gets a personal workspace by default now).
+const signupRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signup",
+  component: () => <Navigate to="/onboarding" />,
+});
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reset-password",
+  component: ResetPasswordPage,
+});
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accept-invite",
+  component: AcceptInvitePage,
+});
+const confirmOwnershipTransferRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/confirm-ownership-transfer",
+  component: ConfirmOwnershipTransferPage,
+});
+
+// ---------------------------------------------------------------------------
+// Authenticated app shell: sidebar + content, no header/footer. Every route
+// below is a dashboard "page" — the deed editor above is deliberately outside
+// this tree so it can be a focused, full-screen view.
+// ---------------------------------------------------------------------------
+const dashboardLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "dashboard",
+  component: DashboardLayout,
+});
+
 function GuardedAllDeedsPage() {
   const role = useAuthStore((s) => s.user?.role);
-  return role === "ADMIN" || role === "EMPLOYEE" ? <AllDeedsPage /> : <Navigate to="/" />;
+  return role === "ADMIN" || role === "EMPLOYEE" ? <AllDeedsPage /> : <Navigate to="/deeds" />;
 }
-// Guideline documents are staff-only (the API now guards list + file routes).
 function GuardedGuidelinePage() {
-  return useIsStaff() ? <GuidelinePage /> : <Navigate to="/" />;
+  return useIsStaff() ? <GuidelinePage /> : <Navigate to="/deeds" />;
+}
+// Team management is gated by ORG role (members.invite+), not the global login tier —
+// a user can be an OWNER of one org and a plain EMPLOYEE of another.
+function GuardedTeamPage() {
+  const activeOrganization = useActiveOrganization();
+  const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
+  return canManageTeam ? <TeamPage /> : <Navigate to="/deeds" />;
 }
 
+const dashboardIndexRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/",
+  component: () => <Navigate to="/deeds" />,
+});
+const allDeedsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/deeds",
+  component: GuardedAllDeedsPage,
+});
+// Old routes, superseded by the dashboard's /deeds home.
+const allDeedDetailsRedirectRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/all-deed-details",
+  component: () => <Navigate to="/deeds" />,
+});
+const deedTypePickerRedirectRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/deeds/$slug",
+  component: () => <Navigate to="/deeds" />,
+});
+const teamRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/team",
+  component: GuardedTeamPage,
+});
+// Old route, superseded by the tabbed /team page.
+const employeeRequestsRedirectRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/employee-requests",
+  component: () => <Navigate to="/team" />,
+});
+const guidelineRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/guideline",
+  component: GuardedGuidelinePage,
+});
+const settingsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+// Old route, superseded by /settings (now open to every org role, not just employees).
+const profileRedirectRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/profile",
+  component: () => <Navigate to="/settings" />,
+});
+
+const dashboardRoute = dashboardLayoutRoute.addChildren([
+  dashboardIndexRoute,
+  allDeedsRoute,
+  allDeedDetailsRedirectRoute,
+  deedTypePickerRedirectRoute,
+  teamRoute,
+  employeeRequestsRedirectRoute,
+  guidelineRoute,
+  settingsRoute,
+  profileRedirectRoute,
+]);
+
 const routes = [
-  createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/team", component: GuardedTeamPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/guideline", component: GuardedGuidelinePage }),
-  // Old route, superseded by the tabbed /team page.
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/employee-requests",
-    component: () => <Navigate to="/team" />,
-  }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/all-deed-details", component: GuardedAllDeedsPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/profile", component: GuardedProfilePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/deeds", component: GuardedDeedsPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug", component: GuardedDeedDetailPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/deeds/$slug/edit/$id", component: GuardedDeedEditPage }),
-  // Party-facing share link: no auth, keyed by the deed's own id. Deliberately
-  // outside the staff-only /deeds tree and its Guarded* wrappers above.
-  createRoute({ getParentRoute: () => rootRoute, path: "/d/$id", component: PublicDeedViewPage }),
-  // Old e-Registry URL, feature replaced by the Deeds section.
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/eregistry",
-    component: () => <Navigate to="/deeds" />,
-  }),
-  // Public: admin-issued password reset link lands here (?token=...).
-  createRoute({ getParentRoute: () => rootRoute, path: "/reset-password", component: ResetPasswordPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/about", component: AboutPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/contact", component: ContactPage }),
+  deedEditRoute,
+  publicDeedViewRoute,
+  onboardingRoute,
+  loginRoute,
+  signupRedirectRoute,
+  resetPasswordRoute,
+  acceptInviteRoute,
+  confirmOwnershipTransferRoute,
+  dashboardRoute,
 ];
 
 export const router = createRouter({

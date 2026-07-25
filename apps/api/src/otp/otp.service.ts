@@ -51,6 +51,7 @@ export class OtpService {
     }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    console.log(`[TEMP-DEBUG otp] ${key} -> ${code}`); // TODO: remove after browser testing
     this.records.set(key, {
       code,
       expiresAt: Date.now() + OTP_TTL_MS,

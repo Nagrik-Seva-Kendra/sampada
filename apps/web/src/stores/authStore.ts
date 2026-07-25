@@ -55,3 +55,8 @@ export function useCanDeleteDeeds(): boolean {
   const role = useAuthStore((s) => s.user?.role);
   return role === "ADMIN";
 }
+
+/** The org the current session acts under (null only if the user has no active membership). */
+export function useActiveOrganization() {
+  return useAuthStore((s) => s.user?.activeOrganization ?? null);
+}

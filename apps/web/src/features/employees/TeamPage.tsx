@@ -10,17 +10,23 @@ import { apiErrorMessage } from "../../lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useApproveEmployee,
+  useCancelOwnershipTransfer,
+  useCreateInvite,
+  useCreateOwnershipTransfer,
   useCreateUser,
-  useDeactivateEmployee,
+  useDeactivateUser,
+  useInvites,
+  useOwnershipTransfers,
   usePendingEmployees,
-  useReactivateEmployee,
+  useReactivateUser,
   useRejectEmployee,
+  useRevokeInvite,
   useSendResetLink,
   useStaffList,
   useUpdateUser,
 } from "./useEmployees";
 
-type Tab = "requests" | "users";
+type Tab = "requests" | "users" | "invites" | "ownership";
 
 /** Admin only: signup approval queue (Requests) + the full staff directory with an Add-User form (User Management). */
 export function TeamPage() {
@@ -59,9 +65,35 @@ export function TeamPage() {
           >
             {t("teamTabUsers")}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "invites"}
+            className={tab === "invites" ? "on" : ""}
+            onClick={() => setTab("invites")}
+          >
+            {t("teamTabInvites")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "ownership"}
+            className={tab === "ownership" ? "on" : ""}
+            onClick={() => setTab("ownership")}
+          >
+            {t("teamTabOwnership")}
+          </button>
         </div>
 
-        {tab === "requests" ? <RequestsTab t={t} /> : <UsersTab t={t} />}
+        {tab === "requests" ? (
+          <RequestsTab t={t} />
+        ) : tab === "users" ? (
+          <UsersTab t={t} />
+        ) : tab === "invites" ? (
+          <InvitesTab t={t} />
+        ) : (
+          <OwnershipTab t={t} />
+        )}
       </div>
     </section>
   );
@@ -160,8 +192,8 @@ function RequestsTab({ t }: { t: (k: StringKey) => string }) {
 /** The full staff directory (employees + admins) plus the Add-User entry point. */
 function UsersTab({ t }: { t: (k: StringKey) => string }) {
   const staff = useStaffList();
-  const deactivate = useDeactivateEmployee();
-  const reactivate = useReactivateEmployee();
+  const deactivate = useDeactivateUser();
+  const reactivate = useReactivateUser();
   const selfId = useAuthStore((s) => s.user?.id);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -238,13 +270,13 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
                   <button className="doc-btn" onClick={() => setEditing(u)}>
                     {t("editUserEdit")}
                   </button>
-                  {/* Only employee services can be discontinued; admins stay active, and you can't discontinue yourself. */}
-                  {isEmployee && !isSelf && u.status === "ACTIVE" && (
+                  {/* Any staff member's services can be discontinued (employee, admin, or owner) — except your own. */}
+                  {!isSelf && u.status === "ACTIVE" && (
                     <button className="doc-btn danger" onClick={() => onDeactivate(u.id)} disabled={deactivate.isPending}>
                       {t("reqDiscontinue")}
                     </button>
                   )}
-                  {isEmployee && u.status === "INACTIVE" && (
+                  {u.status === "INACTIVE" && (
                     <button className="doc-btn" onClick={() => reactivate.mutate(u.id)} disabled={reactivate.isPending}>
                       {t("reqReactivate")}
                     </button>
@@ -259,6 +291,235 @@ function UsersTab({ t }: { t: (k: StringKey) => string }) {
 
       {addOpen && <AddUserModal t={t} onClose={() => setAddOpen(false)} />}
       {editing && <EditUserModal t={t} user={editing} onClose={() => setEditing(null)} />}
+    </>
+  );
+}
+
+/** Invite someone by email to join with a chosen role; list and revoke live invites. */
+function InvitesTab({ t }: { t: (k: StringKey) => string }) {
+  const invites = useInvites();
+  const create = useCreateInvite();
+  const revoke = useRevokeInvite();
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<StaffRole>("EMPLOYEE");
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    create.mutate(
+      { email: email.trim(), role },
+      {
+        onSuccess: () => { setEmail(""); setCopied(false); },
+        onError: async (err) => setError(await apiErrorMessage(err, t("reqActionFailed"))),
+      },
+    );
+  }
+
+  function onRevoke(id: string) {
+    if (window.confirm(t("inviteRevokeConfirm"))) revoke.mutate(id);
+  }
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable — the URL is visible for manual copy anyway.
+    }
+  }
+
+  return (
+    <>
+      <form onSubmit={onCreate} className="modal-form" style={{ marginTop: 16, maxWidth: 480 }}>
+        <div className="form-grid">
+          <label className="modal-field">
+            {t("inviteEmailLabel")}
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </label>
+          <label className="modal-field">
+            {t("inviteRoleLabel")}
+            <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+              <option value="EMPLOYEE">{t("teamRoleEmployee")}</option>
+              <option value="ADMIN">{t("teamRoleAdmin")}</option>
+            </select>
+          </label>
+        </div>
+        {error && <p className="modal-error">{error}</p>}
+        <button className="btn-calc modal-submit" type="submit" disabled={create.isPending || !email.trim()}>
+          {create.isPending ? "…" : t("inviteCreateSubmit")}
+        </button>
+      </form>
+
+      {create.data && (
+        <div className="doc-sub" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              readOnly
+              value={create.data.inviteUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button className="doc-btn" onClick={() => copy(create.data!.inviteUrl)}>
+              {copied ? t("inviteLinkCopied") : t("inviteLinkCopy")}
+            </button>
+          </div>
+          <small>{create.data.emailed ? t("inviteLinkEmailed") : t("inviteLinkNotEmailed")}</small>
+        </div>
+      )}
+
+      {invites.isLoading && <SkeletonRows />}
+
+      {!invites.isLoading && (invites.data ?? []).length === 0 && (
+        <p className="doc-empty">{t("inviteEmpty")}</p>
+      )}
+
+      <div className="doc-list" style={{ marginTop: 16 }}>
+        {(invites.data ?? []).map((inv) => (
+          <div className="doc" key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="doc-meta">
+              <div className="doc-name">
+                {inv.email}
+                <span className={"team-role " + (inv.role === "EMPLOYEE" ? "emp" : "adm")} style={{ marginLeft: 8 }}>
+                  {t(inv.role === "EMPLOYEE" ? "teamRoleEmployee" : "teamRoleAdmin")}
+                </span>
+              </div>
+              <div className="doc-sub">
+                {t("inviteCreatedOn")} {new Date(inv.createdAt).toLocaleDateString()} ·{" "}
+                {t("inviteExpiresOn")} {new Date(inv.expiresAt).toLocaleDateString()}
+              </div>
+            </div>
+            <div className="doc-actions">
+              <button className="doc-btn danger" onClick={() => onRevoke(inv.id)} disabled={revoke.isPending}>
+                {t("inviteRevoke")}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Nominate an existing active admin as the new owner; list and cancel a live
+ * transfer. The server enforces that only the real Owner can use this — every
+ * Admin sees the tab, but a non-Owner gets a clear permission error on submit
+ * (the web app has no client-side signal distinguishing Owner from Admin).
+ */
+function OwnershipTab({ t }: { t: (k: StringKey) => string }) {
+  const staff = useStaffList();
+  const transfers = useOwnershipTransfers();
+  const create = useCreateOwnershipTransfer();
+  const cancel = useCancelOwnershipTransfer();
+  const selfId = useAuthStore((s) => s.user?.id);
+  const [toUserId, setToUserId] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const admins = (staff.data ?? []).filter((u) => u.role === "ADMIN" && u.status === "ACTIVE" && u.id !== selfId);
+
+  function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!toUserId) return;
+    create.mutate(
+      { toUserId },
+      {
+        onSuccess: () => setCopied(false),
+        onError: async (err) => setError(await apiErrorMessage(err, t("reqActionFailed"))),
+      },
+    );
+  }
+
+  function onCancel(id: string) {
+    if (window.confirm(t("transferCancelConfirm"))) cancel.mutate(id);
+  }
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable — the URL is visible for manual copy anyway.
+    }
+  }
+
+  return (
+    <>
+      <form onSubmit={onCreate} className="modal-form" style={{ marginTop: 16, maxWidth: 480 }}>
+        <label className="modal-field">
+          {t("transferNomineeLabel")}
+          <select value={toUserId} onChange={(e) => setToUserId(e.target.value)} required>
+            <option value="" disabled>
+              {t("transferNomineePlaceholder")}
+            </option>
+            {admins.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.fname} {a.lname} ({a.email})
+              </option>
+            ))}
+          </select>
+        </label>
+        {error && <p className="modal-error">{error}</p>}
+        <button className="btn-calc modal-submit" type="submit" disabled={create.isPending || !toUserId}>
+          {create.isPending ? "…" : t("transferCreateSubmit")}
+        </button>
+      </form>
+
+      {create.data && (
+        <div className="doc-sub" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              readOnly
+              value={create.data.transferUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button className="doc-btn" onClick={() => copy(create.data!.transferUrl)}>
+              {copied ? t("inviteLinkCopied") : t("inviteLinkCopy")}
+            </button>
+          </div>
+          <small>{create.data.emailed ? t("inviteLinkEmailed") : t("inviteLinkNotEmailed")}</small>
+        </div>
+      )}
+
+      {transfers.isLoading && <SkeletonRows />}
+
+      {!transfers.isLoading && (transfers.data ?? []).length === 0 && (
+        <p className="doc-empty">{t("transferEmpty")}</p>
+      )}
+
+      <div className="doc-list" style={{ marginTop: 16 }}>
+        {(transfers.data ?? []).map((tr) => {
+          const nominee = (staff.data ?? []).find((u) => u.id === tr.toUserId);
+          return (
+            <div className="doc" key={tr.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="doc-meta">
+                <div className="doc-name">{nominee ? `${nominee.fname} ${nominee.lname}` : tr.toUserId}</div>
+                <div className="doc-sub">
+                  {t("inviteCreatedOn")} {new Date(tr.createdAt).toLocaleDateString()} ·{" "}
+                  {t("inviteExpiresOn")} {new Date(tr.expiresAt).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="doc-actions">
+                <button className="doc-btn danger" onClick={() => onCancel(tr.id)} disabled={cancel.isPending}>
+                  {t("transferCancel")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

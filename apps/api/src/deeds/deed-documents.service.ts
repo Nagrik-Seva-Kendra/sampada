@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 
 export type PartyRole = "buyer" | "seller";
 export type PartyType = "individual" | "company";
@@ -371,7 +372,7 @@ export class DeedDocumentsService {
         const name = (input.name ?? "").trim();
         if (!name) throw new BadRequestException("Name is required for a new person.");
         const created = await this.prisma.party.create({
-          data: {
+          data: tenantCreateData<Prisma.PartyUncheckedCreateInput>({
             name,
             partyType,
             dob: input.dob?.trim() || null,
@@ -390,7 +391,7 @@ export class DeedDocumentsService {
             panMimeType: input.panFile ? (input.panFile.mimetype ?? "application/octet-stream") : null,
             panSize: input.panFile ? input.panFile.buffer.length : null,
             panData: input.panFile ? (input.panFile.buffer as unknown as PartyBytes) : null,
-          },
+          }),
           select: { id: true },
         });
         resolvedPartyId = created.id;
@@ -412,7 +413,11 @@ export class DeedDocumentsService {
     }
 
     const link = await this.prisma.deedParty.create({
-      data: { deedId: input.deedId, partyId: resolvedPartyId, role: input.role },
+      data: tenantCreateData<Prisma.DeedPartyUncheckedCreateInput>({
+        deedId: input.deedId,
+        partyId: resolvedPartyId,
+        role: input.role,
+      }),
       select: { id: true, role: true, party: { select: PARTY_META } },
     });
     return { linkId: link.id, role: link.role as PartyRole, party: toPartyMeta(link.party) };
@@ -544,13 +549,13 @@ export class DeedDocumentsService {
 
   async addNaxa(input: { deedId: string; file: UploadedDoc }): Promise<NaxaMeta> {
     const row = await this.prisma.deedNaxa.create({
-      data: {
+      data: tenantCreateData<Prisma.DeedNaxaUncheckedCreateInput>({
         deedId: input.deedId,
         fileName: input.file.originalname ?? "naxa",
         mimeType: input.file.mimetype ?? "application/octet-stream",
         size: input.file.buffer.length,
         data: input.file.buffer as unknown as NaxaBytes,
-      },
+      }),
       select: { id: true, deedId: true, fileName: true, mimeType: true, size: true, createdAt: true },
     });
     return {

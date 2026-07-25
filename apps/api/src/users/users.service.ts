@@ -1,6 +1,13 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 import { hash as argon2Hash, verify as argon2Verify, Algorithm } from "@node-rs/argon2";
+import { ClsService } from "nestjs-cls";
 import type { User } from "@prisma/client";
 import type {
   CreateEmployeeInput,
@@ -11,6 +18,11 @@ import type {
   UpdateUserInput,
 } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { requireTenantContext } from "../tenant/current-tenant.js";
+import type { TenantContext } from "../tenant/tenant-context.js";
+import { LastOwnerViolationError } from "../organizations/organization-invariants.core.js";
+import { assertOrgKeepsActiveOwner } from "../organizations/organization-invariants.js";
+import { nextEmployeeCodeTx } from "../organizations/employee-code.js";
 
 export interface StoredUser {
   id: string;
@@ -35,7 +47,7 @@ export interface StoredUser {
   employeeCode: string | null;
 }
 
-function toStoredUser(row: User): StoredUser {
+export function toStoredUser(row: User): StoredUser {
   return {
     id: row.id,
     email: row.email,
@@ -64,7 +76,24 @@ const LOGIN_ROLES: Role[] = ["EMPLOYEE", "ADMIN"];
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cls: ClsService,
+  ) {}
+
+  /**
+   * The caller's full tenant context. Every call site that uses this is
+   * behind JwtAdminGuard, which populates the CLS tenant context before the
+   * controller method runs — a missing context here is a genuine bug state,
+   * not a normal caller path.
+   */
+  private requireTenant(): TenantContext {
+    return requireTenantContext(this.cls);
+  }
+
+  private requireOrgId(): string {
+    return this.requireTenant().organizationId;
+  }
 
   /**
    * Verify a login password against the stored hash and, on success, transparently
@@ -82,20 +111,51 @@ export class UsersService {
   }
 
   /** The membership the user acts under at login: their most recent ACTIVE one (null if none yet). */
-  async resolveActiveMembership(userId: string) {
+  /**
+   * Which org a session should act under. Tries, in order: an explicit
+   * preference (e.g. the org the caller just switched/created), then
+   * whichever org the user was last active in, then falls back to their
+   * most-recently-created active membership. Returning org name/slug/etc
+   * inline so callers (issueSession) don't need a second query.
+   */
+  async resolveActiveMembership(userId: string, preferredOrganizationId?: string) {
+    const select = {
+      id: true,
+      organizationId: true,
+      role: true,
+      organization: { select: { name: true, slug: true, status: true } },
+    } as const;
+
+    if (preferredOrganizationId) {
+      const preferred = await this.prisma.membership.findFirst({
+        where: { userId, organizationId: preferredOrganizationId, status: "ACTIVE" },
+        select,
+      });
+      if (preferred) return preferred;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastActiveOrganizationId: true },
+    });
+    if (user?.lastActiveOrganizationId) {
+      const lastActive = await this.prisma.membership.findFirst({
+        where: { userId, organizationId: user.lastActiveOrganizationId, status: "ACTIVE" },
+        select,
+      });
+      if (lastActive) return lastActive;
+    }
+
     return this.prisma.membership.findFirst({
       where: { userId, status: "ACTIVE" },
       orderBy: { createdAt: "desc" },
-      select: { id: true, organizationId: true, role: true },
+      select,
     });
   }
 
-  /** Per-request re-verification that a membership is still ACTIVE (used by the guards). */
-  async getActiveMembership(userId: string, organizationId: string) {
-    return this.prisma.membership.findFirst({
-      where: { userId, organizationId, status: "ACTIVE" },
-      select: { id: true, role: true },
-    });
+  /** Persist which org a session is acting under, so refresh/next-login lands back there. */
+  async setLastActiveOrganization(userId: string, organizationId: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { lastActiveOrganizationId: organizationId } });
   }
 
   /** Set a users password via the reset-link flow and revoke existing sessions. */
@@ -108,9 +168,19 @@ export class UsersService {
     });
   }
 
+  /**
+   * Scoped to the caller's org — a user with only a membership elsewhere must
+   * never show up here. Matches ACTIVE and INACTIVE memberships (not PENDING,
+   * which belongs in the Requests tab) so a deactivated member still shows up
+   * — as discontinued — instead of disappearing from the list entirely.
+   */
   async list(): Promise<StoredUser[]> {
+    const organizationId = this.requireOrgId();
     const rows = await this.prisma.user.findMany({
-      where: { role: { in: STAFF_ROLES } },
+      where: {
+        role: { in: STAFF_ROLES },
+        memberships: { some: { organizationId, status: { in: ["ACTIVE", "INACTIVE"] } } },
+      },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toStoredUser);
@@ -120,10 +190,18 @@ export class UsersService {
    * Admin "User Management" tab: every approved staff account — employees AND
    * admins — so admin-created admin logins show up too. Excludes PENDING
    * self-signups (those live in the Requests tab via listPendingEmployees).
+   * Scoped to the caller's org; matches ACTIVE and INACTIVE memberships so a
+   * deactivated member still shows up as discontinued, not gone.
    */
   async listStaff(): Promise<StoredUser[]> {
+    const organizationId = this.requireOrgId();
     const rows = await this.prisma.user.findMany({
-      where: { role: { in: LOGIN_ROLES }, status: { in: ["ACTIVE", "INACTIVE"] } },
+      where: {
+        role: { in: LOGIN_ROLES },
+        status: { in: ["ACTIVE", "INACTIVE"] },
+        // Membership.status, not User.status above — same enum values, different field.
+        memberships: { some: { organizationId, status: { in: ["ACTIVE", "INACTIVE"] } } },
+      },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toStoredUser);
@@ -242,11 +320,30 @@ export class UsersService {
     if (input.lname !== undefined) data.lname = input.lname;
     if (input.phone !== undefined) data.mobile = input.phone;
 
-    if (input.role !== undefined && input.role !== existing.role) {
-      data.role = input.role;
-      // Employees carry a sequential code; assign one if promoting an admin who lacks it.
-      if (input.role === "EMPLOYEE" && !existing.employeeCode) {
-        data.employeeCode = await this.nextEmployeeCode();
+    // Resolved whenever a role is submitted at all — not just when it differs
+    // from existing.role (User.role), because an Owner's User.role is already
+    // "ADMIN" (only Membership.role says OWNER), so diffing against User.role
+    // alone would treat "demote this Owner to ADMIN" as a no-op and silently
+    // do nothing. Membership.role — the field that actually drives org-level
+    // authorization (the permission matrix, the last-owner invariant) — is
+    // the authoritative source for "did the role actually change." Doesn't
+    // fully close the broader gap that adminUpdateUser has no cross-org guard
+    // for its other fields — left for a future hardening pass.
+    let membership: { id: string; role: "OWNER" | "ADMIN" | "EMPLOYEE"; employeeCode: string | null } | null = null;
+    let organizationId: string | undefined;
+    let newRole: Extract<Role, "EMPLOYEE" | "ADMIN"> | undefined;
+    if (input.role !== undefined) {
+      organizationId = this.requireOrgId();
+      membership = await this.prisma.membership.findFirst({
+        where: { userId: id, organizationId, status: "ACTIVE" },
+        select: { id: true, role: true, employeeCode: true },
+      });
+      if (!membership) throw new NotFoundException("User not found.");
+      if (input.role !== existing.role) {
+        data.role = input.role;
+      }
+      if (input.role !== membership.role) {
+        newRole = input.role;
       }
     }
 
@@ -255,8 +352,29 @@ export class UsersService {
       data.tokenVersion = { increment: 1 };
     }
 
-    const row = await this.prisma.user.update({ where: { id }, data });
-    return toStoredUser(row);
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        if (membership && newRole !== undefined) {
+          // membership.role === "OWNER" here always means a demotion away from
+          // OWNER (newRole is StaffRole, EMPLOYEE|ADMIN only, never "OWNER" itself).
+          if (membership.role === "OWNER") {
+            await assertOrgKeepsActiveOwner(tx, organizationId!);
+          }
+          // Employees carry a sequential code; assign one if promoting into EMPLOYEE who lacks it.
+          let employeeCode = membership.employeeCode;
+          if (newRole === "EMPLOYEE" && !employeeCode) {
+            employeeCode = await nextEmployeeCodeTx(tx, organizationId!);
+            data.employeeCode = employeeCode;
+          }
+          await tx.membership.update({ where: { id: membership.id }, data: { role: newRole, employeeCode } });
+        }
+        return tx.user.update({ where: { id }, data });
+      });
+      return toStoredUser(row);
+    } catch (err) {
+      if (err instanceof LastOwnerViolationError) throw new ConflictException(err.message);
+      throw err;
+    }
   }
 
   /** Public self-signup: stays PENDING until the admin approves it. */
@@ -264,10 +382,15 @@ export class UsersService {
     return this.createStaff(input, "PENDING");
   }
 
-  /** Admin: list employee signups awaiting approval. */
+  /** Admin: list employee signups awaiting approval. Scoped to the caller's org. */
   async listPendingEmployees(): Promise<StoredUser[]> {
+    const organizationId = this.requireOrgId();
     const rows = await this.prisma.user.findMany({
-      where: { role: "EMPLOYEE", status: "PENDING" },
+      where: {
+        role: "EMPLOYEE",
+        status: "PENDING",
+        memberships: { some: { organizationId, status: "PENDING" } },
+      },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toStoredUser);
@@ -277,7 +400,15 @@ export class UsersService {
   async approveEmployee(id: string): Promise<StoredUser> {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing || existing.role !== "EMPLOYEE") throw new NotFoundException("Request not found.");
-    const row = await this.prisma.user.update({ where: { id }, data: { status: "ACTIVE" } });
+    const organizationId = this.requireOrgId();
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.membership.updateMany({
+        where: { userId: id, organizationId, status: "PENDING" },
+        data: { status: "ACTIVE" },
+      });
+      if (updated.count === 0) throw new NotFoundException("Request not found.");
+      return tx.user.update({ where: { id }, data: { status: "ACTIVE" } });
+    });
     return toStoredUser(row);
   }
 
@@ -287,43 +418,71 @@ export class UsersService {
     if (!existing || existing.role !== "EMPLOYEE" || existing.status !== "PENDING") {
       throw new NotFoundException("Request not found.");
     }
-    await this.prisma.user.delete({ where: { id } });
+    const organizationId = this.requireOrgId();
+    // Membership.userId -> User is ON DELETE RESTRICT: the membership must go first.
+    await this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.membership.deleteMany({ where: { userId: id, organizationId, status: "PENDING" } });
+      if (deleted.count === 0) throw new NotFoundException("Request not found.");
+      await tx.user.delete({ where: { id } });
+    });
   }
 
-  /** Admin: discontinue an employee's services — blocks login, keeps the record (reversible). */
-  async deactivateEmployee(id: string): Promise<StoredUser> {
-    return this.setEmployeeStatus(id, "INACTIVE");
+  /** Admin: discontinue any staff member's services (employee, admin, or owner) — blocks login, keeps the record (reversible). */
+  async deactivateMember(id: string): Promise<StoredUser> {
+    return this.setMemberStatus(id, "INACTIVE");
   }
 
-  /** Admin: restore a discontinued employee's access. */
-  async reactivateEmployee(id: string): Promise<StoredUser> {
-    return this.setEmployeeStatus(id, "ACTIVE");
+  /** Admin: restore a discontinued staff member's access. */
+  async reactivateMember(id: string): Promise<StoredUser> {
+    return this.setMemberStatus(id, "ACTIVE");
   }
 
-  private async setEmployeeStatus(id: string, status: "ACTIVE" | "INACTIVE"): Promise<StoredUser> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.role !== "EMPLOYEE" || existing.status === "PENDING") {
+  /**
+   * Keeps User.status and this org's Membership.status in sync (every user
+   * has exactly one org today, so this is safe; AuthService.tryLogin reads
+   * User.status for its clean "services discontinued" rejection at login —
+   * if only Membership flipped, a removed user could still log in with no
+   * org claims in their token instead of getting a clean rejection).
+   */
+  private async setMemberStatus(id: string, status: "ACTIVE" | "INACTIVE"): Promise<StoredUser> {
+    const tenant = this.requireTenant();
+    if (status === "INACTIVE" && id === tenant.userId) {
+      throw new ForbiddenException("You cannot deactivate your own account.");
+    }
+
+    const membership = await this.prisma.membership.findFirst({
+      where: { userId: id, organizationId: tenant.organizationId },
+    });
+    if (!membership || membership.status === "PENDING") {
       throw new NotFoundException("Account not found.");
     }
-    const row = await this.prisma.user.update({
-      where: { id },
-      // Deactivation revokes existing sessions immediately.
-      data: { status, ...(status === "INACTIVE" ? { tokenVersion: { increment: 1 } } : {}) },
-    });
-    return toStoredUser(row);
+
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        if (status === "INACTIVE" && membership.role === "OWNER") {
+          await assertOrgKeepsActiveOwner(tx, tenant.organizationId);
+        }
+        await tx.membership.update({ where: { id: membership.id }, data: { status } });
+        // Deactivation revokes existing sessions immediately.
+        return tx.user.update({
+          where: { id },
+          data: { status, ...(status === "INACTIVE" ? { tokenVersion: { increment: 1 } } : {}) },
+        });
+      });
+      return toStoredUser(row);
+    } catch (err) {
+      if (err instanceof LastOwnerViolationError) throw new ConflictException(err.message);
+      throw err;
+    }
   }
 
-  private async createStaff(
-    input: CreateEmployeeInput | EmployeeSignupInput | CreateUserInput,
-    status: "PENDING" | "ACTIVE",
-    role: Extract<Role, "EMPLOYEE" | "ADMIN"> = "EMPLOYEE",
-  ): Promise<StoredUser> {
-    const email = input.email.trim().toLowerCase();
-    const username =
-      "username" in input && input.username ? input.username.trim().toLowerCase() : null;
-
-    // Clash checks span every staff account (employees + admins) so an
-    // admin-created login can never collide with an existing one.
+  /**
+   * Throws if email/username already belongs to any staff account (EMPLOYEE|ADMIN),
+   * platform-wide — an admin-created or self-signed-up login can never collide
+   * with an existing one, regardless of which org it's joining. Shared by
+   * createStaff and OrganizationsService.signup.
+   */
+  async assertStaffLoginAvailable(email: string, username: string | null): Promise<void> {
     const emailClash = await this.prisma.user.findFirst({
       where: { email, role: { in: LOGIN_ROLES } },
     });
@@ -335,38 +494,68 @@ export class UsersService {
       });
       if (usernameClash) throw new ConflictException("That username is already taken.");
     }
+  }
 
-    // Sequential EMP-code identifies employees only; admins don't get one.
-    const employeeCode = role === "EMPLOYEE" ? await this.nextEmployeeCode() : null;
+  private async createStaff(
+    input: CreateEmployeeInput | EmployeeSignupInput | CreateUserInput,
+    status: "PENDING" | "ACTIVE",
+    role: Extract<Role, "EMPLOYEE" | "ADMIN"> = "EMPLOYEE",
+  ): Promise<StoredUser> {
+    const email = input.email.trim().toLowerCase();
+    const username =
+      "username" in input && input.username ? input.username.trim().toLowerCase() : null;
 
-    const row = await this.prisma.user.create({
-      data: {
-        email,
-        username,
-        passwordHash: await hashPassword(input.password),
-        role,
-        fname: input.fname,
-        lname: input.lname,
-        status,
-        mobile: "phone" in input ? input.phone : null,
-        employeeCode,
-      },
+    await this.assertStaffLoginAvailable(email, username);
+
+    const passwordHash = await hashPassword(input.password);
+    const organizationId = await this.resolveOrgForStaffCreate(
+      status,
+      "joinCode" in input ? input.joinCode : undefined,
+    );
+    const membershipStatus = status === "PENDING" ? "PENDING" : "ACTIVE";
+
+    // User + Membership are created together: a User row with no Membership
+    // has no org context, which would make it invisible to list()/listStaff()
+    // and unable to log in (guards can't resolve a tenant for it). The
+    // employee code is allocated inside the same transaction, atomically
+    // incrementing the org's own counter, so two concurrent joins can never
+    // claim the same code.
+    const row = await this.prisma.$transaction(async (tx) => {
+      const employeeCode = role === "EMPLOYEE" ? await nextEmployeeCodeTx(tx, organizationId) : null;
+      const user = await tx.user.create({
+        data: {
+          email,
+          username,
+          passwordHash,
+          role,
+          fname: input.fname,
+          lname: input.lname,
+          status,
+          mobile: "phone" in input ? input.phone : null,
+          employeeCode,
+        },
+      });
+      await tx.membership.create({
+        data: { userId: user.id, organizationId, role, status: membershipStatus, employeeCode },
+      });
+      return user;
     });
     return toStoredUser(row);
   }
 
-  /** Sequential "EMP-0007"-style code; based on the highest existing employee code so gaps from deletions aren't reused. */
-  private async nextEmployeeCode(): Promise<string> {
-    const rows = await this.prisma.user.findMany({
-      where: { role: "EMPLOYEE", employeeCode: { not: null } },
-      select: { employeeCode: true },
-    });
-    const max = rows
-      .map((r) => Number(r.employeeCode!.replace("EMP-", "")))
-      .filter((n) => Number.isFinite(n))
-      .reduce((a, b) => Math.max(a, b), 0);
-    return `EMP-${String(max + 1).padStart(4, "0")}`;
+  /**
+   * Admin-driven creates (createEmployee/createUser) join the admin's own org
+   * via tenant context. Public self-signup (signupEmployee) resolves the org
+   * from the joinCode the signer entered.
+   */
+  private async resolveOrgForStaffCreate(status: "PENDING" | "ACTIVE", joinCode?: string): Promise<string> {
+    if (status !== "PENDING") return this.requireOrgId();
+    if (!joinCode) throw new BadRequestException("A join code is required.");
+    const org = await this.prisma.$unscoped.organization.findUnique({ where: { joinCode } });
+    if (!org) throw new BadRequestException("Invalid join code.");
+    return org.id;
   }
+
 }
 
 /** Hash a new or changed password with argon2id. */

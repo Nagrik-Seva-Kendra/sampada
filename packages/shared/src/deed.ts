@@ -89,7 +89,6 @@ export const PublicDeedItem = z.object({
   title: z.string(),
   content: z.string(),
   updatedAt: z.string(),
-  formData: z.any().optional(),
 });
 export type PublicDeedItem = z.infer<typeof PublicDeedItem>;
 

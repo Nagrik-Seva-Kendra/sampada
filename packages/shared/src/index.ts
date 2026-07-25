@@ -4,3 +4,7 @@ export * from "./auth.js";
 export * from "./deed.js";
 export * from "./employee.js";
 export * from "./otp.js";
+export * from "./organization.js";
+export * from "./invite.js";
+export * from "./ownership-transfer.js";
+export * from "./permission.js";

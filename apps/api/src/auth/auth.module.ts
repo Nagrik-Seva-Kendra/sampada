@@ -6,6 +6,7 @@ import { ProfilePhotoController } from "./profile-photo.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtAdminGuard } from "./jwt-admin.guard.js";
 import { JwtStaffGuard } from "./jwt-staff.guard.js";
+import { PermissionGuard } from "./permission.guard.js";
 import { UsersModule } from "../users/users.module.js";
 
 @Module({
@@ -22,7 +23,7 @@ import { UsersModule } from "../users/users.module.js";
     }),
   ],
   controllers: [AuthController, ProfileController, ProfilePhotoController],
-  providers: [AuthService, JwtAdminGuard, JwtStaffGuard],
-  exports: [JwtAdminGuard, JwtStaffGuard],
+  providers: [AuthService, JwtAdminGuard, JwtStaffGuard, PermissionGuard],
+  exports: [AuthService, JwtAdminGuard, JwtStaffGuard, PermissionGuard],
 })
 export class AuthModule {}

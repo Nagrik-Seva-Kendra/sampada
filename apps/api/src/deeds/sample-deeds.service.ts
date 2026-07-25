@@ -13,6 +13,7 @@ import type {
 } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import type { DeedTemplate, DeedTemplateRevision, Prisma } from "@prisma/client";
 
 function toItem(row: DeedTemplate): SampleDeedItem {
@@ -59,7 +60,7 @@ const LIST_SELECT = {
     createdAt: true,
 } as const;
 
-type ListRow = Omit<DeedTemplate, "content" | "updatedAt">;
+type ListRow = Pick<DeedTemplate, keyof typeof LIST_SELECT>;
 
 function toListItem(row: ListRow): SampleDeedListItem {
     return {
@@ -184,24 +185,13 @@ function truncateExample(content: string, maxLen = 6000): string {
                 title: row.title,
                 content: row.content,
                 updatedAt: row.updatedAt.toISOString(),
-            formData: (row.formData ?? null) as PublicDeedItem["formData"],
         };
   }
-
-    async saveFormState(id: string, formData: unknown): Promise<{ ok: boolean }> {
-        const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
-        if (!existing || existing.status !== "active") throw new NotFoundException("Deed not found.");
-        await this.prisma.deedTemplate.update({
-            where: { id },
-            data: { formData: formData as Prisma.InputJsonValue },
-        });
-        return { ok: true };
-    }
 
   /** Draft a new deed for a type, owned by the caller. */
   async create(input: CreateSampleDeedInput, user: StaffUser): Promise<SampleDeedItem> {
         const row = await this.prisma.deedTemplate.create({
-                data: {
+                data: tenantCreateData<Prisma.DeedTemplateUncheckedCreateInput>({
                           id: randomUUID(),
                           type: input.type,
                           title: input.title,
@@ -211,7 +201,7 @@ function truncateExample(content: string, maxLen = 6000): string {
                           createdByName: user.name,
                           createdByRole: user.role,
                           createdAt: new Date(),
-                },
+                }),
         });
         return toItem(row);
   }
@@ -231,7 +221,7 @@ function truncateExample(content: string, maxLen = 6000): string {
                 select: { versionNo: true },
         });
         await this.prisma.deedTemplateRevision.create({
-                data: {
+                data: tenantCreateData<Prisma.DeedTemplateRevisionUncheckedCreateInput>({
                           deedId: existing.id,
                           versionNo: (last?.versionNo ?? 0) + 1,
                           title: existing.title,
@@ -239,7 +229,7 @@ function truncateExample(content: string, maxLen = 6000): string {
                           status: existing.status,
                           editedById: user.id,
                           editedByName: user.name,
-                },
+                }),
         });
   }
 
@@ -442,7 +432,7 @@ function truncateExample(content: string, maxLen = 6000): string {
       select: { versionNo: true },
     });
     await this.prisma.deedTemplateRevision.create({
-      data: {
+      data: tenantCreateData<Prisma.DeedTemplateRevisionUncheckedCreateInput>({
         deedId: existing.id,
         versionNo: (last?.versionNo ?? 0) + 1,
         title: existing.title,
@@ -450,7 +440,7 @@ function truncateExample(content: string, maxLen = 6000): string {
         status: existing.status,
         editedById: null,
         editedByName: "Party (form submission)",
-      },
+      }),
     });
     await this.prisma.deedTemplate.update({ where: { id }, data: { content } });
     return { changed: true };

@@ -54,7 +54,12 @@ export class AuthService {
   }
 
   /** Mint an access + refresh pair for an authenticated user, both stamped with the current tokenVersion. */
-  async issueSession(stored: StoredUser): Promise<AuthResponse> {
+  async issueSession(stored: StoredUser, opts?: { activeOrganizationId?: string }): Promise<AuthResponse> {
+    // Org context for tenant scoping: the user's active membership (if any).
+    const membership = await this.users.resolveActiveMembership(stored.id, opts?.activeOrganizationId);
+    if (membership) {
+      await this.users.setLastActiveOrganization(stored.id, membership.organizationId);
+    }
     const user: AuthUser = {
       id: stored.id,
       email: stored.email,
@@ -62,9 +67,16 @@ export class AuthService {
       fname: stored.fname,
       lname: stored.lname,
       role: stored.role,
+      activeOrganization: membership
+        ? {
+            id: membership.organizationId,
+            name: membership.organization.name,
+            slug: membership.organization.slug,
+            status: membership.organization.status,
+            role: membership.role,
+          }
+        : null,
     };
-    // Org context for tenant scoping: the users active membership (if any).
-    const membership = await this.users.resolveActiveMembership(stored.id);
     const accessToken = await this.jwt.signAsync(
       {
         sub: stored.id,

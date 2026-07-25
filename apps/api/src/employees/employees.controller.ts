@@ -7,6 +7,8 @@ import {
   type StaffRole,
 } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
+import { PermissionGuard } from "../auth/permission.guard.js";
+import { RequirePermission } from "../auth/require-permission.decorator.js";
 import { UsersService, type StoredUser } from "../users/users.service.js";
 import { PasswordResetService } from "../users/password-reset.service.js";
 import { OtpService } from "../otp/otp.service.js";
@@ -87,17 +89,19 @@ export class EmployeesController {
 
   /** Admin-only: discontinue an employee's services (blocks login, keeps the record). */
   @Post(":id/deactivate")
-  @UseGuards(JwtAdminGuard)
+  @UseGuards(JwtAdminGuard, PermissionGuard)
+  @RequirePermission("members.remove")
   async deactivate(@Param("id") id: string): Promise<EmployeeItem> {
-    const user = await this.users.deactivateEmployee(id);
+    const user = await this.users.deactivateMember(id);
     return toItem(user);
   }
 
   /** Admin-only: restore a discontinued employee's access. */
   @Post(":id/reactivate")
-  @UseGuards(JwtAdminGuard)
+  @UseGuards(JwtAdminGuard, PermissionGuard)
+  @RequirePermission("members.remove")
   async reactivate(@Param("id") id: string): Promise<EmployeeItem> {
-    const user = await this.users.reactivateEmployee(id);
+    const user = await this.users.reactivateMember(id);
     return toItem(user);
   }
 

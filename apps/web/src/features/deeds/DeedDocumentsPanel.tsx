@@ -146,18 +146,23 @@ function findPan(text: string): string | undefined {
 
 /** Best-effort English-name guess from an Aadhaar/PAN OCR text.
  * On an Aadhaar the English name sits just above the DOB / gender line, so we
- * anchor on that first (most reliable), then fall back to the first plausible
- * name-looking line. Names are still the weakest part of OCR, so the field
- * stays editable for staff to correct. */
-function guessName(text: string): string | undefined {
+ * anchor on that first (most reliable = "anchor" confidence), then fall back
+ * to the first plausible name-looking line ("fallback" confidence, much less
+ * trustworthy). Names are still the weakest part of OCR, so the field stays
+ * editable for staff to correct. */
+function guessName(text: string): { name: string; confidence: "anchor" | "fallback" } | undefined {
   const bad =
     /aadhaar|government|govt|india|uidai|male|female|dob|date of birth|year of birth|income tax|department|permanent|account|number|father|husband|signature|vid|help|www|gov\.in|enrol|address/i;
+  // Guardian-name lines are often unlabeled except for a short relation
+  // abbreviation ("S/O Ram Lal", "D/O Mohan", "W/O Suresh", "C/O ..."), which
+  // `bad` above doesn't catch since it only matches the spelled-out words.
+  const guardianAbbrev = /\b[sdwc]\s*\/\s*o\b/i;
   const clean = (l: string) => l.replace(/[^A-Za-z ]/g, "").replace(/\s+/g, " ").trim();
   // A real name reads as capitalised words ("Seema Devi" / "SEEMA DEVI"), which
   // rejects OCR garbage like "cEEED" so we leave the field blank instead.
   const nameLike = (c: string) => /^[A-Z][A-Za-z.'-]*(?:\s+[A-Z][A-Za-z.'-]*){0,4}$/.test(c);
   const isNameLine = (l: string) => {
-    if (!l || /\d/.test(l) || bad.test(l)) return false;
+    if (!l || /\d/.test(l) || bad.test(l) || guardianAbbrev.test(l)) return false;
     const c = clean(l);
     const words = c.split(/\s+/).filter(Boolean);
     return c.length >= 4 && words.length >= 1 && words.length <= 5 && nameLike(c);
@@ -168,12 +173,12 @@ function guessName(text: string): string | undefined {
   if (anchor > 0) {
     for (let i = anchor - 1; i >= 0; i--) {
       const l = lines[i] ?? "";
-      if (isNameLine(l)) return clean(l);
+      if (isNameLine(l)) return { name: clean(l), confidence: "anchor" };
     }
   }
   // Fallback: first plausible name-looking line.
   for (const l of lines) {
-    if (isNameLine(l)) return clean(l);
+    if (isNameLine(l)) return { name: clean(l), confidence: "fallback" };
   }
   return undefined;
 }
@@ -608,12 +613,18 @@ function PartyGroup({
       }
     }
     if (slot === "aadhaar" || slot === "pan") {
-      const nm = guessName(text);
-      // Auto-save the name in English: fill when empty, or replace a Devanagari
-      // value (e.g. pre-filled from the Hindi deed text) with the Latin OCR name.
-      if (nm && (!name || /[ऀ-ॿ]/.test(name))) {
-        setName(nm);
-        filled = true;
+      const guess = guessName(text);
+      if (guess) {
+        // Fill when empty. Only replace an existing Devanagari value (e.g.
+        // pre-filled from the Hindi deed text) with the Latin OCR name when
+        // the guess is high-confidence (anchored on the DOB/gender line) —
+        // a low-confidence fallback guess is too unreliable to silently
+        // clobber an already-correct name, so leave it for staff to compare.
+        const isDevanagari = /[ऀ-ॿ]/.test(name);
+        if (!name || (isDevanagari && guess.confidence === "anchor")) {
+          setName(guess.name);
+          filled = true;
+        }
       }
     }
     if (filled) setAutoFilled(true);

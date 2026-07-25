@@ -53,17 +53,6 @@ export class PublicDeedsController {
     return this.service.applyPartyFields(id, fields);
   }
 
-  /**
-  * Called by the legacy paper-form share link's own page whenever a party
-  * edits a field. Overwrites the raw snapshot of field values (property,
-  * payment and party fields) used to repopulate the form the next time
-  * this same link is opened -- see SampleDeedsService.saveFormState.
-  */
-  @Post(":id/form-state")
-  async saveFormState(@Param("id") id: string, @Body() body: { formData?: unknown }) {
-    return this.service.saveFormState(id, body?.formData ?? {});
-  }
-
   @Post(":id/selection")
   publishSelection(@Param("id") id: string, @Body() body: unknown) {
     const input = DeedSelectionInput.parse(body);

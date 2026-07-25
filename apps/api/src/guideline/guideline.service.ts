@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import { newGuidelineKey, r2Configured, r2Get, r2Put } from "./r2.js";
 
 export interface GuidelineDocMeta {
@@ -122,7 +123,7 @@ export class GuidelineService {
     }
 
     const row = await this.prisma.guidelineDocument.create({
-      data: {
+      data: tenantCreateData<Prisma.GuidelineDocumentUncheckedCreateInput>({
         title: input.title,
         district: input.district,
         session: input.session,
@@ -132,7 +133,7 @@ export class GuidelineService {
         data: stored as unknown as GuidelineBytes,
         uploadedById: input.uploadedById ?? null,
         uploadedByName: input.uploadedByName ?? null,
-      },
+      }),
       select: META,
     });
     return toMeta(row);

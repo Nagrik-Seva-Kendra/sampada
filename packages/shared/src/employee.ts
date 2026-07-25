@@ -11,7 +11,7 @@ export const CreateEmployeeInput = z.object({
 });
 export type CreateEmployeeInput = z.infer<typeof CreateEmployeeInput>;
 
-/** Public self-signup: same as CreateEmployeeInput plus a chosen username and a verified-email OTP. */
+/** Public self-signup: same as CreateEmployeeInput plus a chosen username, a verified-email OTP, and the org's join code. */
 export const EmployeeSignupInput = CreateEmployeeInput.extend({
   username: z
     .string()
@@ -20,6 +20,7 @@ export const EmployeeSignupInput = CreateEmployeeInput.extend({
     .max(50)
     .regex(/^[a-zA-Z0-9_.-]+$/, "Letters, numbers, dot, underscore, hyphen only"),
   emailOtp: z.string().trim().length(6, "Enter the 6-digit code"),
+  joinCode: z.string().trim().min(1, "Enter your organization's join code"),
 });
 export type EmployeeSignupInput = z.infer<typeof EmployeeSignupInput>;
 

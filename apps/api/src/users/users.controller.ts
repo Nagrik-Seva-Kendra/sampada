@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { CreateUserInput, UpdateUserInput, type EmployeeItem, type StaffRole } from "@sampada/shared";
 import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
+import { PermissionGuard } from "../auth/permission.guard.js";
+import { RequirePermission } from "../auth/require-permission.decorator.js";
 import { UsersService, type StoredUser } from "./users.service.js";
 
 /** Maps a stored staff account to the admin-facing list item (role included). */
@@ -44,5 +46,21 @@ export class UsersController {
   async update(@Param("id") id: string, @Body() body: unknown): Promise<EmployeeItem> {
     const user = await this.users.adminUpdateUser(id, UpdateUserInput.parse(body));
     return toItem(user);
+  }
+
+  /** Discontinue any staff member's services — employee, admin, or the org's owner. */
+  @Post(":id/deactivate")
+  @UseGuards(PermissionGuard)
+  @RequirePermission("members.remove")
+  async deactivate(@Param("id") id: string): Promise<EmployeeItem> {
+    return toItem(await this.users.deactivateMember(id));
+  }
+
+  /** Restore a discontinued staff member's access. */
+  @Post(":id/reactivate")
+  @UseGuards(PermissionGuard)
+  @RequirePermission("members.remove")
+  async reactivate(@Param("id") id: string): Promise<EmployeeItem> {
+    return toItem(await this.users.reactivateMember(id));
   }
 }

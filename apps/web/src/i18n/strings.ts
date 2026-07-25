@@ -70,6 +70,7 @@ export const strings = {
   authSignupLink: { en: "New employee? Sign up", hi: "नए कर्मचारी? साइन अप करें" },
   authSignupTitle: { en: "Employee Sign Up", hi: "कर्मचारी साइन अप" },
   authPhone: { en: "Mobile number", hi: "मोबाइल नंबर" },
+  authJoinCode: { en: "Organization join code", hi: "संस्था जॉइन कोड" },
   authSignupSubmit: { en: "Submit request", hi: "अनुरोध भेजें" },
   authSignupSuccess: {
     en: "Request submitted. You can log in once the admin approves it.",
@@ -85,6 +86,30 @@ export const strings = {
   authVerifyOtp: { en: "Verify OTP", hi: "OTP सत्यापित करें" },
   authOtpVerified: { en: "Email verified.", hi: "ईमेल सत्यापित हो गया।" },
   authOtpVerifyFailed: { en: "Incorrect or expired code.", hi: "कोड गलत है या समय समाप्त हो गया।" },
+  authOrgSignupLink: { en: "New organization? Create one", hi: "नई संस्था? बनाएं" },
+  authOrgSignupTitle: { en: "Create Your Organization", hi: "अपनी संस्था बनाएं" },
+  authOrgName: { en: "Organization name", hi: "संस्था का नाम" },
+  authOrgSignupSubmit: { en: "Create organization", hi: "संस्था बनाएं" },
+  authAcceptInviteTitle: { en: "Accept Invitation", hi: "आमंत्रण स्वीकार करें" },
+  authAcceptInviteMissingToken: {
+    en: "This link is missing its token. Ask the person who invited you to send a new invite.",
+    hi: "इस लिंक में टोकन नहीं है। जिसने आपको आमंत्रित किया है उनसे नया आमंत्रण भेजने के लिए कहें।",
+  },
+  authAcceptInviteSubmit: { en: "Accept and create account", hi: "स्वीकार करें और खाता बनाएं" },
+  transferConfirmTitle: { en: "Confirm Ownership Transfer", hi: "स्वामित्व हस्तांतरण की पुष्टि करें" },
+  transferConfirmMissingToken: {
+    en: "This link is missing its token. Ask the current owner to send a new transfer request.",
+    hi: "इस लिंक में टोकन नहीं है। मौजूदा मालिक से नया हस्तांतरण अनुरोध भेजने के लिए कहें।",
+  },
+  transferConfirmPrompt: {
+    en: "You've been nominated to become the new owner of this organization. This takes effect immediately.",
+    hi: "आपको इस संस्था का नया मालिक बनने के लिए नामांकित किया गया है। यह तुरंत प्रभावी होगा।",
+  },
+  transferConfirmSubmit: { en: "Confirm transfer", hi: "हस्तांतरण की पुष्टि करें" },
+  transferConfirmSuccess: {
+    en: "Ownership transferred. Please sign in again to continue.",
+    hi: "स्वामित्व हस्तांतरित हो गया। जारी रखने के लिए कृपया दोबारा लॉगिन करें।",
+  },
   navEmployeeRequests: { en: "Employee Requests", hi: "कर्मचारी अनुरोध" },
   empReqEmpty: { en: "No pending employee signups.", hi: "कोई लंबित कर्मचारी साइन अप नहीं।" },
   reqApprove: { en: "Approve", hi: "स्वीकृत करें" },
@@ -150,6 +175,37 @@ export const strings = {
     hi: "वर्तमान पासवर्ड रखने के लिए खाली छोड़ें",
   },
   editUserSubmit: { en: "Save changes", hi: "परिवर्तन सहेजें" },
+
+  // Invites (admin)
+  teamTabInvites: { en: "Invites", hi: "आमंत्रण" },
+  inviteEmailLabel: { en: "Email", hi: "ईमेल" },
+  inviteRoleLabel: { en: "Role", hi: "भूमिका" },
+  inviteCreateSubmit: { en: "Send invite", hi: "आमंत्रण भेजें" },
+  inviteRevoke: { en: "Revoke", hi: "रद्द करें" },
+  inviteRevokeConfirm: {
+    en: "Revoke this invite? The link will stop working.",
+    hi: "इस आमंत्रण को रद्द करें? लिंक काम करना बंद कर देगा।",
+  },
+  inviteExpiresOn: { en: "expires", hi: "समाप्ति" },
+  inviteCreatedOn: { en: "sent", hi: "भेजा गया" },
+  inviteEmpty: { en: "No live invites.", hi: "कोई सक्रिय आमंत्रण नहीं।" },
+  inviteLinkCopy: { en: "Copy", hi: "कॉपी करें" },
+  inviteLinkCopied: { en: "Copied", hi: "कॉपी हो गया" },
+  inviteLinkEmailed: { en: "Also emailed to them.", hi: "उन्हें ईमेल भी किया गया।" },
+  inviteLinkNotEmailed: {
+    en: "Email not configured — share this link with them.",
+    hi: "ईमेल कॉन्फ़िगर नहीं है — यह लिंक उनके साथ साझा करें।",
+  },
+  teamTabOwnership: { en: "Ownership", hi: "स्वामित्व" },
+  transferNomineeLabel: { en: "Nominate an admin as the new owner", hi: "नए मालिक के रूप में एक एडमिन नामांकित करें" },
+  transferNomineePlaceholder: { en: "Choose an admin…", hi: "एक एडमिन चुनें…" },
+  transferCreateSubmit: { en: "Send transfer request", hi: "हस्तांतरण अनुरोध भेजें" },
+  transferCancel: { en: "Cancel", hi: "रद्द करें" },
+  transferCancelConfirm: {
+    en: "Cancel this ownership transfer? The link will stop working.",
+    hi: "इस स्वामित्व हस्तांतरण को रद्द करें? लिंक काम करना बंद कर देगा।",
+  },
+  transferEmpty: { en: "No pending ownership transfer.", hi: "कोई लंबित स्वामित्व हस्तांतरण नहीं।" },
 
   // Deeds
   deedsTitle: { en: "Deeds & instruments", hi: "विलेख व दस्तावेज़" },
@@ -328,6 +384,46 @@ export const strings = {
   aboutStat1: { en: "Districts covered", hi: "कवर किए गए जिले" },
   aboutStat2: { en: "Guideline years", hi: "गाइडलाइन वर्ष" },
   aboutStat3: { en: "Citizens served", hi: "सेवित नागरिक" },
+
+  // Onboarding (full-screen) — creates the organization directly.
+  onboardKicker: { en: "Get started", hi: "शुरू करें" },
+  onboardTitle: { en: "Create your organisation", hi: "अपनी संस्था बनाएं" },
+  onboardSub: {
+    en: "Set up your organisation's account on Sampada — you'll be its owner.",
+    hi: "सम्पदा पर अपनी संस्था का खाता बनाएं — आप इसके मालिक होंगे।",
+  },
+  onboardSubmit: { en: "Create organisation", hi: "संस्था बनाएं" },
+  onboardHaveAccount: { en: "Already have an account? Log in", hi: "पहले से खाता है? लॉगिन करें" },
+
+  // Login (full-screen)
+  loginKicker: { en: "Welcome back", hi: "वापसी पर स्वागत है" },
+  loginTitle: { en: "Log in to Sampada", hi: "सम्पदा में लॉगिन करें" },
+  loginNoAccount: { en: "New here? Create an account", hi: "नए हैं? खाता बनाएं" },
+  loginJoinTeamLink: { en: "Joining a team? Use a join code", hi: "किसी टीम में शामिल हो रहे हैं? जॉइन कोड इस्तेमाल करें" },
+
+  // Dashboard sidebar
+  sidebarAllDeeds: { en: "All Deeds", hi: "सभी विलेख" },
+  sidebarCreateDeed: { en: "Create New Deed", hi: "नया विलेख बनाएं" },
+  sidebarGuideline: { en: "Guideline Rates", hi: "गाइडलाइन दरें" },
+  sidebarTeam: { en: "Team", hi: "टीम" },
+  sidebarSettings: { en: "Settings", hi: "सेटिंग्स" },
+  sidebarLogout: { en: "Logout", hi: "लॉगआउट" },
+
+  // Workspace switcher + create-organization
+  workspaceSwitch: { en: "Switch workspace", hi: "वर्कस्पेस बदलें" },
+  workspaceCreateOrg: { en: "Create organisation", hi: "संस्था बनाएं" },
+  createOrgTitle: { en: "Create an organisation", hi: "एक संस्था बनाएं" },
+  createOrgSub: {
+    en: "A new organisation you'll own — invite others once it's created.",
+    hi: "एक नई संस्था जिसके आप मालिक होंगे — बनने के बाद दूसरों को आमंत्रित करें।",
+  },
+  createOrgNameLabel: { en: "Organisation name", hi: "संस्था का नाम" },
+  createOrgSubmit: { en: "Create", hi: "बनाएं" },
+  createOrgCancel: { en: "Cancel", hi: "रद्द करें" },
+
+  // Settings
+  settingsTitle: { en: "Settings", hi: "सेटिंग्स" },
+  settingsWorkspaceSection: { en: "Workspace", hi: "वर्कस्पेस" },
 } as const;
 
 export type StringKey = keyof typeof strings;

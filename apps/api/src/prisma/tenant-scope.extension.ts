@@ -26,3 +26,15 @@ export function tenantScopeExtension(cls: ClsService, getBase: () => AnyClient) 
     },
   });
 }
+
+/**
+ * For `.create()`/`.upsert()` calls on a tenant-scoped model: the extension
+ * (see tenant-scope.core.ts, the `create`/`createMany`/`upsert` cases) always
+ * stamps the real `organizationId` from tenant context into `data`, overwriting
+ * whatever's there — so call sites never have (and must never fabricate) the
+ * real value. This just satisfies the generated Prisma types, which don't know
+ * about the extension's injection and otherwise demand the field up front.
+ */
+export function tenantCreateData<T>(data: Omit<T, "organizationId">): T {
+  return data as unknown as T;
+}

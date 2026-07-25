@@ -1,22 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { createTransport, type Transporter } from "nodemailer";
 import type { PasswordResetLink } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { UsersService } from "./users.service.js";
+import { appBaseUrl, hashToken } from "../lib/link-tokens.js";
 
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-/** Hash-at-rest: only the SHA-256 of the raw token is ever stored. */
-function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
-}
-
-/** Base URL of the web app, used to build the reset link (falls back to CORS origin, then localhost). */
-function appBaseUrl(): string {
-  const fromEnv = process.env.APP_URL ?? (process.env.CORS_ORIGIN ?? "").split(",")[0] ?? "";
-  return (fromEnv || "http://localhost:5173").trim().replace(/\/+$/, "");
-}
 
 /**
  * Admin-triggered password reset via a single-use, 1-hour link. Replaces the

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Role, StaffRole } from "./enums.js";
+import { OrganizationSummary } from "./organization.js";
 
 export const LoginInput = z.object({
   /** Which login tab the user picked — the resolved account must match this role. */
@@ -39,6 +40,8 @@ export const AuthUser = z.object({
   fname: z.string(),
   lname: z.string(),
   role: Role,
+  /** The org this session currently acts under; null only if the user has no active membership at all. */
+  activeOrganization: OrganizationSummary.nullable(),
 });
 export type AuthUser = z.infer<typeof AuthUser>;
 

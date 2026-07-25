@@ -1,9 +1,11 @@
+import type { OrgRole } from "@sampada/shared";
+
 /** Identity + tenant context carried for the lifetime of a single request. */
 export interface TenantContext {
   userId: string;
   organizationId: string;
   membershipId: string;
-  role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  role: OrgRole;
 }
 
 /** CLS key under which the tenant context lives for the request. */

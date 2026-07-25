@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronDownIcon, ExternalLink, FilePlus2, FileText, MoreVertical } from "lucide-react";
+import { ChevronDownIcon, FileText, MoreVertical } from "lucide-react";
 import { DeedType, type ListDeedsQuery, type SampleDeedListItem } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useCanDeleteDeeds, useIsStaff } from "../../stores/authStore";
@@ -112,14 +112,6 @@ export function AllDeedsPage() {
     setDateTo("");
   }
 
-  // No name prompt — create a blank draft and open the editor, where the user types the title.
-  function onCreate(type: DeedType) {
-    create.mutate(
-      { type, title: t("deedsUntitledTitle"), content: "" },
-      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}?new=1`, "_blank") },
-    );
-  }
-
   function openEdit(d: SampleDeedListItem) {
     window.open(`/deeds/${d.type}/edit/${d.id}`, "_blank");
   }
@@ -191,34 +183,6 @@ export function AllDeedsPage() {
                 ? `${t("allDeedsMatches")}: ${filtered.length} / ${rows.length}`
                 : `${t("allDeedsTotal")}: ${rows.length}`}
             </span>
-          )}
-          {isStaff && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="btn-calc"
-                  style={{
-                    marginLeft: "auto",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 7,
-                  }}
-                >
-                  <FilePlus2 size={17} strokeWidth={2.2} />
-                  {t("deedsCreateBtn")}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>{t("deedsCreateChooseType")}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {DeedType.options.map((type) => (
-                  <DropdownMenuItem key={type} onSelect={() => onCreate(type)}>
-                    {findDeed(type)?.name[lang] ?? type}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           )}
         </div>
 
@@ -422,15 +386,6 @@ export function AllDeedsPage() {
                               }
                             >
                               <FileText className="size-4 opacity-80" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Legacy deed form"
-                              title={lang === "hi" ? "पुराना डीड फॉर्म खोलें" : "Open legacy deed form"}
-                              onClick={() => window.open(`/legacy-deed-form.html?deedId=${d.id}`, "_blank")}
-                              className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent shadow-xs outline-none"
-                            >
-                              <ExternalLink className="size-4 opacity-80" />
                             </button>
                           </div>
                         </td>
