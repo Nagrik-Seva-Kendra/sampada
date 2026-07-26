@@ -6,6 +6,38 @@ import { usePendingCorrections } from "../deeds/useSampleDeeds";
 
 const MENU_WIDTH = 320;
 
+/**
+ * Short two-tone chime, synthesized on the fly (no audio asset to host or
+ * ship) -- played when a genuinely new correction shows up while the tab is
+ * open. Browsers block audio before any user interaction on the page; a
+ * failed play() is silently ignored rather than surfaced, since a missed
+ * chime is never worth an error to staff.
+ */
+function playChime() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    [880, 1320].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = now + i * 0.12;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+    setTimeout(() => void ctx.close(), 900);
+  } catch {
+    // Autoplay blocked or WebAudio unavailable -- a silent bell is fine.
+  }
+}
+
 function timeAgo(iso: string, lang: "en" | "hi"): string {
   const ms = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(ms / 60000);
@@ -42,10 +74,24 @@ export function NotificationBell({ collapsed = false }: { collapsed?: boolean })
     return () => document.removeEventListener("click", onDoc);
   }, [open]);
 
-  if (!isStaff) return null;
-
   const items = pending.data ?? [];
   const count = items.length;
+
+  // Chime on any id that wasn't in the last poll's set -- not just "count
+  // went up", so a simultaneous resolve+new-flag (count unchanged) still
+  // rings. `seenRef` starts unset so the first successful fetch never rings
+  // for corrections that were already pending before this tab opened.
+  const seenRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!pending.data) return;
+    const ids = new Set(pending.data.map((c) => c.id));
+    if (seenRef.current && [...ids].some((id) => !seenRef.current!.has(id))) {
+      playChime();
+    }
+    seenRef.current = ids;
+  }, [pending.data]);
+
+  if (!isStaff) return null;
 
   function toggleOpen() {
     if (!open && triggerRef.current) {
