@@ -534,24 +534,6 @@ export const strings = {
   },
   deleteOrgConfirmTitle: { en: "Delete this organisation?", hi: "क्या यह संस्था हटानी है?" },
   deleteOrgConfirmPrompt: { en: "Type the organisation name to confirm:", hi: "पुष्टि के लिए संस्था का नाम लिखें:" },
-
-  // Guideline: platform-admin manage section
-  guidelineManageTitle: { en: "Manage guideline library", hi: "गाइडलाइन लाइब्रेरी प्रबंधित करें" },
-  guidelineUploadTitle: { en: "Upload a PDF", hi: "एक PDF अपलोड करें" },
-  guidelineImportTitle: { en: "Bulk import from URLs", hi: "URLs से बल्क इम्पोर्ट करें" },
-  guidelineImportHint: {
-    en: "One per line: district, session (e.g. 2015), language (en/hi), title, url",
-    hi: "प्रति पंक्ति एक: जिला, सत्र (जैसे 2015), भाषा (en/hi), शीर्षक, url",
-  },
-  guidelineImportSubmit: { en: "Import all", hi: "सभी इम्पोर्ट करें" },
-  guidelineImportRunning: { en: "Importing — this can take a while for large batches…", hi: "इम्पोर्ट हो रहा है — बड़े बैच में समय लग सकता है…" },
-  guidelineTitleLabel: { en: "Title", hi: "शीर्षक" },
-  guidelineDistrictLabel: { en: "District", hi: "जिला" },
-  guidelineSessionLabel: { en: "Session", hi: "सत्र" },
-  guidelineLanguageLabel: { en: "Language", hi: "भाषा" },
-  guidelineFileLabel: { en: "PDF file", hi: "PDF फ़ाइल" },
-  guidelineUploadSubmit: { en: "Upload", hi: "अपलोड करें" },
-  guidelineDeleteConfirm: { en: "Delete this document?", hi: "यह दस्तावेज़ हटाएं?" },
 } as const;
 
 export type StringKey = keyof typeof strings;
