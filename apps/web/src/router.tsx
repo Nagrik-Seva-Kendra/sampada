@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { hasPermission } from "@sampada/shared";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { LangToggle } from "./components/LangToggle";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
@@ -24,7 +25,10 @@ import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authSt
 const rootRoute = createRootRoute({
   component: () => (
     <>
-      <ThemeToggle />
+      <div className="top-controls-fab">
+        <LangToggle />
+        <ThemeToggle />
+      </div>
       <Outlet />
     </>
   ),
