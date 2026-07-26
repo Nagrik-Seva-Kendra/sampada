@@ -201,7 +201,7 @@ function JoinTeamForm({ t, onBack }: { t: (k: StringKey) => string; onBack: () =
             {sendOtp.isPending ? "…" : t(sendOtp.isSuccess ? "authResendOtp" : "authSendOtp")}
           </button>
           {sendOtp.isSuccess && <p className="dr-status-active">✓ {t("authOtpSent")}</p>}
-          {sendOtp.isError && <p className="modal-error">{t("authOtpFailed")}</p>}
+          {sendOtp.isError && <p className="modal-error">{sendOtp.error.message}</p>}
         </div>
         <label className="modal-field">
           {t("authOtpLabel")}
@@ -227,7 +227,7 @@ function JoinTeamForm({ t, onBack }: { t: (k: StringKey) => string; onBack: () =
             {verifyOtp.isPending ? "…" : t("authVerifyOtp")}
           </button>
           {verifyOtp.isSuccess && <p className="dr-status-active">✓ {t("authOtpVerified")}</p>}
-          {verifyOtp.isError && <p className="modal-error">{t("authOtpVerifyFailed")}</p>}
+          {verifyOtp.isError && <p className="modal-error">{verifyOtp.error.message}</p>}
         </div>
         <label className="modal-field">
           {t("profileUsername")}

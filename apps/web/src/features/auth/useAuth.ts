@@ -130,15 +130,25 @@ export function useEmployeeSignup() {
 /** Public: email a 6-digit verification code (used before signup). */
 export function useSendEmailOtp() {
   return useMutation<{ sent: true }, Error, string>({
-    mutationFn: (email) =>
-      api.post("otp/send-email", { json: { email } }).json<{ sent: true }>(),
+    mutationFn: async (email) => {
+      try {
+        return await api.post("otp/send-email", { json: { email } }).json<{ sent: true }>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Couldn't send the code — try again."));
+      }
+    },
   });
 }
 
 /** Public: check a received code ahead of final signup (does not consume it). */
 export function useVerifyEmailOtp() {
   return useMutation<{ verified: true }, Error, { email: string; code: string }>({
-    mutationFn: (input) =>
-      api.post("otp/verify-email", { json: input }).json<{ verified: true }>(),
+    mutationFn: async (input) => {
+      try {
+        return await api.post("otp/verify-email", { json: input }).json<{ verified: true }>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Incorrect or expired code."));
+      }
+    },
   });
 }

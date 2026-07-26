@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Check,
@@ -65,6 +65,26 @@ export function OnboardingPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  // This wizard is one SPA route with no per-step URL, so without this the
+  // browser's own Back button would just leave /onboarding entirely (to
+  // whatever page came before it) instead of stepping back — surprising and
+  // easy to trigger by accident. Pushing a history entry per step, and
+  // reading it back on popstate, makes native Back move one step at a time.
+  useEffect(() => {
+    window.history.replaceState({ step: 0 }, "");
+    const onPopState = (e: PopStateEvent) => {
+      const s = e.state as { step?: number } | null;
+      setStep(s?.step ?? 0);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  function goToStep(s: number) {
+    setStep(s);
+    window.history.pushState({ step: s }, "");
+  }
+
   function canContinue(s: number): boolean {
     switch (s) {
       case 1:
@@ -82,14 +102,16 @@ export function OnboardingPage() {
 
   function next() {
     if (!canContinue(step)) return;
-    setStep((s) => Math.min(s + 1, 5));
+    goToStep(Math.min(step + 1, 5));
   }
   function back() {
-    setStep((s) => Math.max(s - 1, 0));
+    // Goes through popstate (see the effect above) so native Back and this
+    // button always agree on what "one step back" means.
+    window.history.back();
   }
   /** Role/goal are personalization only, never required to finish onboarding. */
   function skip() {
-    setStep((s) => Math.min(s + 1, 5));
+    goToStep(Math.min(step + 1, 5));
   }
 
   function onEmailChange(value: string) {
@@ -119,7 +141,7 @@ export function OnboardingPage() {
         password,
         emailOtp: otp.trim(),
       },
-      { onSuccess: () => setStep(5) },
+      { onSuccess: () => goToStep(5) },
     );
   }
 
@@ -333,7 +355,7 @@ export function OnboardingPage() {
                     </button>
                   </div>
                   {sendOtp.isSuccess && <p className="dr-status-active">✓ {t("authOtpSent")}</p>}
-                  {sendOtp.isError && <p className="modal-error">{t("authOtpFailed")}</p>}
+                  {sendOtp.isError && <p className="modal-error">{sendOtp.error.message}</p>}
                 </label>
 
                 {sendOtp.isSuccess && (
@@ -355,7 +377,7 @@ export function OnboardingPage() {
                         </span>
                       )}
                     </div>
-                    {verifyOtp.isError && <p className="modal-error">{t("authOtpVerifyFailed")}</p>}
+                    {verifyOtp.isError && <p className="modal-error">{verifyOtp.error.message}</p>}
                   </label>
                 )}
 
