@@ -6,6 +6,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { hasPermission } from "@sampada/shared";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
@@ -21,7 +22,12 @@ import { SettingsPage } from "./features/dashboard/SettingsPage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <ThemeToggle />
+      <Outlet />
+    </>
+  ),
   notFoundComponent: () => <Navigate to="/" />,
 });
 

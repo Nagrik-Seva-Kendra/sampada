@@ -2527,3 +2527,35 @@ h3 {
   height: 1px;
   background: var(--border);
 }
+
+/* ---------- theme toggle (rendered once at the app root, floats over every page) ---------- */
+.theme-toggle-fab {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.theme-toggle-fab:hover {
+  border-color: var(--accent);
+  color: var(--primary);
+}
+@media (max-width: 860px) {
+  .theme-toggle-fab {
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+  }
+}
