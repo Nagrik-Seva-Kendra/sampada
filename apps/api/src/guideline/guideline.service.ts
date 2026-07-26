@@ -83,7 +83,10 @@ export class GuidelineService {
   async list(filters?: { district?: string; session?: number; language?: Language }): Promise<GuidelineDocMeta[]> {
     const rows = await this.prisma.guidelineDocument.findMany({
       where: {
-        ...(filters?.district ? { district: filters.district } : {}),
+        // Older sessions only have one state-wide combined PDF (district
+        // "All Districts", no per-district split) — it must still show up
+        // when browsing a specific district, or those years look empty.
+        ...(filters?.district ? { OR: [{ district: filters.district }, { district: "All Districts" }] } : {}),
         ...(filters?.session ? { session: filters.session } : {}),
         ...(filters?.language ? { language: filters.language } : {}),
       },
