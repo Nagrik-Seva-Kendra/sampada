@@ -2132,3 +2132,398 @@ h3 {
   background: var(--border);
   margin: 6px 2px;
 }
+
+/* ---------- onboarding wizard ---------- */
+@keyframes obFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes obPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.ob-fade {
+  animation: obFadeUp 0.4s ease both;
+}
+
+/* Decorative overlays on the brand panel — a faint corner brand-mark and a
+   soft glow — need the panel to clip/anchor them. Scoped as a modifier so
+   plain .auth-brand consumers (e.g. LoginPage) are unaffected. */
+.auth-brand--deco {
+  position: relative;
+  overflow: hidden;
+}
+.auth-brand-deco-mark {
+  position: absolute;
+  right: -90px;
+  bottom: -70px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+.auth-brand-deco-glow {
+  position: absolute;
+  left: -120px;
+  top: -120px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.14), transparent 70%);
+  pointer-events: none;
+}
+.auth-brand--deco > * {
+  position: relative;
+}
+
+.ob-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ob-tracker-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.ob-tracker-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  font-feature-settings: "tnum";
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(253, 245, 236, 0.6);
+}
+.ob-tracker-circle.done {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+.ob-tracker-circle.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.35);
+}
+.ob-tracker-label {
+  font-size: 14.5px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: rgba(253, 245, 236, 0.55);
+}
+.ob-tracker-label.done {
+  color: rgba(253, 245, 236, 0.92);
+}
+.ob-tracker-label.active {
+  font-weight: 700;
+  color: #fff;
+}
+
+.ob-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 9px;
+}
+.ob-back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ob-step-counter {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+.ob-progress {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 34px;
+}
+.ob-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+
+.ob-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+.ob-perk {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.ob-perk-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.ob-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ob-option {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 17px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.ob-option.on {
+  border-color: var(--primary);
+  background: var(--accent-soft);
+  box-shadow: 0 10px 24px -14px rgba(180, 80, 44, 0.55);
+}
+.ob-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  background: var(--accent-soft);
+  color: var(--primary);
+}
+.ob-option.on .ob-option-icon {
+  background: var(--accent-2);
+}
+.ob-option-body {
+  flex: 1;
+  min-width: 0;
+}
+.ob-option-title {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15.5px;
+  color: var(--fg);
+}
+.ob-option-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.ob-option-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  background: transparent;
+}
+.ob-option.on .ob-option-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+
+.ob-continue {
+  width: 100%;
+  margin-top: 26px;
+}
+.ob-continue:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ob-otp-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ob-otp-row input {
+  flex: 1;
+}
+.ob-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5a7d3a;
+  white-space: nowrap;
+}
+
+.ob-success {
+  text-align: center;
+}
+.ob-success-icon-outer {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  animation: obPop 0.5s ease both;
+}
+.ob-success-icon-inner {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-fg);
+}
+.ob-summary {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  margin-bottom: 26px;
+  box-shadow: var(--shadow);
+}
+.ob-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 18px;
+}
+.ob-summary-row + .ob-summary-row {
+  border-top: 1px solid var(--border);
+}
+.ob-summary-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ob-summary-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+}
+.ob-summary-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+@media (max-width: 860px) {
+  .ob-progress {
+    margin-bottom: 26px;
+  }
+}
+
+/* ---------- login page (icons-in-field, forgot link, keep-signed-in, divider) ---------- */
+.field-icon-wrap {
+  position: relative;
+  display: flex;
+}
+.field-icon-wrap svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.field-icon-wrap input {
+  width: 100%;
+  padding-left: 38px;
+}
+.modal-field-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.modal-field-row .modal-link {
+  width: auto;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+}
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.divider-or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 6px 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.divider-or::before,
+.divider-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

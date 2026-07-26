@@ -10,18 +10,31 @@ import type {
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 
-/** POST /auth/login → stores token + user on success. */
+/** POST /auth/login → stores token + user on success. `remember` is UI-only — never sent to the API. */
 export function useLogin() {
   const setSession = useAuthStore((s) => s.setSession);
-  return useMutation<AuthResponse, Error, LoginInput>({
-    mutationFn: async (input) => {
+  return useMutation<AuthResponse, Error, LoginInput & { remember?: boolean }>({
+    mutationFn: async ({ remember: _remember, ...input }) => {
       try {
         return await api.post("auth/login", { json: input }).json<AuthResponse>();
       } catch (err) {
         throw new Error(await apiErrorMessage(err, "Invalid email or password."));
       }
     },
-    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
+    onSuccess: (res, variables) => setSession(res.accessToken, res.refreshToken, res.user, variables.remember ?? true),
+  });
+}
+
+/** Public: request a password-reset email; always resolves the same way regardless of match. */
+export function useForgotPassword() {
+  return useMutation<{ ok: true }, Error, string>({
+    mutationFn: async (login) => {
+      try {
+        return await api.post("auth/forgot-password", { json: { login } }).json<{ ok: true }>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Something went wrong — try again."));
+      }
+    },
   });
 }
 

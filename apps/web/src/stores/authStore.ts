@@ -1,17 +1,44 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { AuthUser } from "@sampada/shared";
 import { queryClient } from "../lib/queryClient";
 
 /**
- * Admin auth session: JWT access token + user, persisted to localStorage.
+ * "Keep me signed in" (checked by default): unchecked at login, the session
+ * still works for the rest of the tab but isn't written to localStorage, so
+ * it's gone the next time the browser opens. Module-level because it must be
+ * set synchronously right before the `set()` call below triggers persist's
+ * own `setItem` — there's no other hook point to intercept that write.
+ */
+let rememberSession = true;
+
+const sessionAwareStorage = {
+  getItem: (name: string) => localStorage.getItem(name) ?? sessionStorage.getItem(name),
+  setItem: (name: string, value: string) => {
+    if (rememberSession) {
+      localStorage.setItem(name, value);
+      sessionStorage.removeItem(name);
+    } else {
+      sessionStorage.setItem(name, value);
+      localStorage.removeItem(name);
+    }
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  },
+};
+
+/**
+ * Admin auth session: JWT access token + user, persisted to localStorage (or
+ * sessionStorage — see `rememberSession` above).
  * Privileged requests send `Authorization: Bearer <token>`.
  */
 interface AuthState {
   token: string | null;
   refreshToken: string | null;
   user: AuthUser | null;
-  setSession: (token: string, refreshToken: string, user: AuthUser) => void;
+  setSession: (token: string, refreshToken: string, user: AuthUser, remember?: boolean) => void;
   /** Swap in a rotated token pair after a silent refresh (keeps cached queries). */
   setTokens: (token: string, refreshToken: string) => void;
   logout: () => void;
@@ -23,7 +50,8 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       refreshToken: null,
       user: null,
-      setSession: (token, refreshToken, user) => {
+      setSession: (token, refreshToken, user, remember = true) => {
+        rememberSession = remember;
         queryClient.clear();
         set({ token, refreshToken, user });
       },
@@ -35,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
         set({ token: null, refreshToken: null, user: null });
       },
     }),
-    { name: "nsk-auth" },
+    { name: "nsk-auth", storage: createJSONStorage(() => sessionAwareStorage) },
   ),
 );
 

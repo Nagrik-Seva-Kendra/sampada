@@ -102,10 +102,10 @@ export class AuthService {
     return { accessToken, refreshToken, user };
   }
 
-  /** The stored account's role must match the tab the user picked (admin/employee). */
+  /** No role tab to pick anymore — the account's own stored role decides admin vs. employee. */
   private async tryLogin(input: LoginInput): Promise<StoredUser | null> {
     const stored = await this.users.findByLogin(input.login);
-    if (!stored || stored.role !== input.role) return null;
+    if (!stored) return null;
     if (!(await this.users.verifyCredentials(stored, input.password))) return null;
     if (stored.status === "PENDING") {
       throw new ForbiddenException("Your signup is awaiting admin approval.");

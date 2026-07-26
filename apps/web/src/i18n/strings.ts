@@ -61,11 +61,9 @@ export const strings = {
     hi: "गाइडलाइन दरों और विलेख सेवाओं का उपयोग करने वाले नागरिकों के असली अनुभव।",
   },
 
-  authUsername: { en: "Username", hi: "यूज़रनेम" },
+  authUsername: { en: "Email or username", hi: "ईमेल या यूज़रनेम" },
   authPassword: { en: "Password", hi: "पासवर्ड" },
   authLogin: { en: "Login", hi: "लॉगिन" },
-  authEmployeeLogin: { en: "Employee Login", hi: "कर्मचारी लॉगिन" },
-  authAdminLogin: { en: "Admin Login", hi: "एडमिन लॉगिन" },
   authLogout: { en: "Logout", hi: "लॉगआउट" },
   authSignupLink: { en: "New employee? Sign up", hi: "नए कर्मचारी? साइन अप करें" },
   authSignupTitle: { en: "Employee Sign Up", hi: "कर्मचारी साइन अप" },
@@ -385,21 +383,138 @@ export const strings = {
   aboutStat2: { en: "Guideline years", hi: "गाइडलाइन वर्ष" },
   aboutStat3: { en: "Citizens served", hi: "सेवित नागरिक" },
 
-  // Onboarding (full-screen) — creates the organization directly.
-  onboardKicker: { en: "Get started", hi: "शुरू करें" },
-  onboardTitle: { en: "Create your organisation", hi: "अपनी संस्था बनाएं" },
+  // Onboarding (full-screen, multi-step wizard) — creates the organization directly.
+  onboardKicker: { en: "Welcome", hi: "स्वागत है" },
+  onboardTitle: { en: "Let's set up your workspace", hi: "आइए आपका वर्कस्पेस सेट करें" },
   onboardSub: {
-    en: "Set up your organisation's account on Sampada — you'll be its owner.",
-    hi: "सम्पदा पर अपनी संस्था का खाता बनाएं — आप इसके मालिक होंगे।",
+    en: "A few quick questions and you'll be ready to look up guideline rates, draft deeds, and manage registrations — all in one place.",
+    hi: "कुछ त्वरित सवाल और आप गाइडलाइन दरें देखने, विलेख बनाने और पंजीकरण प्रबंधित करने के लिए तैयार होंगे — सब एक ही जगह।",
   },
-  onboardSubmit: { en: "Create organisation", hi: "संस्था बनाएं" },
-  onboardHaveAccount: { en: "Already have an account? Log in", hi: "पहले से खाता है? लॉगिन करें" },
+  onboardBrandQuote: {
+    en: "Guideline rates, deeds & e-registry — modernised for the people who use them every day.",
+    hi: "गाइडलाइन दरें, विलेख व ई-रजिस्ट्री — हर दिन इस्तेमाल करने वालों के लिए आधुनिक बनाया गया।",
+  },
+  onboardSubmit: { en: "Create workspace", hi: "वर्कस्पेस बनाएं" },
+  onboardHaveAccount: { en: "Already have an account? Sign in", hi: "पहले से खाता है? साइन इन करें" },
+
+  obPerk1: { en: "Instant guideline-rate lookup", hi: "तुरंत गाइडलाइन दर खोज" },
+  obPerk2: { en: "Ready-made deed templates", hi: "तैयार विलेख टेम्पलेट" },
+  obPerk3: { en: "Team & e-registry in one workspace", hi: "टीम व ई-रजिस्ट्री एक ही वर्कस्पेस में" },
+
+  obStepGetStarted: { en: "Get started", hi: "शुरू करें" },
+  obStepAboutYou: { en: "About you", hi: "आपके बारे में" },
+  obStepYourGoal: { en: "Your goal", hi: "आपका लक्ष्य" },
+  obStepWorkspace: { en: "Workspace", hi: "वर्कस्पेस" },
+  obStepAccount: { en: "Account", hi: "खाता" },
+
+  obBack: { en: "Back", hi: "वापस" },
+  obContinue: { en: "Continue", hi: "जारी रखें" },
+  obSkip: { en: "Skip", hi: "छोड़ें" },
+
+  obRoleTitle: { en: "What best describes your work?", hi: "आपके काम का सबसे सही विवरण क्या है?" },
+  obRoleSub: { en: "We'll tailor Sampada around how you use it.", hi: "हम सम्पदा को आपके उपयोग के अनुसार ढालेंगे।" },
+  obRoleAgentTitle: { en: "Property / real-estate agent", hi: "प्रॉपर्टी / रियल-एस्टेट एजेंट" },
+  obRoleAgentSub: {
+    en: "Look up rates and draft sale deeds for clients",
+    hi: "क्लाइंट्स के लिए दरें देखें और विक्रय विलेख बनाएं",
+  },
+  obRoleWriterTitle: { en: "Deed writer / document drafter", hi: "विलेख लेखक / दस्तावेज़ प्रारूपकार" },
+  obRoleWriterSub: {
+    en: "Draft and manage deed documents day to day",
+    hi: "रोज़ाना विलेख दस्तावेज़ तैयार करें और प्रबंधित करें",
+  },
+  obRoleLegalTitle: { en: "Legal & registration professional", hi: "कानूनी व पंजीकरण पेशेवर" },
+  obRoleLegalSub: {
+    en: "Advise clients and handle e-registry filings",
+    hi: "क्लाइंट्स को सलाह दें और ई-रजिस्ट्री फाइलिंग संभालें",
+  },
+  obRoleOfficeTitle: { en: "Sub-registry / government office", hi: "उप-पंजीयक / सरकारी कार्यालय" },
+  obRoleOfficeSub: {
+    en: "Publish guideline rates and manage a team",
+    hi: "गाइडलाइन दरें प्रकाशित करें और टीम प्रबंधित करें",
+  },
+
+  obGoalTitle: { en: "What do you want to do first?", hi: "आप पहले क्या करना चाहते हैं?" },
+  obGoalSub: {
+    en: "Pick your main goal — you can do all of it later.",
+    hi: "अपना मुख्य लक्ष्य चुनें — बाकी सब आप बाद में कर सकते हैं।",
+  },
+  obGoalRatesTitle: { en: "Look up guideline rates", hi: "गाइडलाइन दरें देखें" },
+  obGoalRatesSub: {
+    en: "Search current circle rates by district & year",
+    hi: "जिले व वर्ष के अनुसार वर्तमान सर्किल दरें खोजें",
+  },
+  obGoalDeedsTitle: { en: "Draft & register deeds", hi: "विलेख बनाएं व पंजीकृत करें" },
+  obGoalDeedsSub: {
+    en: "Create deed drafts from ready templates",
+    hi: "तैयार टेम्पलेट से विलेख प्रारूप बनाएं",
+  },
+  obGoalTeamTitle: { en: "Manage my team of drafters", hi: "अपनी प्रारूपकार टीम प्रबंधित करें" },
+  obGoalTeamSub: {
+    en: "Invite employees and approve their work",
+    hi: "कर्मचारियों को आमंत्रित करें और उनका काम स्वीकृत करें",
+  },
+  obGoalEregistryTitle: { en: "Explore the e-Registry process", hi: "ई-रजिस्ट्री प्रक्रिया जानें" },
+  obGoalEregistrySub: {
+    en: "Understand steps & documents for registration",
+    hi: "पंजीकरण के चरण व दस्तावेज़ समझें",
+  },
+
+  obWorkspaceTitle: { en: "Set up your workspace", hi: "अपना वर्कस्पेस सेट करें" },
+  obWorkspaceSub: {
+    en: "This creates your organization — you'll be its owner.",
+    hi: "इससे आपकी संस्था बनेगी — आप इसके मालिक होंगे।",
+  },
+
+  obAccountTitle: { en: "Create your account", hi: "अपना खाता बनाएं" },
+  obAccountSub: {
+    en: "We'll verify your email so we can secure your workspace.",
+    hi: "हम आपके वर्कस्पेस को सुरक्षित करने के लिए आपका ईमेल सत्यापित करेंगे।",
+  },
+  obVerifiedBadge: { en: "Verified", hi: "सत्यापित" },
+
+  obSuccessTitle: { en: "You're all set", hi: "आप तैयार हैं" },
+  obSuccessSubPrefix: { en: "Your workspace", hi: "आपका वर्कस्पेस" },
+  obSuccessSubSuffix: {
+    en: "is ready. Here's what we've lined up for you.",
+    hi: "तैयार है। यहाँ है जो हमने आपके लिए तैयार किया है।",
+  },
+  obSuccessRoleLabel: { en: "Role", hi: "भूमिका" },
+  obSuccessGoalLabel: { en: "First up", hi: "सबसे पहले" },
+  obEnterDashboard: { en: "Enter dashboard", hi: "डैशबोर्ड में जाएं" },
 
   // Login (full-screen)
-  loginKicker: { en: "Welcome back", hi: "वापसी पर स्वागत है" },
-  loginTitle: { en: "Log in to Sampada", hi: "सम्पदा में लॉगिन करें" },
-  loginNoAccount: { en: "New here? Create an account", hi: "नए हैं? खाता बनाएं" },
+  loginKicker: { en: "Sign in", hi: "साइन इन" },
+  loginTitle: { en: "Welcome back", hi: "वापसी पर स्वागत है" },
+  loginSub: {
+    en: "Sign in to your workspace to look up guideline rates, draft deeds, and manage registrations.",
+    hi: "गाइडलाइन दरें देखने, विलेख बनाने और पंजीकरण प्रबंधित करने के लिए अपने वर्कस्पेस में साइन इन करें।",
+  },
+  loginBrandQuote: {
+    en: "Everything for property registration, in one modern workspace.",
+    hi: "संपत्ति पंजीकरण के लिए सब कुछ, एक आधुनिक वर्कस्पेस में।",
+  },
+  loginPerk1: { en: "Live circle rates by district & year", hi: "जिले व वर्ष के अनुसार लाइव सर्किल दरें" },
+  loginPerk2: { en: "Deed templates ready to draft", hi: "विलेख टेम्पलेट बनाने के लिए तैयार" },
+  loginPerk3: {
+    en: "Team, e-registry & approvals in one place",
+    hi: "टीम, ई-रजिस्ट्री व स्वीकृतियाँ एक ही जगह",
+  },
+  loginForgot: { en: "Forgot?", hi: "भूल गए?" },
+  loginKeepSignedIn: { en: "Keep me signed in", hi: "मुझे साइन इन रखें" },
+  loginOr: { en: "OR", hi: "या" },
+  loginNoAccount: { en: "New to Sampada? Create your workspace", hi: "सम्पदा में नए हैं? अपना वर्कस्पेस बनाएं" },
   loginJoinTeamLink: { en: "Joining a team? Use a join code", hi: "किसी टीम में शामिल हो रहे हैं? जॉइन कोड इस्तेमाल करें" },
+  loginForgotTitle: { en: "Reset your password", hi: "अपना पासवर्ड रीसेट करें" },
+  loginForgotSub: {
+    en: "Enter your email or username and we'll send you a reset link, if an account exists.",
+    hi: "अपना ईमेल या यूज़रनेम डालें, अगर खाता मौजूद है तो हम आपको रीसेट लिंक भेज देंगे।",
+  },
+  loginForgotSubmit: { en: "Send reset link", hi: "रीसेट लिंक भेजें" },
+  loginForgotSent: {
+    en: "If that account exists, a reset link is on its way — check your email.",
+    hi: "अगर वह खाता मौजूद है, तो रीसेट लिंक भेजा जा रहा है — अपना ईमेल देखें।",
+  },
 
   // Dashboard sidebar
   sidebarAllDeeds: { en: "All Deeds", hi: "सभी विलेख" },

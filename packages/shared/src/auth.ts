@@ -1,11 +1,9 @@
 import { z } from "zod";
-import { Role, StaffRole } from "./enums.js";
+import { Role } from "./enums.js";
 import { OrganizationSummary } from "./organization.js";
 
 export const LoginInput = z.object({
-  /** Which login tab the user picked — the resolved account must match this role. */
-  role: StaffRole,
-  /** Employee: username (or email, kept working as a fallback). Admin: email. */
+  /** Email or username — the account's own stored role decides admin vs. employee, no tab to pick. */
   login: z.string().trim().min(1),
   password: z.string().min(1),
 });
@@ -65,6 +63,12 @@ export const ResetPasswordInput = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 export type ResetPasswordInput = z.infer<typeof ResetPasswordInput>;
+
+/** Public "forgot password" request — same email/username the account logs in with. */
+export const ForgotPasswordInput = z.object({
+  login: z.string().trim().min(1),
+});
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordInput>;
 
 /** Admin "send reset link" result: the link to copy plus whether it was emailed. */
 export const PasswordResetLink = z.object({

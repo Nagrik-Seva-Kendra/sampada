@@ -23,6 +23,19 @@ export class PasswordResetService {
     private readonly users: UsersService,
   ) {}
 
+  /**
+   * Public self-service "forgot password": if the identifier matches a staff
+   * account, email them a reset link — same as the admin-triggered flow, just
+   * without returning the link (would let a caller confirm which emails have
+   * accounts). Always resolves either way; the controller sends one generic
+   * response regardless of whether anything actually matched.
+   */
+  async requestReset(login: string): Promise<void> {
+    const user = await this.users.findByLogin(login);
+    if (!user) return;
+    await this.createLink(user.id);
+  }
+
   /** Mint a fresh reset link for a user, invalidating any earlier unused ones. */
   async createLink(userId: string): Promise<PasswordResetLink> {
     const user = await this.users.findById(userId);
