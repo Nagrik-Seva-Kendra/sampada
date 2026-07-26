@@ -22,61 +22,42 @@ export function PublicDeedViewPage() {
 
   if (deed.isLoading) {
     return (
-      <section className="page">
-        <div className="wrap" style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
+      <div className="doc-viewer-shell">
+        <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
           <span className="spinner" aria-hidden />
         </div>
-      </section>
+      </div>
     );
   }
 
   if (!deed.data) {
     return (
-      <section className="page">
-        <div className="wrap">
-          <p className="doc-empty">This link is no longer valid.</p>
+      <div className="doc-viewer-shell">
+        <div className="doc-viewer-paper">
+          <p style={{ textAlign: "center", color: "#6b6b6b", margin: 0 }}>This link is no longer valid.</p>
         </div>
-      </section>
+      </div>
     );
   }
 
   const { title, content, updatedAt } = deed.data;
 
   return (
-    <section className="page">
-      <div className="wrap" style={{ maxWidth: 900 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <h2 className="page-title" style={{ margin: 0 }}>
-            {title}
-          </h2>
-          <button type="button" className="doc-btn" onClick={() => printDeed(title, content)}>
-            Print
-          </button>
+    <div className="doc-viewer-shell">
+      <div className="doc-viewer-toolbar">
+        <div>
+          <div className="doc-viewer-title">{title}</div>
+          <div className="doc-viewer-sub">Last updated {new Date(updatedAt).toLocaleString()}</div>
         </div>
-        <p className="doc-sub" style={{ fontSize: 12, opacity: 0.7 }}>
-          Last updated {new Date(updatedAt).toLocaleString()}
-        </p>
-        <div
-          ref={contentRef}
-          style={{
-            fontSize: "1.05rem",
-            lineHeight: 1.8,
-            whiteSpace: "pre-wrap",
-            textAlign: "justify",
-            marginTop: 20,
-          }}
-        >
+        <button type="button" className="doc-viewer-btn" onClick={() => printDeed(title, content)}>
+          Print
+        </button>
+      </div>
+      <div className="doc-viewer-paper">
+        <div ref={contentRef} className="doc-viewer-body">
           {content}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
