@@ -58,6 +58,15 @@ type StaffRequest = Request & { user: StaffUser };
           return this.service.listPendingCorrectionDeedIds();
     }
 
+  /** Admin/Employee: every pending correction with deed context, for the notification bell. */
+  @Get("corrections/pending")
+    pendingCorrections(@Req() req: StaffRequest) {
+          if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+                  throw new ForbiddenException("Only admin/employee can view corrections.");
+          }
+          return this.service.listPendingCorrections();
+    }
+
   /**
      * One sample deed with its full content (for view/print/edit). Lists omit the
      * body, so this is the only way to read it. ADMIN/EMPLOYEE may read any deed;

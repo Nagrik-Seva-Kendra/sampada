@@ -7,6 +7,7 @@ import type {
     DeedRevisionItem,
     DeedType,
     ListDeedsQuery,
+    PendingCorrectionSummary,
     PublicDeedItem,
     ResolveCorrectionInput,
     SampleDeedItem,
@@ -297,5 +298,25 @@ export function usePendingCorrectionIds() {
           enabled: !!token && canView,
           queryFn: () =>
                   api.get("sample-deeds/corrections/pending-ids", { headers: authHeaders(token) }).json<string[]>(),
+    });
+}
+
+/**
+ * Admin/Employee: every pending correction org-wide, with deed context —
+ * powers the sidebar notification bell. Polls so a new party-flagged
+ * correction shows up without the dashboard needing a reload.
+ */
+export function usePendingCorrections() {
+    const token = useAuthStore((s) => s.token);
+    const role = useAuthStore((s) => s.user?.role);
+    const canView = role === "ADMIN" || role === "EMPLOYEE";
+    return useQuery({
+          queryKey: ["sample-deeds", "corrections", "pending"],
+          enabled: !!token && canView,
+          refetchInterval: 30000,
+          queryFn: () =>
+                  api
+              .get("sample-deeds/corrections/pending", { headers: authHeaders(token) })
+              .json<PendingCorrectionSummary[]>(),
     });
 }

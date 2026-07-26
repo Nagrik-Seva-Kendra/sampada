@@ -130,3 +130,14 @@ export const ResolveCorrectionInput = z.object({
   resolutionNote: z.string().trim().max(2000).optional(),
 });
 export type ResolveCorrectionInput = z.infer<typeof ResolveCorrectionInput>;
+
+/** One pending correction, with enough deed context to power the notification bell. */
+export const PendingCorrectionSummary = z.object({
+  id: z.string(),
+  deedId: z.string(),
+  deedType: DeedType,
+  deedTitle: z.string(),
+  message: z.string(),
+  createdAt: z.string(),
+});
+export type PendingCorrectionSummary = z.infer<typeof PendingCorrectionSummary>;

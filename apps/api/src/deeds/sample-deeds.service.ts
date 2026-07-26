@@ -8,6 +8,7 @@ import type {
     DeedCreator,
     DeedRevisionItem,
     ListDeedsQuery,
+    PendingCorrectionSummary,
     PublicDeedItem,
     ResolveCorrectionInput,
     SampleDeedItem,
@@ -505,6 +506,27 @@ function truncateExample(content: string, maxLen = 6000): string {
       distinct: ["deedTemplateId"],
     });
     return rows.map((r) => r.deedTemplateId);
+  }
+
+  /**
+   * Every pending correction across every deed, newest first, with just
+   * enough deed context to power the notification bell (title + type, so
+   * the dropdown can link straight into the editor).
+   */
+  async listPendingCorrections(): Promise<PendingCorrectionSummary[]> {
+    const rows = await this.prisma.deedCorrectionRequest.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+      include: { deedTemplate: { select: { id: true, type: true, title: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      deedId: r.deedTemplate.id,
+      deedType: r.deedTemplate.type as DeedType,
+      deedTitle: r.deedTemplate.title,
+      message: r.message,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   /** Staff: marks a correction resolved (ADMIN/EMPLOYEE, same as editing the deed itself). */
