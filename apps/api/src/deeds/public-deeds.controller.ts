@@ -1,6 +1,6 @@
 import { Body, Controller, Get, NotFoundException, Param, Post, Sse, UseInterceptors } from "@nestjs/common";
 import { map, type Observable } from "rxjs";
-import { DeedSelectionInput } from "@sampada/shared";
+import { CreateCorrectionInput, DeedSelectionInput } from "@sampada/shared";
 import { SampleDeedsService } from "./sample-deeds.service.js";
 import { DeedLiveService } from "./deed-live.service.js";
 import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
@@ -51,6 +51,24 @@ export class PublicDeedsController {
       if (typeof v === "string") fields[k] = v;
     }
     return this.service.applyPartyFields(id, fields);
+  }
+
+  /**
+   * Party flags something wrong with the deed. No auth -- gated by the
+   * deed's own unguessable id, same trust model as the read above.
+   */
+  @Post(":id/corrections")
+  createCorrection(@Param("id") id: string, @Body() body: unknown) {
+    return this.service.createCorrection(id, CreateCorrectionInput.parse(body));
+  }
+
+  /**
+   * Every correction on this deed, so the party can see the status of what
+   * they (or an earlier visitor on this same link) already reported.
+   */
+  @Get(":id/corrections")
+  listCorrections(@Param("id") id: string) {
+    return this.service.listCorrections(id);
   }
 
   @Post(":id/selection")

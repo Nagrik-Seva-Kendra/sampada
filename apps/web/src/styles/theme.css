@@ -195,6 +195,45 @@ h3 {
   align-items: center;
   gap: 10px;
 }
+.deed-corrections-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 18px 0;
+}
+.deed-correction-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff3d6;
+  border: 1px solid #e8c977;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+:root[data-theme="dark"] .deed-correction-row,
+.dark .deed-correction-row {
+  background: #3a2f10;
+  border-color: #6b5620;
+}
+.deed-correction-row-msg {
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--fg);
+}
+.deed-correction-row-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a6300;
+  margin-bottom: 4px;
+}
+:root[data-theme="dark"] .deed-correction-row-label,
+.dark .deed-correction-row-label {
+  color: #e0b95a;
+}
 .deed-modal-loader {
   height: 100%;
   display: flex;
@@ -1340,6 +1379,97 @@ h3 {
   .doc-viewer-paper {
     padding: 36px 24px;
   }
+}
+
+/* correction panel, below the paper -- same theme-independent light look */
+.doc-correction-panel {
+  max-width: 860px;
+  margin: 22px auto 0;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 24px 28px;
+}
+.doc-correction-heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: #1f1f1f;
+  margin-bottom: 4px;
+}
+.doc-correction-hint {
+  font-size: 12.5px;
+  color: #6b6b6b;
+  margin-bottom: 14px;
+}
+.doc-correction-textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  border: 1px solid #c7c7c7;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1a1a1a;
+  box-sizing: border-box;
+}
+.doc-correction-textarea:focus {
+  outline: 2px solid #8b8b8b;
+  outline-offset: 1px;
+}
+.doc-correction-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.doc-correction-list {
+  margin-top: 20px;
+  border-top: 1px solid #ececec;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.doc-correction-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.doc-correction-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.doc-correction-msg {
+  font-size: 13.5px;
+  color: #1a1a1a;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.doc-correction-badge {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.doc-correction-badge.pending {
+  background: #fff3d6;
+  color: #8a6300;
+}
+.doc-correction-badge.resolved {
+  background: #dcf3e2;
+  color: #16713a;
+}
+.doc-correction-resolution {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e6e6e6;
+  font-size: 12.5px;
+  color: #3f6e4d;
 }
 
 /* ---------- e-registry page ---------- */

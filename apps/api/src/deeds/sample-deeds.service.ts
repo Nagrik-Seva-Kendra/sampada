@@ -2,11 +2,14 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { randomUUID } from "node:crypto";
 import { DeedType } from "@sampada/shared";
 import type {
+    CreateCorrectionInput,
     CreateSampleDeedInput,
+    DeedCorrectionItem,
     DeedCreator,
     DeedRevisionItem,
     ListDeedsQuery,
     PublicDeedItem,
+    ResolveCorrectionInput,
     SampleDeedItem,
     SampleDeedListItem,
     UpdateSampleDeedInput,
@@ -14,7 +17,7 @@ import type {
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
-import type { DeedTemplate, DeedTemplateRevision, Prisma } from "@prisma/client";
+import type { DeedCorrectionRequest, DeedTemplate, DeedTemplateRevision, Prisma } from "@prisma/client";
 
 function toItem(row: DeedTemplate): SampleDeedItem {
     return {
@@ -26,6 +29,18 @@ function toItem(row: DeedTemplate): SampleDeedItem {
           createdById: row.createdById,
           createdByName: row.createdByName,
           createdByRole: (row.createdByRole ?? undefined) as SampleDeedItem["createdByRole"],
+          createdAt: row.createdAt.toISOString(),
+    };
+}
+
+function toCorrectionItem(row: DeedCorrectionRequest & { resolvedBy?: { fname: string; lname: string } | null }): DeedCorrectionItem {
+    return {
+          id: row.id,
+          message: row.message,
+          status: row.status as DeedCorrectionItem["status"],
+          resolutionNote: row.resolutionNote,
+          resolvedByName: row.resolvedBy ? `${row.resolvedBy.fname} ${row.resolvedBy.lname}`.trim() : null,
+          resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
           createdAt: row.createdAt.toISOString(),
     };
 }
@@ -444,5 +459,68 @@ function truncateExample(content: string, maxLen = 6000): string {
     });
     await this.prisma.deedTemplate.update({ where: { id }, data: { content } });
     return { changed: true };
+  }
+
+  /**
+   * Party-facing: flags something wrong with the deed, from the public share
+   * link. No auth -- gated only by the deed's own unguessable id, same as
+   * getPublic()/applyPartyFields(). Rejected on an inactive/removed deed so a
+   * stale link can't spawn corrections nobody will ever see.
+   */
+  async createCorrection(deedId: string, input: CreateCorrectionInput): Promise<DeedCorrectionItem> {
+    const deed = await this.prisma.deedTemplate.findUnique({ where: { id: deedId } });
+    if (!deed || deed.status !== "active") throw new NotFoundException("Deed not found.");
+    const row = await this.prisma.deedCorrectionRequest.create({
+      data: tenantCreateData<Prisma.DeedCorrectionRequestUncheckedCreateInput>({
+        deedTemplateId: deedId,
+        message: input.message,
+      }),
+    });
+    return toCorrectionItem(row);
+  }
+
+  /**
+   * Every correction on this deed, newest first -- shown both on the public
+   * share link (so the party can see their own report's status) and to staff
+   * editing the deed.
+   */
+  async listCorrections(deedId: string): Promise<DeedCorrectionItem[]> {
+    const rows = await this.prisma.deedCorrectionRequest.findMany({
+      where: { deedTemplateId: deedId },
+      orderBy: { createdAt: "desc" },
+      include: { resolvedBy: { select: { fname: true, lname: true } } },
+    });
+    return rows.map(toCorrectionItem);
+  }
+
+  /**
+   * The set of deed ids with at least one PENDING correction, across every
+   * deed -- powers the "flagged" badge on the All Deeds list so staff notice
+   * without opening each deed individually.
+   */
+  async listPendingCorrectionDeedIds(): Promise<string[]> {
+    const rows = await this.prisma.deedCorrectionRequest.findMany({
+      where: { status: "PENDING" },
+      select: { deedTemplateId: true },
+      distinct: ["deedTemplateId"],
+    });
+    return rows.map((r) => r.deedTemplateId);
+  }
+
+  /** Staff: marks a correction resolved (ADMIN/EMPLOYEE, same as editing the deed itself). */
+  async resolveCorrection(correctionId: string, input: ResolveCorrectionInput, user: StaffUser): Promise<DeedCorrectionItem> {
+    const existing = await this.prisma.deedCorrectionRequest.findUnique({ where: { id: correctionId } });
+    if (!existing) throw new NotFoundException("Correction not found.");
+    const row = await this.prisma.deedCorrectionRequest.update({
+      where: { id: correctionId },
+      data: {
+        status: "RESOLVED",
+        resolutionNote: input.resolutionNote ?? null,
+        resolvedById: user.id,
+        resolvedAt: new Date(),
+      },
+      include: { resolvedBy: { select: { fname: true, lname: true } } },
+    });
+    return toCorrectionItem(row);
   }
 }

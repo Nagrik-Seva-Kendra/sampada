@@ -103,3 +103,30 @@ export const DeedSelectionInput = z.object({
   end: z.number().int().nonnegative().nullable(),
 });
 export type DeedSelectionInput = z.infer<typeof DeedSelectionInput>;
+
+export const CorrectionStatus = z.enum(["PENDING", "RESOLVED"]);
+export type CorrectionStatus = z.infer<typeof CorrectionStatus>;
+
+/** Submitted by a party on the public share-link page, flagging something wrong in the deed. */
+export const CreateCorrectionInput = z.object({
+  message: z.string().trim().min(1).max(2000),
+});
+export type CreateCorrectionInput = z.infer<typeof CreateCorrectionInput>;
+
+/** One correction thread on a deed -- shown to both the party (via the share link) and staff. */
+export const DeedCorrectionItem = z.object({
+  id: z.string(),
+  message: z.string(),
+  status: CorrectionStatus,
+  resolutionNote: z.string().nullable(),
+  resolvedByName: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type DeedCorrectionItem = z.infer<typeof DeedCorrectionItem>;
+
+/** Staff resolving a correction; the note is optional context for what changed. */
+export const ResolveCorrectionInput = z.object({
+  resolutionNote: z.string().trim().max(2000).optional(),
+});
+export type ResolveCorrectionInput = z.infer<typeof ResolveCorrectionInput>;

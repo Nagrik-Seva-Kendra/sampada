@@ -4,7 +4,7 @@ import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
-import { useSampleDeed, useSaveSampleDeed } from "./useSampleDeeds";
+import { useDeedCorrections, useResolveCorrection, useSampleDeed, useSaveSampleDeed } from "./useSampleDeeds";
 import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
@@ -27,6 +27,9 @@ export function DeedEditPage() {
   const record = useSampleDeed(id);
   const saveDeed = useSaveSampleDeed(type);
   const item = record.data;
+  const corrections = useDeedCorrections(id, !!item);
+  const resolveCorrection = useResolveCorrection(id);
+  const pendingCorrections = (corrections.data ?? []).filter((c) => c.status === "PENDING");
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -160,6 +163,30 @@ export function DeedEditPage() {
           <span className="deed-type-tag">{deed ? deed.name[lang] : type}</span>
           <AutoSaveStatusLine status={status} t={t} />
         </div>
+
+        {pendingCorrections.length > 0 && (
+          <div className="deed-corrections-banner">
+            {pendingCorrections.map((c) => (
+              <div key={c.id} className="deed-correction-row">
+                <div>
+                  <div className="deed-correction-row-label">
+                    {lang === "hi" ? "Party ne correction bataya hai" : "Party flagged a correction"}
+                  </div>
+                  <div className="deed-correction-row-msg">{c.message}</div>
+                </div>
+                <button
+                  type="button"
+                  className="doc-btn"
+                  style={{ flexShrink: 0 }}
+                  disabled={resolveCorrection.isPending}
+                  onClick={() => resolveCorrection.mutate({ correctionId: c.id, input: {} })}
+                >
+                  {lang === "hi" ? "Resolved mark karein" : "Mark resolved"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <form className="modal-form" onSubmit={onSubmit} style={{ marginTop: 20 }}>
           <label className="modal-field">

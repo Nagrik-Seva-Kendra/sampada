@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+    CreateCorrectionInput,
     CreateSampleDeedInput,
+    DeedCorrectionItem,
     DeedCreator,
     DeedRevisionItem,
     DeedType,
     ListDeedsQuery,
     PublicDeedItem,
+    ResolveCorrectionInput,
     SampleDeedItem,
     SampleDeedListItem,
     UpdateSampleDeedInput,
@@ -227,5 +230,72 @@ export function usePublicDeed(id: string | undefined) {
           queryKey: ["public-deed", id],
           enabled: !!id,
           queryFn: () => api.get(`public/deeds/${id}`).json<PublicDeedItem>(),
+    });
+}
+
+/**
+ * Corrections the party (or an earlier visitor on this same link) has
+ * flagged on this deed. Polls while the tab stays open so a resolution
+ * staff applies shows up without the party needing to reload -- there's no
+ * other way to reach an anonymous visitor once they've left the page.
+ */
+export function usePublicDeedCorrections(id: string | undefined) {
+    return useQuery({
+          queryKey: ["public-deed", id, "corrections"],
+          enabled: !!id,
+          refetchInterval: 20000,
+          queryFn: () => api.get(`public/deeds/${id}/corrections`).json<DeedCorrectionItem[]>(),
+    });
+}
+
+/** Party-facing: flags something wrong with the deed from the public share link. */
+export function useCreateCorrection(id: string | undefined) {
+    const qc = useQueryClient();
+    return useMutation<DeedCorrectionItem, Error, CreateCorrectionInput>({
+          mutationFn: (input) => api.post(`public/deeds/${id}/corrections`, { json: input }).json<DeedCorrectionItem>(),
+          onSuccess: () => qc.invalidateQueries({ queryKey: ["public-deed", id, "corrections"] }),
+    });
+}
+
+/** Staff: corrections flagged on this deed (shown in the editor). */
+export function useDeedCorrections(id: string | null, enabled: boolean) {
+    const token = useAuthStore((s) => s.token);
+    return useQuery({
+          queryKey: ["sample-deeds", "corrections", id],
+          enabled: !!token && !!id && enabled,
+          queryFn: () =>
+                  api.get(`sample-deeds/${id}/corrections`, { headers: authHeaders(token) }).json<DeedCorrectionItem[]>(),
+    });
+}
+
+/** Staff: marks a party-flagged correction resolved. */
+export function useResolveCorrection(deedId: string) {
+    const token = useAuthStore((s) => s.token);
+    const qc = useQueryClient();
+    return useMutation<DeedCorrectionItem, Error, { correctionId: string; input: ResolveCorrectionInput }>({
+          mutationFn: ({ correctionId, input }) =>
+                  api
+              .patch(`sample-deeds/${deedId}/corrections/${correctionId}/resolve`, {
+                          headers: authHeaders(token),
+                          json: input,
+              })
+              .json<DeedCorrectionItem>(),
+          onSuccess: () => {
+                  qc.invalidateQueries({ queryKey: ["sample-deeds", "corrections", deedId] });
+                  qc.invalidateQueries({ queryKey: ["sample-deeds", "corrections", "pending-ids"] });
+          },
+    });
+}
+
+/** Admin/Employee: deed ids with an unresolved correction, for the All Deeds "flagged" badge. */
+export function usePendingCorrectionIds() {
+    const token = useAuthStore((s) => s.token);
+    const role = useAuthStore((s) => s.user?.role);
+    const canView = role === "ADMIN" || role === "EMPLOYEE";
+    return useQuery({
+          queryKey: ["sample-deeds", "corrections", "pending-ids"],
+          enabled: !!token && canView,
+          queryFn: () =>
+                  api.get("sample-deeds/corrections/pending-ids", { headers: authHeaders(token) }).json<string[]>(),
     });
 }

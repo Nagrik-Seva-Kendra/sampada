@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
-import { usePublicDeed } from "./useSampleDeeds";
+import { usePublicDeed, usePublicDeedCorrections, useCreateCorrection } from "./useSampleDeeds";
 import { usePublishSelection } from "./useDeedLiveSelection";
 import { printDeed } from "./printDeed";
 
@@ -58,6 +58,77 @@ export function PublicDeedViewPage() {
           {content}
         </div>
       </div>
+      <CorrectionPanel deedId={id} />
+    </div>
+  );
+}
+
+/**
+ * Lets the party flag something wrong with the deed above, and shows the
+ * status of anything already reported on this same link (staff resolving it
+ * flips the badge below within ~20s, via polling -- see
+ * usePublicDeedCorrections).
+ */
+function CorrectionPanel({ deedId }: { deedId: string }) {
+  const corrections = usePublicDeedCorrections(deedId);
+  const createCorrection = useCreateCorrection(deedId);
+  const [message, setMessage] = useState("");
+
+  function submit() {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    createCorrection.mutate(
+      { message: trimmed },
+      { onSuccess: () => setMessage("") },
+    );
+  }
+
+  return (
+    <div className="doc-correction-panel">
+      <div className="doc-correction-heading">Is draft mein koi correction chahiye?</div>
+      <div className="doc-correction-hint">
+        Neeche likhiye ki kya galat hai ya kya badalna hai — hamari team ko turant pata chal jaayega.
+      </div>
+      <textarea
+        className="doc-correction-textarea"
+        placeholder="Jaise: naam ki spelling galat hai, plot number sahi karein, etc."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        disabled={createCorrection.isPending}
+      />
+      <div className="doc-correction-actions">
+        <button
+          type="button"
+          className="doc-viewer-btn"
+          onClick={submit}
+          disabled={createCorrection.isPending || !message.trim()}
+        >
+          {createCorrection.isPending ? "Submitting…" : "Submit correction"}
+        </button>
+      </div>
+
+      {corrections.data && corrections.data.length > 0 && (
+        <div className="doc-correction-list">
+          {corrections.data.map((c) => (
+            <div key={c.id} className="doc-correction-item">
+              <div className="doc-correction-item-head">
+                <span
+                  className={`doc-correction-badge ${c.status === "RESOLVED" ? "resolved" : "pending"}`}
+                >
+                  {c.status === "RESOLVED" ? "✓ Correction laga diya gaya" : "Pending"}
+                </span>
+                <span style={{ fontSize: 11, color: "#9a9a9a" }}>
+                  {new Date(c.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="doc-correction-msg">{c.message}</div>
+              {c.status === "RESOLVED" && c.resolutionNote && (
+                <div className="doc-correction-resolution">{c.resolutionNote}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

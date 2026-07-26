@@ -14,7 +14,7 @@ import {
     UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { CreateSampleDeedInput, DeedType, ListDeedsQuery, UpdateSampleDeedInput } from "@sampada/shared";
+import { CreateSampleDeedInput, DeedType, ListDeedsQuery, ResolveCorrectionInput, UpdateSampleDeedInput } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { SampleDeedsService } from "./sample-deeds.service.js";
 
@@ -49,6 +49,15 @@ type StaffRequest = Request & { user: StaffUser };
           return this.service.listCreators();
     }
 
+  /** Admin/Employee: deed ids with at least one unresolved correction, for the All Deeds "flagged" badge. */
+  @Get("corrections/pending-ids")
+    pendingCorrectionIds(@Req() req: StaffRequest) {
+          if (req.user.role !== "ADMIN" && req.user.role !== "EMPLOYEE") {
+                  throw new ForbiddenException("Only admin/employee can view corrections.");
+          }
+          return this.service.listPendingCorrectionDeedIds();
+    }
+
   /**
      * One sample deed with its full content (for view/print/edit). Lists omit the
      * body, so this is the only way to read it. ADMIN/EMPLOYEE may read any deed;
@@ -69,6 +78,18 @@ type StaffRequest = Request & { user: StaffUser };
   @Get(":id/revisions")
     listRevisions(@Param("id") id: string, @Req() req: StaffRequest) {
           return this.service.listRevisions(id, req.user);
+    }
+
+  /** Corrections a party has flagged via the public share link, newest first. */
+  @Get(":id/corrections")
+    listCorrections(@Param("id") id: string) {
+          return this.service.listCorrections(id);
+    }
+
+  /** Marks a party-flagged correction resolved. */
+  @Patch(":id/corrections/:correctionId/resolve")
+    resolveCorrection(@Param("correctionId") correctionId: string, @Body() body: unknown, @Req() req: StaffRequest) {
+          return this.service.resolveCorrection(correctionId, ResolveCorrectionInput.parse(body), req.user);
     }
 
   /** Draft a new deed for a type, owned by the caller. */

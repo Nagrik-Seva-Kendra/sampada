@@ -13,6 +13,7 @@ import {
   useDeedCreators,
   useDeleteAnyDeed,
   useFetchSampleDeed,
+  usePendingCorrectionIds,
 } from "./useSampleDeeds";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -73,6 +74,8 @@ export function AllDeedsPage() {
 
   const deeds = useAllDeeds(filters);
   const creators = useDeedCreators();
+  const pendingCorrectionIds = usePendingCorrectionIds();
+  const flaggedIds = useMemo(() => new Set(pendingCorrectionIds.data ?? []), [pendingCorrectionIds.data]);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
@@ -319,7 +322,27 @@ export function AllDeedsPage() {
                       <tr>
                         <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
                         <td>{formatDate(d.createdAt)}</td>
-                        <td>{d.title}</td>
+                        <td>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            {d.title}
+                            {flaggedIds.has(d.id) && (
+                              <span
+                                title={lang === "hi" ? "Party ne correction bataya hai" : "Party flagged a correction"}
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  color: "#8a6300",
+                                  background: "#fff3d6",
+                                  borderRadius: 999,
+                                  padding: "2px 8px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                ⚠ Correction
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
                         <td>
                           <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>

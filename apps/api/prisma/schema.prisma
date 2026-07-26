@@ -63,6 +63,11 @@ enum MemberStatus {
   INACTIVE
 }
 
+enum CorrectionStatus {
+  PENDING
+  RESOLVED
+}
+
 // Draft/example deeds shown on a deed-type's public info page (view/print
 // only) — matches @sampada/shared's SampleDeedItem exactly. `type` and
 // `status` stay plain strings (not enums) because the API validates them via
@@ -82,10 +87,35 @@ model DeedTemplate {
   updatedAt      DateTime     @updatedAt
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  corrections    DeedCorrectionRequest[]
 
   @@index([type])
   @@index([createdById])
   @@index([organizationId, type])
+}
+
+// A correction a party flags via the public share link ("/d/:id"). Scoped to
+// the same org as the deed itself (see PublicDeedTenantInterceptor, which
+// adopts the deed's org for the whole request) so it goes through the normal
+// tenant-scoped Prisma client with no special-casing.
+model DeedCorrectionRequest {
+  id             String           @id @default(cuid())
+  deedTemplateId String
+  organizationId String
+  message        String           @db.Text
+  status         CorrectionStatus @default(PENDING)
+  resolutionNote String?
+  resolvedById   String?
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  deedTemplate DeedTemplate @relation(fields: [deedTemplateId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+  resolvedBy   User?        @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([deedTemplateId, status])
+  @@index([organizationId, status])
 }
 
 /// Immutable snapshot of a DeedTemplate taken right before each correction
@@ -159,6 +189,7 @@ model User {
    */
   lastActiveOrganizationId String?
   lastActiveOrganization   Organization? @relation("UserLastActiveOrganization", fields: [lastActiveOrganizationId], references: [id], onDelete: SetNull)
+  resolvedCorrections      DeedCorrectionRequest[]
 }
 
 /// An organization (customer tenant). Every tenant-scoped row belongs to one.
@@ -189,6 +220,7 @@ model Organization {
   deedNaxas           DeedNaxa[]
   guidelineDocuments  GuidelineDocument[]
   usersLastActiveHere User[]                 @relation("UserLastActiveOrganization")
+  correctionRequests  DeedCorrectionRequest[]
 }
 
 /// A user's place in one organization. Carries the role, status, and per-org
