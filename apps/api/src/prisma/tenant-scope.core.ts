@@ -9,7 +9,6 @@ export const TENANT_MODELS = [
   "Party",
   "DeedParty",
   "DeedNaxa",
-  "GuidelineDocument",
 ] as const;
 export const TENANT_MODEL_SET = new Set<string>(TENANT_MODELS);
 

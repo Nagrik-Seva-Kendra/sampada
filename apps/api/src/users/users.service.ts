@@ -45,6 +45,8 @@ export interface StoredUser {
   phone: string | null;
   /** Sequential admin-facing id, e.g. "EMP-0007"; only assigned to EMPLOYEE accounts. */
   employeeCode: string | null;
+  /** Platform staff (me/my team) — gates back-office capabilities like the shared guideline library. */
+  isPlatformAdmin: boolean;
 }
 
 export function toStoredUser(row: User): StoredUser {
@@ -62,6 +64,7 @@ export function toStoredUser(row: User): StoredUser {
     status: row.status,
     phone: row.mobile,
     employeeCode: row.employeeCode,
+    isPlatformAdmin: row.isPlatformAdmin,
   };
 }
 
@@ -125,6 +128,10 @@ export class UsersService {
       role: true,
       organization: { select: { name: true, slug: true, status: true } },
     } as const;
+    // CANCELLED marks a soft-deleted org (see OrganizationsService.deleteOwn) —
+    // its data stays intact for recovery, but it must stop resolving as anyone's
+    // active workspace, same as if the membership itself were gone.
+    const liveOrg = { organization: { status: { not: "CANCELLED" as const } } };
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -132,17 +139,26 @@ export class UsersService {
     });
     if (user?.lastActiveOrganizationId) {
       const lastActive = await this.prisma.membership.findFirst({
-        where: { userId, organizationId: user.lastActiveOrganizationId, status: "ACTIVE" },
+        where: { userId, organizationId: user.lastActiveOrganizationId, status: "ACTIVE", ...liveOrg },
         select,
       });
       if (lastActive) return lastActive;
     }
 
     return this.prisma.membership.findFirst({
-      where: { userId, status: "ACTIVE" },
+      where: { userId, status: "ACTIVE", ...liveOrg },
       orderBy: { createdAt: "desc" },
       select,
     });
+  }
+
+  /** Login-time guard: does this account have any non-deleted org left to act under? */
+  async hasLiveMembership(userId: string): Promise<boolean> {
+    const membership = await this.prisma.membership.findFirst({
+      where: { userId, status: "ACTIVE", organization: { status: { not: "CANCELLED" } } },
+      select: { id: true },
+    });
+    return !!membership;
   }
 
   /** Persist which org a session is acting under, so refresh/next-login lands back there. */

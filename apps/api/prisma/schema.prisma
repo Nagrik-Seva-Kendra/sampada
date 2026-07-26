@@ -297,6 +297,10 @@ model GuidelineDocument {
   title          String
   district       String
   session        Int
+  /// Which language this specific PDF is in — English and Hindi are stored
+  /// as separate rows (same district+session, different language), not one
+  /// row with two files.
+  language       Language     @default(en)
   fileName       String
   mimeType       String
   size           Int
@@ -309,7 +313,13 @@ model GuidelineDocument {
 
   @@index([createdAt])
   @@index([district, session])
+  @@index([district, session, language])
   @@index([organizationId, district, session])
+}
+
+enum Language {
+  en
+  hi
 }
 
 /// Single-use, 1-hour password-reset tokens minted by an admin ("send reset

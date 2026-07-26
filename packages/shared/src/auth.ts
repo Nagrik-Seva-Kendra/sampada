@@ -38,6 +38,8 @@ export const AuthUser = z.object({
   fname: z.string(),
   lname: z.string(),
   role: Role,
+  /** Platform staff — gates back-office capabilities like the shared guideline library. */
+  isPlatformAdmin: z.boolean(),
   /** The org this session currently acts under; null only if the user has no active membership at all. */
   activeOrganization: OrganizationSummary.nullable(),
 });

@@ -1,10 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { ClsService } from "nestjs-cls";
 import type { AuthResponse, OrgSignupInput } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { OtpService } from "../otp/otp.service.js";
 import { UsersService, hashPassword, toStoredUser } from "../users/users.service.js";
 import { AuthService } from "../auth/auth.service.js";
+import { requireTenantContext } from "../tenant/current-tenant.js";
 import { generateUniqueJoinCode, generateUniqueSlug } from "./organization-codes.js";
 
 const MAX_SIGNUP_ATTEMPTS = 3;
@@ -25,6 +27,7 @@ export class OrganizationsService {
     private readonly otp: OtpService,
     private readonly users: UsersService,
     private readonly auth: AuthService,
+    private readonly cls: ClsService,
   ) {}
 
   async signup(input: OrgSignupInput): Promise<AuthResponse> {
@@ -77,5 +80,27 @@ export class OrganizationsService {
     }
     /* istanbul ignore next -- loop always returns or throws */
     throw new Error("unreachable");
+  }
+
+  /**
+   * Owner-only self-service soft delete: marks the org CANCELLED (excluded
+   * from resolveActiveMembership going forward, so it stops resolving as
+   * anyone's active workspace — recoverable by flipping status back) and
+   * revokes every member's session immediately. Nothing is actually erased —
+   * deeds, members, everything stays in place for possible recovery.
+   */
+  async deleteOwn(): Promise<void> {
+    const { organizationId } = requireTenantContext(this.cls);
+    await this.prisma.$transaction(async (tx) => {
+      const members = await tx.membership.findMany({
+        where: { organizationId },
+        select: { userId: true },
+      });
+      await tx.organization.update({ where: { id: organizationId }, data: { status: "CANCELLED" } });
+      await tx.user.updateMany({
+        where: { id: { in: members.map((m) => m.userId) } },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    });
   }
 }

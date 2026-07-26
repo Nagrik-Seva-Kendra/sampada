@@ -67,6 +67,7 @@ export class AuthService {
       fname: stored.fname,
       lname: stored.lname,
       role: stored.role,
+      isPlatformAdmin: stored.isPlatformAdmin,
       activeOrganization: membership
         ? {
             id: membership.organizationId,
@@ -112,6 +113,9 @@ export class AuthService {
     }
     if (stored.status === "INACTIVE") {
       throw new ForbiddenException("Your services have been discontinued by the admin.");
+    }
+    if (!(await this.users.hasLiveMembership(stored.id))) {
+      throw new ForbiddenException("This organisation has been deleted.");
     }
     return stored;
   }

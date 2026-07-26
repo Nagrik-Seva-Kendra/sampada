@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Language } from "@sampada/shared";
 import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -7,6 +8,7 @@ export interface GuidelineDoc {
   title: string;
   district: string;
   session: number;
+  language: Language;
   fileName: string;
   mimeType: string;
   size: number;
@@ -120,38 +122,41 @@ export function useGuidelineFileOpener() {
       .then((b) => URL.createObjectURL(b));
 }
 
-/** Staff-only: list of guideline documents, optionally filtered by district and/or session. */
-export function useGuidelineList(filters?: { district?: string; session?: number }) {
+/** Staff-only: list of guideline documents, optionally filtered by district, session and/or language. */
+export function useGuidelineList(filters?: { district?: string; session?: number; language?: Language }) {
   const district = filters?.district;
   const session = filters?.session;
+  const language = filters?.language;
   return useQuery({
-    queryKey: ["guideline-documents", district ?? null, session ?? null],
+    queryKey: ["guideline-documents", district ?? null, session ?? null, language ?? null],
     queryFn: () =>
       api
         .get("guideline-documents", {
           searchParams: {
             ...(district ? { district } : {}),
             ...(session ? { session } : {}),
+            ...(language ? { language } : {}),
           },
         })
         .json<GuidelineDoc[]>(),
   });
 }
 
-/** Admin: upload a new guideline PDF for a district + session. */
+/** Platform admin: upload a new guideline PDF for a district + session + language. */
 export function useUploadGuideline() {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<
     GuidelineDoc,
     Error,
-    { title: string; district: string; session: number; file: File }
+    { title: string; district: string; session: number; language: Language; file: File }
   >({
-    mutationFn: async ({ title, district, session, file }) => {
+    mutationFn: async ({ title, district, session, language, file }) => {
       const fd = new FormData();
       fd.set("title", title);
       fd.set("district", district);
       fd.set("session", String(session));
+      fd.set("language", language);
       fd.set("file", file);
       try {
         return await api
@@ -165,13 +170,54 @@ export function useUploadGuideline() {
   });
 }
 
-/** Admin: delete a guideline document. */
+/** Platform admin: delete a guideline document. */
 export function useDeleteGuideline() {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<unknown, Error, string>({
     mutationFn: (id) =>
       api.delete(`guideline-documents/${id}`, { headers: authHeaders(token) }).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["guideline-documents"] }),
+  });
+}
+
+export interface GuidelineImportItem {
+  district: string;
+  session: number;
+  language: Language;
+  title?: string;
+  url: string;
+}
+
+export interface GuidelineImportResult {
+  imported: number;
+  failed: number;
+  results: Array<{ url?: string; district?: string; ok: boolean; error?: string }>;
+}
+
+/**
+ * Platform admin: bulk import — the server downloads each PDF (e.g. from an
+ * official government site) and stores it via the normal upload path. Pass
+ * deleteExisting on the very first batch to clear any earlier documents
+ * before reloading the full set.
+ */
+export function useImportGuideline() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<
+    GuidelineImportResult,
+    Error,
+    { items: GuidelineImportItem[]; deleteExisting?: boolean }
+  >({
+    mutationFn: async (input) => {
+      try {
+        return await api
+          .post("guideline-documents/import", { headers: authHeaders(token), json: input, timeout: 120000 })
+          .json<GuidelineImportResult>();
+      } catch (e) {
+        throw new Error(await apiErrorMessage(e, "Import failed."));
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["guideline-documents"] }),
   });
 }

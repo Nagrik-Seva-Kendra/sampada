@@ -15,9 +15,10 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import type { Language } from "@prisma/client";
 import type { Request, Response } from "express";
 import { get as httpsGet } from "node:https";
-import { JwtAdminGuard } from "../auth/jwt-admin.guard.js";
+import { JwtPlatformAdminGuard } from "../auth/jwt-platform-admin.guard.js";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { GuidelineService } from "./guideline.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -35,8 +36,13 @@ type AuthedRequest = Request & { user?: { id: string; name: string } };
 interface ImportItem {
   district?: string;
   session?: number | string;
+  language?: string;
   title?: string;
   url?: string;
+}
+
+function parseLanguage(raw: unknown): Language {
+  return raw === "hi" ? "hi" : "en";
 }
 
 /**
@@ -77,9 +83,10 @@ function downloadPdf(url: string, redirects = 0): Promise<Buffer> {
 /**
  * Guideline documents (official circulars/rate PDFs), filed under a district
  * (52 MP districts) and a session (registration session's starting year, e.g.
- * 2015 means "2015-2016"). List and download are public — no login needed to
- * view or download them. Upload and delete are admin-only (JwtAdminGuard),
- * managed from the Manage Guideline admin page.
+ * 2015 means "2015-2016"). Shared across every organization — list/view/
+ * download need only a staff login (any org). Upload, bulk import, and delete
+ * are platform-admin-only (JwtPlatformAdminGuard), managed from the Guideline
+ * page's admin section.
  */
 @Controller("guideline-documents")
 export class GuidelineController {
@@ -90,11 +97,16 @@ export class GuidelineController {
 
   @Get()
   @UseGuards(JwtStaffGuard)
-  list(@Query("district") district?: string, @Query("session") sessionRaw?: string) {
+  list(
+    @Query("district") district?: string,
+    @Query("session") sessionRaw?: string,
+    @Query("language") language?: string,
+  ) {
     const session = sessionRaw ? Number(sessionRaw) : undefined;
     return this.service.list({
       district: district?.trim() || undefined,
       session: session && !Number.isNaN(session) ? session : undefined,
+      language: language === "en" || language === "hi" ? language : undefined,
     });
   }
 
@@ -117,11 +129,11 @@ export class GuidelineController {
   }
 
   @Post()
-  @UseGuards(JwtAdminGuard)
+  @UseGuards(JwtPlatformAdminGuard)
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
   upload(
     @Req() req: AuthedRequest,
-    @Body() body: { title?: string; district?: string; session?: string },
+    @Body() body: { title?: string; district?: string; session?: string; language?: string },
     @UploadedFile() file?: UploadedDoc,
   ) {
     if (!file) throw new BadRequestException("A PDF file is required.");
@@ -137,6 +149,7 @@ export class GuidelineController {
       title: title || "Guideline document",
       district,
       session,
+      language: parseLanguage(body?.language),
       file,
       uploadedById: req.user?.id,
       uploadedByName: req.user?.name,
@@ -150,7 +163,7 @@ export class GuidelineController {
    * batch small (~6 items) to stay within the free-tier request timeout.
    */
   @Post("import")
-  @UseGuards(JwtAdminGuard)
+  @UseGuards(JwtPlatformAdminGuard)
   async import(
     @Req() req: AuthedRequest,
     @Body() body: { items?: ImportItem[]; deleteExisting?: boolean },
@@ -172,6 +185,7 @@ export class GuidelineController {
           title: (it.title || district + " Guideline").toString().trim(),
           district,
           session,
+          language: parseLanguage(it.language),
           file: {
             buffer,
             originalname: (it.title || district + "-guideline") + ".pdf",
@@ -193,7 +207,7 @@ export class GuidelineController {
   }
 
   @Delete(":id")
-  @UseGuards(JwtAdminGuard)
+  @UseGuards(JwtPlatformAdminGuard)
   async remove(@Param("id") id: string) {
     await this.service.remove(id);
     return { removed: true };

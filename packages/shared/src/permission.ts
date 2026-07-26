@@ -14,6 +14,7 @@ export const Permission = z.enum([
   "members.approveJoinRequest",
   "org.settingsManage",
   "org.ownershipTransfer",
+  "org.delete",
   "billing.manage",
 ]);
 export type Permission = z.infer<typeof Permission>;

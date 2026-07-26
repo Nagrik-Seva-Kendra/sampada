@@ -8,7 +8,7 @@ import type {
   OrgSignupInput,
 } from "@sampada/shared";
 import { api, apiErrorMessage } from "../../lib/api";
-import { useAuthStore } from "../../stores/authStore";
+import { authHeaders, useAuthStore } from "../../stores/authStore";
 
 /** POST /auth/login → stores token + user on success. `remember` is UI-only — never sent to the API. */
 export function useLogin() {
@@ -35,6 +35,24 @@ export function useForgotPassword() {
         throw new Error(await apiErrorMessage(err, "Something went wrong — try again."));
       }
     },
+  });
+}
+
+/** Owner-only: soft-delete (deactivate, recoverable) the caller's own organization, then log out locally. */
+export function useDeleteOrganization() {
+  const token = useAuthStore((s) => s.token);
+  const logout = useAuthStore((s) => s.logout);
+  return useMutation<{ ok: true }, Error, void>({
+    mutationFn: async () => {
+      try {
+        return await api
+          .post("organizations/delete", { headers: authHeaders(token) })
+          .json<{ ok: true }>();
+      } catch (err) {
+        throw new Error(await apiErrorMessage(err, "Could not delete the organization."));
+      }
+    },
+    onSuccess: () => logout(),
   });
 }
 

@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import type { Language, Prisma } from "@prisma/client";
+import { ClsService } from "nestjs-cls";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
+import { requireTenantContext } from "../tenant/current-tenant.js";
 import { newGuidelineKey, r2Configured, r2Get, r2Put } from "./r2.js";
 
 export interface GuidelineDocMeta {
@@ -9,6 +10,7 @@ export interface GuidelineDocMeta {
   title: string;
   district: string;
   session: number;
+  language: Language;
   fileName: string;
   mimeType: string;
   size: number;
@@ -36,6 +38,7 @@ const META = {
   title: true,
   district: true,
   session: true,
+  language: true,
   fileName: true,
   mimeType: true,
   size: true,
@@ -48,6 +51,7 @@ function toMeta(r: {
   title: string;
   district: string;
   session: number;
+  language: Language;
   fileName: string;
   mimeType: string;
   size: number;
@@ -58,25 +62,30 @@ function toMeta(r: {
 }
 
 /**
- * Guideline documents (official circulars/rate PDFs), uploaded by admins via
- * the Manage Guideline admin page. List/download are public so the site-wide
- * Guideline page works without login; only upload/delete require admin auth
- * (enforced in the controller via JwtAdminGuard). When R2 env vars are set the
- * PDF bytes live in Cloudflare R2 (the `data` column stores an "r2:<key>"
- * pointer); otherwise they fall back to Postgres bytes (legacy behavior), so
- * old rows keep working unchanged. Each document is filed under a district (52
- * MP districts) and a session (registration session's starting year — e.g.
- * 2015 means "2015-2016").
+ * Guideline documents (official circulars/rate PDFs) — a single shared
+ * library visible to every organization (not tenant-scoped: these are
+ * official government documents, identical for everyone, not per-customer
+ * data). Only a platform admin can upload/import/delete (JwtPlatformAdminGuard
+ * in the controller); every org's own staff can list/view/download. When R2
+ * env vars are set the PDF bytes live in Cloudflare R2 (the `data` column
+ * stores an "r2:<key>" pointer); otherwise they fall back to Postgres bytes
+ * (legacy behavior), so old rows keep working unchanged. Each document is
+ * filed under a district (52 MP districts) and a session (registration
+ * session's starting year — e.g. 2015 means "2015-2016").
  */
 @Injectable()
 export class GuidelineService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cls: ClsService,
+  ) {}
 
-  async list(filters?: { district?: string; session?: number }): Promise<GuidelineDocMeta[]> {
+  async list(filters?: { district?: string; session?: number; language?: Language }): Promise<GuidelineDocMeta[]> {
     const rows = await this.prisma.guidelineDocument.findMany({
       where: {
         ...(filters?.district ? { district: filters.district } : {}),
         ...(filters?.session ? { session: filters.session } : {}),
+        ...(filters?.language ? { language: filters.language } : {}),
       },
       orderBy: [{ session: "desc" }, { createdAt: "desc" }],
       select: META,
@@ -103,6 +112,7 @@ export class GuidelineService {
     title: string;
     district: string;
     session: number;
+    language: Language;
     file: UploadedDoc;
     uploadedById?: string;
     uploadedByName?: string;
@@ -122,18 +132,24 @@ export class GuidelineService {
       stored = input.file.buffer;
     }
 
+    // No longer tenant-scoped (this is a shared library), so organizationId
+    // isn't auto-stamped by the Prisma extension anymore — attribute the
+    // upload to whichever org the platform admin happened to be acting under.
+    const { organizationId } = requireTenantContext(this.cls);
     const row = await this.prisma.guidelineDocument.create({
-      data: tenantCreateData<Prisma.GuidelineDocumentUncheckedCreateInput>({
+      data: {
+        organizationId,
         title: input.title,
         district: input.district,
         session: input.session,
+        language: input.language,
         fileName: input.file.originalname ?? "guideline.pdf",
         mimeType,
         size,
         data: stored as unknown as GuidelineBytes,
         uploadedById: input.uploadedById ?? null,
         uploadedByName: input.uploadedByName ?? null,
-      }),
+      } satisfies Prisma.GuidelineDocumentUncheckedCreateInput,
       select: META,
     });
     return toMeta(row);
