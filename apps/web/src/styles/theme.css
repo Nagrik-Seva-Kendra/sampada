@@ -1342,7 +1342,8 @@ h3 {
   }
 }
 .doc-viewer-toolbar {
-  margin: 0 0 18px;
+  max-width: 1208px;
+  margin: 0 auto 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2911,5 +2912,320 @@ h3 {
   .theme-toggle-fab {
     width: 30px;
     height: 30px;
+  }
+}
+
+/* ---------- post-login welcome splash ----------
+   Deliberately theme-independent (fixed dark/gold gradient, like a brand
+   moment) -- ignores the light/dark toggle, same reasoning as the public
+   deed viewer being fixed light. */
+@keyframes welcomeAurora1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(60px, -40px) scale(1.15);
+  }
+}
+@keyframes welcomeAurora2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate(-50px, 40px) scale(1);
+  }
+}
+@keyframes welcomeMark {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes welcomeRingPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(231, 200, 122, 0.5),
+      0 20px 60px -20px rgba(231, 200, 122, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 0 22px rgba(231, 200, 122, 0),
+      0 20px 60px -20px rgba(231, 200, 122, 0.6);
+  }
+}
+@keyframes welcomeWord {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotate(2deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+    filter: blur(0);
+  }
+}
+@keyframes welcomeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes welcomeBar {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes welcomeSpark {
+  0% {
+    transform: translateY(0) scale(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-140px) scale(1);
+    opacity: 0;
+  }
+}
+
+.welcome-screen {
+  position: relative;
+  overflow: hidden;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+  background: radial-gradient(120% 90% at 50% -10%, #c86340 0%, #a8481f 34%, #3d1c0d 74%, #1a0f08 100%);
+  color: #fdf5ec;
+  font-family: "Public Sans", "Noto Sans Devanagari", sans-serif;
+}
+.welcome-aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(32px);
+  pointer-events: none;
+}
+.welcome-aurora-1 {
+  left: -10%;
+  top: -10%;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, rgba(224, 150, 60, 0.5), transparent 65%);
+  animation: welcomeAurora1 12s ease-in-out infinite;
+}
+.welcome-aurora-2 {
+  right: -14%;
+  bottom: -16%;
+  width: 560px;
+  height: 560px;
+  background: radial-gradient(circle, rgba(180, 80, 44, 0.55), transparent 65%);
+  animation: welcomeAurora2 14s ease-in-out infinite;
+}
+.welcome-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 50% at 50% 42%, rgba(255, 240, 210, 0.1), transparent 70%);
+  pointer-events: none;
+}
+.welcome-sparks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34%;
+  height: 0;
+  pointer-events: none;
+}
+.welcome-spark {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  background: #fdf5ec;
+  box-shadow: 0 0 10px rgba(253, 245, 236, 0.8);
+  animation-name: welcomeSpark;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+.welcome-spark.gold {
+  background: #e7c87a;
+  box-shadow: 0 0 10px rgba(231, 200, 122, 0.9);
+}
+.welcome-content {
+  position: relative;
+}
+.welcome-mark {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 32px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 240, 214, 0.14);
+  border: 1px solid rgba(231, 200, 122, 0.5);
+  animation:
+    welcomeMark 0.8s cubic-bezier(0.2, 0.85, 0.3, 1) both,
+    welcomeRingPulse 2.8s ease-in-out infinite 0.8s;
+}
+.welcome-mark svg {
+  transform: scale(1.4);
+}
+.welcome-dateline {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #e7c87a;
+  animation: welcomeUp 0.6s ease 0.2s both;
+}
+.welcome-heading {
+  margin: 0 0 22px;
+  font-family: "Archivo", sans-serif;
+  font-weight: 800;
+  font-size: 52px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  justify-content: center;
+}
+.welcome-word {
+  display: inline-block;
+  color: #fff;
+  animation: welcomeWord 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.welcome-word.accent {
+  color: #e7c87a;
+}
+.welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  border-radius: 99px;
+  background: rgba(255, 240, 214, 0.12);
+  border: 1px solid rgba(231, 200, 122, 0.4);
+  font-family: "Archivo", sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  animation: welcomeUp 0.6s ease 0.55s both;
+}
+.welcome-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e7c87a;
+  box-shadow: 0 0 0 4px rgba(231, 200, 122, 0.25);
+}
+.welcome-stats {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 34px;
+  flex-wrap: wrap;
+}
+.welcome-stat {
+  min-width: 104px;
+  padding: 16px 14px;
+  border-radius: 14px;
+  background: rgba(255, 240, 214, 0.08);
+  border: 1px solid rgba(255, 240, 214, 0.14);
+  animation: welcomeUp 0.6s ease both;
+}
+.welcome-stat-value {
+  font-family: "Archivo", sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  color: #fff;
+  line-height: 1;
+}
+.welcome-stat-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(253, 245, 236, 0.62);
+  margin-top: 6px;
+}
+.welcome-footer {
+  position: absolute;
+  bottom: 46px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: welcomeUp 0.6s ease 1s both;
+}
+.welcome-countdown {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  color: rgba(253, 245, 236, 0.8);
+}
+.welcome-countdown strong {
+  color: #fff;
+}
+.welcome-count {
+  display: inline-block;
+  min-width: 12px;
+  font-family: "Archivo", sans-serif;
+  font-weight: 800;
+  color: #e7c87a;
+}
+.welcome-progress {
+  width: 230px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.welcome-progress-bar {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #e7c87a, #c99a38);
+  transition: width 1s linear;
+}
+.welcome-skip {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(253, 245, 236, 0.72);
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .welcome-heading {
+    font-size: 36px;
+  }
+  .welcome-stats {
+    gap: 10px;
   }
 }

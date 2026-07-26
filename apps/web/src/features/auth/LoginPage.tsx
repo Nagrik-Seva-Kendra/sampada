@@ -24,7 +24,7 @@ export function LoginPage() {
     e.preventDefault();
     login.mutate(
       { login: loginValue, password, remember },
-      { onSuccess: () => navigate({ to: "/" }) },
+      { onSuccess: () => navigate({ to: "/welcome" }) },
     );
   }
 

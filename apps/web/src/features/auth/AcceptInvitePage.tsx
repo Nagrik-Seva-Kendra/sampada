@@ -28,7 +28,7 @@ export function AcceptInvitePage() {
         username: username.trim() || undefined,
         password,
       },
-      { onSuccess: () => navigate({ to: "/" }) },
+      { onSuccess: () => navigate({ to: "/welcome" }) },
     );
   }
 

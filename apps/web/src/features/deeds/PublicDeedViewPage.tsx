@@ -44,17 +44,17 @@ export function PublicDeedViewPage() {
 
   return (
     <div className="doc-viewer-shell">
+      <div className="doc-viewer-toolbar">
+        <div>
+          <div className="doc-viewer-title">{title}</div>
+          <div className="doc-viewer-sub">Last updated {new Date(updatedAt).toLocaleString()}</div>
+        </div>
+        <button type="button" className="doc-viewer-btn" onClick={() => printDeed(title, content)}>
+          Print
+        </button>
+      </div>
       <div className="doc-viewer-layout">
         <div className="doc-viewer-main">
-          <div className="doc-viewer-toolbar">
-            <div>
-              <div className="doc-viewer-title">{title}</div>
-              <div className="doc-viewer-sub">Last updated {new Date(updatedAt).toLocaleString()}</div>
-            </div>
-            <button type="button" className="doc-viewer-btn" onClick={() => printDeed(title, content)}>
-              Print
-            </button>
-          </div>
           <div className="doc-viewer-paper">
             <div ref={contentRef} className="doc-viewer-body">
               {content}

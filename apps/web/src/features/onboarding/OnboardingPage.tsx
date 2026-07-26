@@ -456,7 +456,7 @@ export function OnboardingPage() {
                   </div>
                 </div>
               </div>
-              <button type="button" className="btn-calc ob-continue" onClick={() => navigate({ to: "/" })}>
+              <button type="button" className="btn-calc ob-continue" onClick={() => navigate({ to: "/welcome" })}>
                 {t("obEnterDashboard")}
               </button>
             </div>

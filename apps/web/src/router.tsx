@@ -20,6 +20,7 @@ import { ConfirmOwnershipTransferPage } from "./features/auth/ConfirmOwnershipTr
 import { OnboardingPage } from "./features/onboarding/OnboardingPage";
 import { DashboardLayout } from "./features/dashboard/DashboardLayout";
 import { SettingsPage } from "./features/dashboard/SettingsPage";
+import { WelcomePage } from "./features/dashboard/WelcomePage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
 const rootRoute = createRootRoute({
@@ -80,6 +81,14 @@ const confirmOwnershipTransferRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/confirm-ownership-transfer",
   component: ConfirmOwnershipTransferPage,
+});
+// One-time post-login splash (greeting + this org's deed stats), shown right
+// after login/onboarding/accepting an invite -- deliberately outside the
+// dashboard shell so it's a full-screen moment, not a page with a sidebar.
+const welcomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/welcome",
+  component: WelcomePage,
 });
 
 // ---------------------------------------------------------------------------
@@ -178,6 +187,7 @@ const routes = [
   resetPasswordRoute,
   acceptInviteRoute,
   confirmOwnershipTransferRoute,
+  welcomeRoute,
   dashboardRoute,
 ];
 
