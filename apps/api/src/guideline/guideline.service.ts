@@ -83,7 +83,7 @@ export class GuidelineService {
   async list(filters?: { district?: string; session?: number; language?: Language }): Promise<GuidelineDocMeta[]> {
     const rows = await this.prisma.guidelineDocument.findMany({
       where: {
-        // Older sessions only have one state-wide combined PDF (district
+        // Some older sessions only have one state-wide combined PDF (district
         // "All Districts", no per-district split) — it must still show up
         // when browsing a specific district, or those years look empty.
         ...(filters?.district ? { OR: [{ district: filters.district }, { district: "All Districts" }] } : {}),
@@ -93,7 +93,18 @@ export class GuidelineService {
       orderBy: [{ session: "desc" }, { createdAt: "desc" }],
       select: META,
     });
-    return rows.map(toMeta);
+    if (!filters?.district) return rows.map(toMeta);
+
+    // A handful of older sessions have since had their real per-district PDF
+    // found and imported for *some* districts (not all — the source
+    // government site's URL scheme for older years isn't fully guessable).
+    // Where that district-specific doc exists, hide the combined fallback
+    // for that same session so it doesn't show up twice; sessions/districts
+    // still lacking a specific doc keep falling back to the combined one.
+    const sessionsWithSpecific = new Set(
+      rows.filter((r) => r.district === filters.district).map((r) => r.session),
+    );
+    return rows.filter((r) => r.district === filters.district || !sessionsWithSpecific.has(r.session)).map(toMeta);
   }
 
   async file(id: string): Promise<{ fileName: string; mimeType: string; data: Buffer }> {
