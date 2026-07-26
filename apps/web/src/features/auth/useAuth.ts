@@ -1,16 +1,14 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
   AcceptInviteInput,
   AuthResponse,
-  CreateOrganizationInput,
   EmployeeItem,
   EmployeeSignupInput,
   LoginInput,
-  OrganizationSummary,
   OrgSignupInput,
 } from "@sampada/shared";
 import { api, apiErrorMessage } from "../../lib/api";
-import { authHeaders, useAuthStore } from "../../stores/authStore";
+import { useAuthStore } from "../../stores/authStore";
 
 /** POST /auth/login → stores token + user on success. */
 export function useLogin() {
@@ -54,52 +52,6 @@ export function useOnboard() {
       }
     },
     onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
-  });
-}
-
-/** Authenticated: create an ADDITIONAL org for the current user; auto-switches into it. */
-export function useCreateOrganization() {
-  const token = useAuthStore((s) => s.token);
-  const setSession = useAuthStore((s) => s.setSession);
-  return useMutation<AuthResponse, Error, CreateOrganizationInput>({
-    mutationFn: async (input) => {
-      try {
-        return await api
-          .post("organizations", { headers: authHeaders(token), json: input })
-          .json<AuthResponse>();
-      } catch (err) {
-        throw new Error(await apiErrorMessage(err, "Could not create the organization."));
-      }
-    },
-    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
-  });
-}
-
-/** Authenticated: switch which org the session acts under — just mints a new session. */
-export function useSwitchOrganization() {
-  const token = useAuthStore((s) => s.token);
-  const setSession = useAuthStore((s) => s.setSession);
-  return useMutation<AuthResponse, Error, string>({
-    mutationFn: async (organizationId) => {
-      try {
-        return await api
-          .post("organizations/switch", { headers: authHeaders(token), json: { organizationId } })
-          .json<AuthResponse>();
-      } catch (err) {
-        throw new Error(await apiErrorMessage(err, "Could not switch workspace."));
-      }
-    },
-    onSuccess: (res) => setSession(res.accessToken, res.refreshToken, res.user),
-  });
-}
-
-/** Authenticated: every org the current user actively belongs to (workspace switcher). */
-export function useMyOrganizations() {
-  const token = useAuthStore((s) => s.token);
-  return useQuery<OrganizationSummary[]>({
-    queryKey: ["organizations", "mine"],
-    queryFn: () => api.get("organizations/mine", { headers: authHeaders(token) }).json<OrganizationSummary[]>(),
-    enabled: !!token,
   });
 }
 

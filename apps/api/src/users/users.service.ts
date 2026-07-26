@@ -118,21 +118,13 @@ export class UsersService {
    * most-recently-created active membership. Returning org name/slug/etc
    * inline so callers (issueSession) don't need a second query.
    */
-  async resolveActiveMembership(userId: string, preferredOrganizationId?: string) {
+  async resolveActiveMembership(userId: string) {
     const select = {
       id: true,
       organizationId: true,
       role: true,
       organization: { select: { name: true, slug: true, status: true } },
     } as const;
-
-    if (preferredOrganizationId) {
-      const preferred = await this.prisma.membership.findFirst({
-        where: { userId, organizationId: preferredOrganizationId, status: "ACTIVE" },
-        select,
-      });
-      if (preferred) return preferred;
-    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

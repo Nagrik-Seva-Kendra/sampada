@@ -3,19 +3,17 @@ import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { ProfilePage } from "../profile/ProfilePage";
-import { CreateOrganizationModal } from "./CreateOrganizationModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 
 /**
- * Settings: workspace info + create-organisation + change password, then the
- * personal profile form. Open to every org role — unlike the old /profile
- * route, which only employees could reach.
+ * Settings: workspace info + change password, then the personal profile
+ * form. Open to every org role — unlike the old /profile route, which only
+ * employees could reach.
  */
 export function SettingsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const activeOrganization = useActiveOrganization();
-  const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   return (
@@ -46,9 +44,6 @@ export function SettingsPage() {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{activeOrganization.name}</div>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{activeOrganization.role}</div>
               </div>
-              <button type="button" className="btn-calc" onClick={() => setCreateOrgOpen(true)}>
-                {t("workspaceCreateOrg")}
-              </button>
             </div>
           )}
 
@@ -65,7 +60,6 @@ export function SettingsPage() {
 
       <ProfilePage />
 
-      {createOrgOpen && <CreateOrganizationModal onClose={() => setCreateOrgOpen(false)} />}
       {pwOpen && <ChangePasswordModal lang={lang} onClose={() => setPwOpen(false)} />}
     </>
   );

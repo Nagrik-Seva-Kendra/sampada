@@ -409,18 +409,6 @@ export const strings = {
   sidebarSettings: { en: "Settings", hi: "सेटिंग्स" },
   sidebarLogout: { en: "Logout", hi: "लॉगआउट" },
 
-  // Workspace switcher + create-organization
-  workspaceSwitch: { en: "Switch workspace", hi: "वर्कस्पेस बदलें" },
-  workspaceCreateOrg: { en: "Create organisation", hi: "संस्था बनाएं" },
-  createOrgTitle: { en: "Create an organisation", hi: "एक संस्था बनाएं" },
-  createOrgSub: {
-    en: "A new organisation you'll own — invite others once it's created.",
-    hi: "एक नई संस्था जिसके आप मालिक होंगे — बनने के बाद दूसरों को आमंत्रित करें।",
-  },
-  createOrgNameLabel: { en: "Organisation name", hi: "संस्था का नाम" },
-  createOrgSubmit: { en: "Create", hi: "बनाएं" },
-  createOrgCancel: { en: "Cancel", hi: "रद्द करें" },
-
   // Settings
   settingsTitle: { en: "Settings", hi: "सेटिंग्स" },
   settingsWorkspaceSection: { en: "Workspace", hi: "वर्कस्पेस" },

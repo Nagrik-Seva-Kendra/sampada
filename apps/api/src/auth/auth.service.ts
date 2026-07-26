@@ -54,9 +54,9 @@ export class AuthService {
   }
 
   /** Mint an access + refresh pair for an authenticated user, both stamped with the current tokenVersion. */
-  async issueSession(stored: StoredUser, opts?: { activeOrganizationId?: string }): Promise<AuthResponse> {
+  async issueSession(stored: StoredUser): Promise<AuthResponse> {
     // Org context for tenant scoping: the user's active membership (if any).
-    const membership = await this.users.resolveActiveMembership(stored.id, opts?.activeOrganizationId);
+    const membership = await this.users.resolveActiveMembership(stored.id);
     if (membership) {
       await this.users.setLastActiveOrganization(stored.id, membership.organizationId);
     }

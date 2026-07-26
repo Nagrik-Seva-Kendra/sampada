@@ -20,19 +20,7 @@ export const OrgSignupInput = z.object({
 });
 export type OrgSignupInput = z.infer<typeof OrgSignupInput>;
 
-/** Authenticated: create an ADDITIONAL org for the already-logged-in user. */
-export const CreateOrganizationInput = z.object({
-  name: z.string().trim().min(2).max(200),
-});
-export type CreateOrganizationInput = z.infer<typeof CreateOrganizationInput>;
-
-/** Authenticated: switch which org the session acts under. */
-export const SwitchOrganizationInput = z.object({
-  organizationId: z.string().min(1),
-});
-export type SwitchOrganizationInput = z.infer<typeof SwitchOrganizationInput>;
-
-/** One row of the workspace switcher — an org the caller belongs to, plus their role in it. */
+/** The org a session is acting under, plus the caller's role in it. */
 export const OrganizationSummary = z.object({
   id: z.string(),
   name: z.string(),
