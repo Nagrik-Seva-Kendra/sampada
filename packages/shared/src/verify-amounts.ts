@@ -41,9 +41,15 @@ const MARKER_RE = WORD_MARKERS.map((m) => m.replace(/\s+/g, '\\s+')).join('|');
 const CURRENCY = '(?:₹|रुपये|रूपये|रुपए|रूपए|रु\\.?|Rs\\.?)';
 const FIGURE = '([0-9०-९][0-9०-९,\\s]{0,20}[0-9०-९]|[0-9०-९])';
 
+/**
+ * Punctuation that legitimately sits between the figure and the written form:
+ * the /- suffix, quotes around the शब्देन clause, brackets, dashes.
+ */
+const GAP = `[\\s"'\\u2018\\u2019\\u201C\\u201D()\\[\\]{}:;,\\-\\u2013\\u2014/]*`;
+
 /** figure … marker … words … terminator */
 const PAIR_RE = new RegExp(
-  `${CURRENCY}?\\s*${FIGURE}\\s*(?:\\/\\s*-|\\/-|-)?\\s*${CURRENCY}?\\s*(?:${MARKER_RE})\\s*([^0-9०-९।\\n]{2,120}?)\\s*(?:${CURRENCY}|मात्र|केवल|only|$)`,
+  `${CURRENCY}?\\s*${FIGURE}${GAP}${CURRENCY}?${GAP}(?:${MARKER_RE})${GAP}([^0-9०-९।\\n]{2,120}?)\\s*(?:${CURRENCY}|मात्र|केवल|only|$)`,
   'g',
 );
 
