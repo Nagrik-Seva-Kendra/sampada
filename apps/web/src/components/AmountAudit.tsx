@@ -86,7 +86,7 @@ export function AmountAudit({ content, onJumpTo, hideMatched = true, defaultOpen
     ? audit.findings.filter((f) => f.code !== 'ok')
     : audit.findings;
 
-  if (audit.findings.length === 0) return null;
+  if (audit.errors === 0) return null;
 
   const dot = needsAttention
     ? (audit.errors > 0 ? LEVEL_STYLE.error!.bar : LEVEL_STYLE.warning!.bar)
