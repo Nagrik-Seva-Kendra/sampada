@@ -65,13 +65,16 @@ const MIN_MONEY = 1000;
 export interface VerifyOptions {
   /** Amounts under this are ignored by the "words missing" check. Default 1000. */
   minMoney?: number;
-  /** Also report amounts written only in figures. Default true. */
+  /**
+   * Also report amounts written only in figures. Off by default: deeds carry
+   * plenty of figures that are not meant to have a शब्देन clause.
+   */
   flagMissingWords?: boolean;
 }
 
 export function verifyAmounts(text: string, opts: VerifyOptions = {}): AmountFinding[] {
   const minMoney = opts.minMoney ?? MIN_MONEY;
-  const flagMissingWords = opts.flagMissingWords ?? true;
+  const flagMissingWords = opts.flagMissingWords ?? false;
 
   const findings: AmountFinding[] = [];
   const coveredRanges: Array<[number, number]> = [];
