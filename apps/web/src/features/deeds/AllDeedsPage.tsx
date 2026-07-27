@@ -320,9 +320,11 @@ export function AllDeedsPage() {
                   pageRows.map((d, i) => (
                     <Fragment key={d.id}>
                       <tr>
-                        <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
-                        <td>{formatDate(d.createdAt)}</td>
-                        <td>
+                        <td className="dr-cell-sno" data-label={t("deedsColId")}>
+                          {(current - 1) * PAGE_SIZE + i + 1}
+                        </td>
+                        <td data-label={t("deedsColDate")}>{formatDate(d.createdAt)}</td>
+                        <td className="dr-cell-name" data-label={t("deedsColName")}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             {d.title}
                             {flaggedIds.has(d.id) && (
@@ -343,14 +345,14 @@ export function AllDeedsPage() {
                             )}
                           </span>
                         </td>
-                        <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
-                        <td>
+                        <td data-label={t("deedsColCategory")}>{findDeed(d.type)?.name[lang] ?? d.type}</td>
+                        <td data-label={t("deedsColStatus")}>
                           <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
                             {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
                           </span>
                         </td>
-                        <td>{d.createdByName}</td>
-                        <td>
+                        <td data-label={t("deedsColUser")}>{d.createdByName}</td>
+                        <td className="dr-cell-action" data-label={t("deedsAction")}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
