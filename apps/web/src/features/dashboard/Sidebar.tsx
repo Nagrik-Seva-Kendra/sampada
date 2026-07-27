@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, ChevronLeft, ChevronRight, FileStack, Settings, Users } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, FileStack, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
@@ -33,8 +33,17 @@ function SidebarLink({
   );
 }
 
-/** Left nav for the authenticated app shell: deeds, workspace tools, settings. Collapsible via the edge arrow. */
-export function Sidebar() {
+/**
+ * Left nav for the authenticated app shell: deeds, workspace tools, settings.
+ * Collapsible via the edge arrow on desktop; slides in as a drawer on mobile.
+ */
+export function Sidebar({
+  mobileOpen = false,
+  onCloseMobile,
+}: {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const isStaff = useIsStaff();
@@ -49,7 +58,7 @@ export function Sidebar() {
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 
   return (
-    <aside className={"sidebar" + (collapsed ? " collapsed" : "")}>
+    <aside className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}>
       <div className="sidebar-top">
         <Link to="/" className="sidebar-brand" title={collapsed ? t("brandName") : undefined}>
           <BrandMark />
@@ -64,6 +73,14 @@ export function Sidebar() {
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight size={13} strokeWidth={2.5} /> : <ChevronLeft size={13} strokeWidth={2.5} />}
+        </button>
+        <button
+          type="button"
+          className="sidebar-close-btn"
+          onClick={onCloseMobile}
+          aria-label="Close menu"
+        >
+          <X size={18} strokeWidth={2.4} />
         </button>
       </div>
       {collapsed && (
