@@ -3229,3 +3229,265 @@ h3 {
     gap: 10px;
   }
 }
+
+/* =====================================================================
+   Mobile layer
+   Everything below only applies on small screens. Desktop is untouched.
+   ===================================================================== */
+
+/* The mobile bar and drawer close button don't exist on desktop. */
+.mobile-topbar,
+.mobile-nav-backdrop,
+.sidebar-close-btn {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* ---------- app shell: fixed top bar + off-canvas drawer ---------- */
+  .dashboard-shell {
+    flex-direction: column;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    padding: 10px 14px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-left: -6px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .mobile-nav-toggle:active {
+    background: var(--surface-2);
+  }
+  .mobile-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .mobile-topbar-brand span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-topbar-brand svg {
+    flex-shrink: 0;
+  }
+  .mobile-topbar .notif-bell-trigger {
+    margin-left: auto;
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(20, 16, 11, 0.5);
+  }
+
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 80;
+    width: min(84vw, 300px);
+    height: 100svh;
+    padding: 16px 14px;
+    align-items: stretch;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Collapsing is a desktop affordance; in a drawer it just gets in the way. */
+  .sidebar-collapse-btn {
+    display: none;
+  }
+  .sidebar-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .sidebar-close-btn:active {
+    background: var(--surface-2);
+  }
+  /* The bell already lives in the top bar. */
+  .sidebar .notif-bell-trigger {
+    display: none;
+  }
+  /* A collapsed drawer would show icons only — always show labels here. */
+  .sidebar.collapsed .sidebar-link,
+  .sidebar.collapsed .sidebar-nav,
+  .sidebar.collapsed .btn-calc,
+  .sidebar.collapsed .ws-switcher-trigger {
+    justify-content: flex-start;
+  }
+  .sidebar-link {
+    min-height: 46px;
+  }
+
+  /* ---------- page rhythm ---------- */
+  .page {
+    padding: 20px 16px 48px;
+  }
+  .page-title {
+    font-size: 22px;
+  }
+  .wrap {
+    max-width: 100%;
+  }
+
+  /* ---------- touch targets ---------- */
+  .doc-btn,
+  .deed-edit-actions button,
+  .btn-calc,
+  .dr-action-select,
+  select,
+  .district-input {
+    min-height: 44px;
+  }
+  .doc-btn {
+    padding: 11px 14px;
+    font-size: 13.5px;
+  }
+  .deed-edit-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .deed-edit-actions button {
+    flex: 1 1 auto;
+    min-width: 44%;
+  }
+
+  /* Anything under 16px makes iOS zoom the whole page on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* ---------- deeds list: table becomes cards ---------- */
+@media (max-width: 720px) {
+  .dr-table-wrap {
+    border: none;
+    background: none;
+    overflow-x: visible;
+  }
+  .dr-table {
+    font-size: 14px;
+  }
+  .dr-table thead {
+    display: none;
+  }
+  .dr-table,
+  .dr-table tbody,
+  .dr-table tr,
+  .dr-table td {
+    display: block;
+    width: 100%;
+  }
+  .dr-table tr {
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .dr-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 5px 0;
+    border-bottom: none;
+    white-space: normal;
+    text-align: right;
+  }
+  .dr-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+  }
+  /* The deed name is the headline of the card, not another labelled row. */
+  .dr-table td.dr-cell-name {
+    display: block;
+    padding: 0 0 8px;
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 1.35;
+    text-align: left;
+  }
+  .dr-table td.dr-cell-name::before {
+    display: none;
+  }
+  .dr-table td:nth-child(3) {
+    min-width: 0;
+  }
+  /* Row number adds nothing once the rows are cards. */
+  .dr-table td.dr-cell-sno {
+    display: none;
+  }
+  .dr-table td.dr-cell-action {
+    padding-top: 10px;
+  }
+  .dr-table td.dr-cell-action::before {
+    display: none;
+  }
+  .dr-table td.dr-cell-action .dr-action-select {
+    width: 100%;
+  }
+  /* Skeletons and the expanded detail row span the whole card. */
+  .dr-table td[colspan] {
+    display: block;
+    text-align: left;
+  }
+  .dr-table td[colspan]::before {
+    display: none;
+  }
+  .dr-pagination {
+    gap: 12px;
+  }
+}
