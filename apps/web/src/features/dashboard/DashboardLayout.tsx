@@ -5,7 +5,6 @@ import { useAuthStore } from "../../stores/authStore";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
-import { NotificationBell } from "./NotificationBell";
 import { Sidebar } from "./Sidebar";
 
 /** Shell for every authenticated app route: sidebar + content, no header/footer. */
@@ -55,7 +54,6 @@ export function DashboardLayout() {
           <BrandMark />
           <span>{t("brandName")}</span>
         </Link>
-        <NotificationBell collapsed={false} />
       </header>
 
       {navOpen && (
