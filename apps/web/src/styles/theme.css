@@ -2342,8 +2342,8 @@ h3 {
   border-right: 1px solid var(--border);
   padding: 18px 14px;
   position: sticky;
-  top: 60px;
-  height: calc(100svh - 60px);
+  top: 0;
+  height: 100svh;
   overflow-y: auto;
   transition: width 0.18s ease;
 }
