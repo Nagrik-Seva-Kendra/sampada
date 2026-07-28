@@ -8,6 +8,7 @@ import {
 import { hasPermission } from "@sampada/shared";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { LangToggle } from "./components/LangToggle";
+import { NotificationBell } from "./features/dashboard/NotificationBell";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
@@ -23,13 +24,22 @@ import { SettingsPage } from "./features/dashboard/SettingsPage";
 import { WelcomePage } from "./features/dashboard/WelcomePage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
+function TopControls() {
+  // The bell only means anything once there's a session behind it.
+  const token = useAuthStore((s) => s.token);
+  return (
+    <div className="top-controls-fab">
+      <LangToggle />
+      <ThemeToggle />
+      {token && <NotificationBell />}
+    </div>
+  );
+}
+
 const rootRoute = createRootRoute({
   component: () => (
     <>
-      <div className="top-controls-fab">
-        <LangToggle />
-        <ThemeToggle />
-      </div>
+      <TopControls />
       <Outlet />
     </>
   ),
