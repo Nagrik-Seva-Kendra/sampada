@@ -3491,3 +3491,26 @@ h3 {
     gap: 12px;
   }
 }
+
+/* The theme and language toggles are fixed at the app root, so the sticky
+   mobile top bar was covering them. Lift them above it and reserve the space. */
+@media (max-width: 860px) {
+  .top-controls-fab {
+    z-index: 65;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: 12px;
+    gap: 6px;
+  }
+  .mobile-topbar {
+    padding-right: 120px;
+  }
+  .theme-toggle-fab {
+    width: 36px;
+    height: 36px;
+  }
+  .lang-toggle-fab button {
+    min-height: 30px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+}
