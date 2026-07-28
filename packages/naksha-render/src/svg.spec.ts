@@ -145,14 +145,14 @@ describe("buildNakshaSvg", () => {
     const dangerous = {
       ...referencePlot,
       location: `Gwalior <"tricky"> & co`,
-      boundaries: { ...boundaries, north: "Plot 12 & 13 <disputed>" },
+      boundaries: { ...boundaries, north: "12 & 13 <disputed>" },
     };
     const svg = buildNakshaSvg(dangerous, { sellerName: `A & B <Co>` }, "en");
     expect(svg).not.toContain(`<"tricky">`);
-    expect(svg).not.toContain("Plot 12 & 13 <disputed>");
+    expect(svg).not.toContain("12 & 13 <disputed>");
     expect(svg).not.toContain("A & B <Co>");
     expect(svg).toContain("Gwalior &lt;&quot;tricky&quot;&gt; &amp; co");
-    expect(svg).toContain("Plot 12 &amp; 13 &lt;disputed&gt;");
+    expect(svg).toContain("12 &amp; 13 &lt;disputed&gt;");
     expect(svg).toContain("A &amp; B &lt;Co&gt;");
   });
 

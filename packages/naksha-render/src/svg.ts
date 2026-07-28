@@ -15,8 +15,9 @@ const FONT_STACK = "'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif";
 // the on-screen preview and the exported PDF page are both A4-proportioned.
 const WIDTH = 794;
 const MARGIN_X = 60;
-const DRAW_WIDTH = 280; // horizontal extent of the drawn rectangle = N-S measurement
-const DRAW_HEIGHT = 340; // vertical extent of the drawn rectangle = E-W measurement
+const DRAW_MAX_W = 280; // max horizontal extent of the drawn rectangle (N-S measurement axis)
+const DRAW_MAX_H = 340; // max vertical extent of the drawn rectangle (E-W measurement axis)
+const DRAW_MIN = 100; // floor so an extreme length:breadth ratio doesn't draw an unreadable sliver
 const RIGHT_MARGIN_W = 190; // room for the vertical dimension + south column
 const LEFT_MARGIN_W = 190; // room for the north column
 
@@ -63,6 +64,28 @@ const FIELD_LABEL: Record<
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+/**
+ * Renders a direction label + its (possibly long, real chauhaddi text) boundary line as a
+ * vertically-centered stack of `<text>` elements at `x`, wrapping the boundary text so it can't
+ * run into the vertical dimension arrow/label sitting in the same margin column.
+ */
+function renderSideBlock(
+  parts: string[],
+  x: number,
+  centerY: number,
+  dirLabel: string,
+  boundaryText: string,
+  maxChars: number,
+): void {
+  const lines = [dirLabel, ...wrapText(boundaryText, maxChars)];
+  const lineHeight = 17;
+  const startOffset = -((lines.length - 1) / 2) * lineHeight;
+  lines.forEach((line, i) => {
+    const ly = centerY + startOffset + i * lineHeight;
+    parts.push(`<text x="${x}" y="${ly}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(line)}</text>`);
+  });
 }
 
 /** Naive word-based wrap — approximates Devanagari width by character count, good enough for a print layout. */
@@ -116,8 +139,19 @@ export function buildNakshaSvg(
   const field = FIELD_LABEL[lang];
   const areas = computeAreas(d);
 
-  const rectW = DRAW_WIDTH;
-  const rectH = DRAW_HEIGHT;
+  // The rectangle's shape follows the real N-S : E-W ratio (fit into a max bounding box, floored
+  // so a very lopsided plot doesn't draw as an unreadable sliver) — a fixed shape regardless of
+  // input made the longer edge look shorter than the shorter one, i.e. length/breadth looked
+  // swapped on the drawing even though the dimension labels themselves were correct.
+  const nsEwRatio = d.nsLength / d.ewLength;
+  let rectW = DRAW_MAX_W;
+  let rectH = rectW / nsEwRatio;
+  if (rectH > DRAW_MAX_H) {
+    rectH = DRAW_MAX_H;
+    rectW = rectH * nsEwRatio;
+  }
+  rectW = Math.max(rectW, DRAW_MIN);
+  rectH = Math.max(rectH, DRAW_MIN);
   const rectX = MARGIN_X + LEFT_MARGIN_W;
   const centerX = rectX + rectW / 2;
 
@@ -160,11 +194,14 @@ export function buildNakshaSvg(
   y += lineGap + 20;
 
   // Top margin: direction label, then the East boundary text, directly above the rectangle.
+  // The boundary text wraps if it's too long for one line, rather than overflowing past the page.
   parts.push(`<text x="${centerX}" y="${y}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.east)}</text>`);
   y += lineGap;
-  parts.push(
-    `<text x="${centerX}" y="${y}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.east)}</text>`,
-  );
+  const eastLines = wrapText(d.boundaries.east, 45);
+  eastLines.forEach((line, i) => {
+    parts.push(`<text x="${centerX}" y="${y}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(line)}</text>`);
+    if (i < eastLines.length - 1) y += lineGap;
+  });
   y += 14;
 
   const rectY = y;
@@ -186,14 +223,10 @@ export function buildNakshaSvg(
   }
 
   // Left margin: North direction label + boundary text, centered in the left margin column —
-  // same centering convention as East/West (which are centered above/below the rectangle).
+  // same centering convention as East/West (which are centered above/below the rectangle). The
+  // boundary text wraps to fit the column's width instead of running past it.
   const leftColCenterX = MARGIN_X + LEFT_MARGIN_W / 2;
-  parts.push(
-    `<text x="${leftColCenterX}" y="${plotCenterY - 8}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.north)}</text>`,
-  );
-  parts.push(
-    `<text x="${leftColCenterX}" y="${plotCenterY + 12}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.north)}</text>`,
-  );
+  renderSideBlock(parts, leftColCenterX, plotCenterY, side.north, d.boundaries.north, 22);
 
   // Right margin: vertical dimension (E-W length) directly against the rectangle, drawn as a
   // double-headed arrow with the length on the line (matching this office's reference naksha
@@ -207,13 +240,11 @@ export function buildNakshaSvg(
     <text x="${dimX}" y="${plotCenterY}" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
       transform="rotate(-90 ${dimX} ${plotCenterY})">${fmt(d.ewLength)} ${unitLabel}</text>`);
 
-  const rightColCenterX = rectX + rectW + RIGHT_MARGIN_W / 2 + 20;
-  parts.push(
-    `<text x="${rightColCenterX}" y="${plotCenterY - 8}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.south)}</text>`,
-  );
-  parts.push(
-    `<text x="${rightColCenterX}" y="${plotCenterY + 12}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.south)}</text>`,
-  );
+  // South's column starts clear of the dimension arrow/label (dimX + ~36px) and runs to the page
+  // edge; its boundary text wraps to that narrower width instead of overlapping the dimension.
+  const southColStart = dimX + 36;
+  const rightColCenterX = southColStart + (WIDTH - MARGIN_X - southColStart) / 2;
+  renderSideBlock(parts, rightColCenterX, plotCenterY, side.south, d.boundaries.south, 22);
 
   // Bottom margin: horizontal dimension (N-S length) against the rectangle, drawn as a
   // double-headed arrow with the length on the line (same convention as the vertical
@@ -225,9 +256,11 @@ export function buildNakshaSvg(
     <path d="M ${rectX + rectW} ${dimY} L ${rectX + rectW - arrow} ${dimY - arrow / 2} L ${rectX + rectW - arrow} ${dimY + arrow / 2} Z" fill="#111"/>
     <text x="${centerX}" y="${dimY - 6}" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">${fmt(d.nsLength)} ${unitLabel}</text>`);
   let by = dimY + lineGap + 10;
-  parts.push(
-    `<text x="${centerX}" y="${by}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.west)}</text>`,
-  );
+  const westLines = wrapText(d.boundaries.west, 45);
+  westLines.forEach((line, i) => {
+    parts.push(`<text x="${centerX}" y="${by}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(line)}</text>`);
+    if (i < westLines.length - 1) by += lineGap;
+  });
   by += lineGap;
   parts.push(`<text x="${centerX}" y="${by}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.west)}</text>`);
   by += lineGap + 30;

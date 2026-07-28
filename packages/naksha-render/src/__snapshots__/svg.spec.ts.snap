@@ -8,28 +8,28 @@ exports[`buildNakshaSvg > 5-plot snapshot set > decimal measurements 1`] = `
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1582.88 वर्गफुट</text>
 <text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 147.05 वर्गमीटर</text>
-<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
-<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
-<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
-<text x="390" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 19-B</text>
-<text x="390" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – B</text>
-<text x="155" y="366" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
-<text x="155" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
+<text x="370.5291005291005" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="370.5291005291005" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="241.05820105820104" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
+<text x="370.5291005291005" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 19-B</text>
+<text x="370.5291005291005" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – B</text>
+<text x="155" y="365.5" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
+<text x="155" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
 
-    <line x1="564" y1="204" x2="564" y2="544" stroke="#111" stroke-width="1.75"/>
-    <path d="M 564 204 L 560 212 L 568 212 Z" fill="#111"/>
-    <path d="M 564 544 L 560 536 L 568 536 Z" fill="#111"/>
-    <text x="564" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
-      transform="rotate(-90 564 374)">47.25 फुट</text>
-<text x="645" y="366" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
-<text x="645" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
+    <line x1="525.058201058201" y1="204" x2="525.058201058201" y2="544" stroke="#111" stroke-width="1.75"/>
+    <path d="M 525.058201058201 204 L 521.058201058201 212 L 529.058201058201 212 Z" fill="#111"/>
+    <path d="M 525.058201058201 544 L 521.058201058201 536 L 529.058201058201 536 Z" fill="#111"/>
+    <text x="525.058201058201" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 525.058201058201 374)">47.25 फुट</text>
+<text x="647.5291005291006" y="365.5" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
+<text x="647.5291005291006" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
 
-    <line x1="250" y1="570" x2="530" y2="570" stroke="#111" stroke-width="1.75"/>
+    <line x1="250" y1="570" x2="491.058201058201" y2="570" stroke="#111" stroke-width="1.75"/>
     <path d="M 250 570 L 258 566 L 258 574 Z" fill="#111"/>
-    <path d="M 530 570 L 522 566 L 522 574 Z" fill="#111"/>
-    <text x="390" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">33.50 फुट</text>
-<text x="390" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
-<text x="390" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+    <path d="M 491.058201058201 570 L 483.058201058201 566 L 483.058201058201 574 Z" fill="#111"/>
+    <text x="370.5291005291005" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">33.50 फुट</text>
+<text x="370.5291005291005" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="370.5291005291005" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
 <text x="100" y="670" font-size="13" fill="#111">हस्ता.विक्रेता</text>
 <text x="694" y="670" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
 </svg>"
@@ -43,27 +43,27 @@ exports[`buildNakshaSvg > 5-plot snapshot set > meter unit 1`] = `
 <text x="60" y="80" font-size="14" fill="#111">Buyer – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">Area – 2429.41 sq ft</text>
 <text x="734" y="130" font-size="14" text-anchor="end" fill="#111">i.e. – 225.70 sq m</text>
-<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(East)</text>
-<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
-<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
-<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">Plot No. – 56</text>
-<text x="155" y="366" font-size="13" text-anchor="middle" fill="#111">(North)</text>
-<text x="155" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
+<text x="362.1081081081081" y="170" font-size="13" text-anchor="middle" fill="#111">(East)</text>
+<text x="362.1081081081081" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="224.2162162162162" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
+<text x="362.1081081081081" y="374" font-size="13" text-anchor="middle" fill="#111">Plot No. – 56</text>
+<text x="155" y="365.5" font-size="13" text-anchor="middle" fill="#111">(North)</text>
+<text x="155" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
 
-    <line x1="564" y1="204" x2="564" y2="544" stroke="#111" stroke-width="1.75"/>
-    <path d="M 564 204 L 560 212 L 568 212 Z" fill="#111"/>
-    <path d="M 564 544 L 560 536 L 568 536 Z" fill="#111"/>
-    <text x="564" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
-      transform="rotate(-90 564 374)">18.50 m</text>
-<text x="645" y="366" font-size="13" text-anchor="middle" fill="#111">(South)</text>
-<text x="645" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
+    <line x1="508.2162162162162" y1="204" x2="508.2162162162162" y2="544" stroke="#111" stroke-width="1.75"/>
+    <path d="M 508.2162162162162 204 L 504.2162162162162 212 L 512.2162162162163 212 Z" fill="#111"/>
+    <path d="M 508.2162162162162 544 L 504.2162162162162 536 L 512.2162162162163 536 Z" fill="#111"/>
+    <text x="508.2162162162162" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 508.2162162162162 374)">18.50 m</text>
+<text x="639.1081081081081" y="365.5" font-size="13" text-anchor="middle" fill="#111">(South)</text>
+<text x="639.1081081081081" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
 
-    <line x1="250" y1="570" x2="530" y2="570" stroke="#111" stroke-width="1.75"/>
+    <line x1="250" y1="570" x2="474.2162162162162" y2="570" stroke="#111" stroke-width="1.75"/>
     <path d="M 250 570 L 258 566 L 258 574 Z" fill="#111"/>
-    <path d="M 530 570 L 522 566 L 522 574 Z" fill="#111"/>
-    <text x="390" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">12.20 m</text>
-<text x="390" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
-<text x="390" y="620" font-size="13" text-anchor="middle" fill="#111">(West)</text>
+    <path d="M 474.2162162162162 570 L 466.2162162162162 566 L 466.2162162162162 574 Z" fill="#111"/>
+    <text x="362.1081081081081" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">12.20 m</text>
+<text x="362.1081081081081" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="362.1081081081081" y="620" font-size="13" text-anchor="middle" fill="#111">(West)</text>
 <text x="100" y="670" font-size="13" fill="#111">Seller&apos;s Signature</text>
 <text x="694" y="670" font-size="13" text-anchor="end" fill="#111">Buyer&apos;s Signature</text>
 </svg>"
@@ -77,28 +77,28 @@ exports[`buildNakshaSvg > 5-plot snapshot set > reference plot (matches the offi
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1000 वर्गफुट</text>
 <text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 92.90 वर्गमीटर</text>
-<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
-<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
-<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
-<text x="390" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 173</text>
-<text x="390" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – ई</text>
-<text x="155" y="366" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
-<text x="155" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
+<text x="318" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="318" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="136" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
+<text x="318" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 173</text>
+<text x="318" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – ई</text>
+<text x="155" y="365.5" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
+<text x="155" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
 
-    <line x1="564" y1="204" x2="564" y2="544" stroke="#111" stroke-width="1.75"/>
-    <path d="M 564 204 L 560 212 L 568 212 Z" fill="#111"/>
-    <path d="M 564 544 L 560 536 L 568 536 Z" fill="#111"/>
-    <text x="564" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
-      transform="rotate(-90 564 374)">50 फुट</text>
-<text x="645" y="366" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
-<text x="645" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
+    <line x1="420" y1="204" x2="420" y2="544" stroke="#111" stroke-width="1.75"/>
+    <path d="M 420 204 L 416 212 L 424 212 Z" fill="#111"/>
+    <path d="M 420 544 L 416 536 L 424 536 Z" fill="#111"/>
+    <text x="420" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 420 374)">50 फुट</text>
+<text x="595" y="365.5" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
+<text x="595" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
 
-    <line x1="250" y1="570" x2="530" y2="570" stroke="#111" stroke-width="1.75"/>
+    <line x1="250" y1="570" x2="386" y2="570" stroke="#111" stroke-width="1.75"/>
     <path d="M 250 570 L 258 566 L 258 574 Z" fill="#111"/>
-    <path d="M 530 570 L 522 566 L 522 574 Z" fill="#111"/>
-    <text x="390" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">20 फुट</text>
-<text x="390" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
-<text x="390" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+    <path d="M 386 570 L 378 566 L 378 574 Z" fill="#111"/>
+    <text x="318" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">20 फुट</text>
+<text x="318" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="318" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
 <text x="100" y="670" font-size="13" fill="#111">हस्ता.विक्रेता</text>
 <text x="694" y="670" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
 </svg>"
@@ -112,35 +112,35 @@ exports[`buildNakshaSvg > 5-plot snapshot set > tall rectangle 1`] = `
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1400 वर्गफुट</text>
 <text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 130.06 वर्गमीटर</text>
-<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
-<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
-<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
-<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 3</text>
-<text x="155" y="366" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
-<text x="155" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
+<text x="300" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="300" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="100" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
+<text x="300" y="374" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 3</text>
+<text x="155" y="365.5" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
+<text x="155" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
 
-    <line x1="564" y1="204" x2="564" y2="544" stroke="#111" stroke-width="1.75"/>
-    <path d="M 564 204 L 560 212 L 568 212 Z" fill="#111"/>
-    <path d="M 564 544 L 560 536 L 568 536 Z" fill="#111"/>
-    <text x="564" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
-      transform="rotate(-90 564 374)">70 फुट</text>
-<text x="645" y="366" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
-<text x="645" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
+    <line x1="384" y1="204" x2="384" y2="544" stroke="#111" stroke-width="1.75"/>
+    <path d="M 384 204 L 380 212 L 388 212 Z" fill="#111"/>
+    <path d="M 384 544 L 380 536 L 388 536 Z" fill="#111"/>
+    <text x="384" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 384 374)">70 फुट</text>
+<text x="577" y="365.5" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
+<text x="577" y="382.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
 
-    <line x1="250" y1="570" x2="530" y2="570" stroke="#111" stroke-width="1.75"/>
+    <line x1="250" y1="570" x2="350" y2="570" stroke="#111" stroke-width="1.75"/>
     <path d="M 250 570 L 258 566 L 258 574 Z" fill="#111"/>
-    <path d="M 530 570 L 522 566 L 522 574 Z" fill="#111"/>
-    <text x="390" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">20 फुट</text>
-<text x="390" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
-<text x="390" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+    <path d="M 350 570 L 342 566 L 342 574 Z" fill="#111"/>
+    <text x="300" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">20 फुट</text>
+<text x="300" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="300" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
 <text x="100" y="670" font-size="13" fill="#111">हस्ता.विक्रेता</text>
 <text x="694" y="670" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
 </svg>"
 `;
 
 exports[`buildNakshaSvg > 5-plot snapshot set > wide rectangle 1`] = `
-"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="690" viewBox="0 0 794 690" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
-  <rect x="0" y="0" width="794" height="690" fill="#ffffff"/>
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="450" viewBox="0 0 794 450" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
+  <rect x="0" y="0" width="794" height="450" fill="#ffffff"/>
 <text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Morar, Gwalior में स्थित है।</text>
 <text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
@@ -148,26 +148,26 @@ exports[`buildNakshaSvg > 5-plot snapshot set > wide rectangle 1`] = `
 <text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 185.81 वर्गमीटर</text>
 <text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
 <text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
-<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="2.5"/>
-<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 8</text>
-<text x="155" y="366" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
-<text x="155" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
+<rect x="250" y="204" width="280" height="100" fill="none" stroke="#111" stroke-width="2.5"/>
+<text x="390" y="254" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 8</text>
+<text x="155" y="245.5" font-size="13" text-anchor="middle" fill="#111">(उत्तर)</text>
+<text x="155" y="262.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 172</text>
 
-    <line x1="564" y1="204" x2="564" y2="544" stroke="#111" stroke-width="1.75"/>
+    <line x1="564" y1="204" x2="564" y2="304" stroke="#111" stroke-width="1.75"/>
     <path d="M 564 204 L 560 212 L 568 212 Z" fill="#111"/>
-    <path d="M 564 544 L 560 536 L 568 536 Z" fill="#111"/>
-    <text x="564" y="374" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
-      transform="rotate(-90 564 374)">25 फुट</text>
-<text x="645" y="366" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
-<text x="645" y="386" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
+    <path d="M 564 304 L 560 296 L 568 296 Z" fill="#111"/>
+    <text x="564" y="254" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 564 254)">25 फुट</text>
+<text x="667" y="245.5" font-size="13" text-anchor="middle" fill="#111">(दक्षिण)</text>
+<text x="667" y="262.5" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 174</text>
 
-    <line x1="250" y1="570" x2="530" y2="570" stroke="#111" stroke-width="1.75"/>
-    <path d="M 250 570 L 258 566 L 258 574 Z" fill="#111"/>
-    <path d="M 530 570 L 522 566 L 522 574 Z" fill="#111"/>
-    <text x="390" y="564" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">80 फुट</text>
-<text x="390" y="600" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
-<text x="390" y="620" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
-<text x="100" y="670" font-size="13" fill="#111">हस्ता.विक्रेता</text>
-<text x="694" y="670" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
+    <line x1="250" y1="330" x2="530" y2="330" stroke="#111" stroke-width="1.75"/>
+    <path d="M 250 330 L 258 326 L 258 334 Z" fill="#111"/>
+    <path d="M 530 330 L 522 326 L 522 334 Z" fill="#111"/>
+    <text x="390" y="324" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">80 फुट</text>
+<text x="390" y="360" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="380" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+<text x="100" y="430" font-size="13" fill="#111">हस्ता.विक्रेता</text>
+<text x="694" y="430" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
 </svg>"
 `;
