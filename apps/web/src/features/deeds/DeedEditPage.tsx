@@ -309,7 +309,7 @@ export function DeedEditPage() {
           </div>
         </form>
 
-        <DeedPropertyDetailSection deedId={id} />
+        {type === "sale-deed" && <DeedPropertyDetailSection deedId={id} />}
       </div>
 
       {showHistory && <DeedHistoryModal deedId={id} onClose={() => setShowHistory(false)} />}

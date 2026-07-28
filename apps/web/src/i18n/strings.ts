@@ -316,6 +316,7 @@ export const strings = {
 
   // Property details (structured plot data + auto-generated naksha)
   propDetailHeading: { en: "Property Details", hi: "संपत्ति विवरण" },
+  propDetailGenerateBtn: { en: "Generate Naksha", hi: "नक्शा बनाएं" },
   propDetailPlotNo: { en: "Plot No. (optional)", hi: "भूखंड क्रमांक (वैकल्पिक)" },
   propDetailBlock: { en: "Block", hi: "ब्लॉक" },
   propDetailLocation: { en: "Location / full address", hi: "स्थान / पूरा पता" },
