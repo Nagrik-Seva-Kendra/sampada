@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, Building2, ChevronLeft, ChevronRight, FileStack, Home, Settings, Users, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, FileStack, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
@@ -34,10 +34,8 @@ function SidebarLink({
 }
 
 /**
- * Left nav for the authenticated app shell: deeds, workspace tools, settings,
- * plus the platform-admin and property-upload back-office pages (each gated
- * to who can actually reach them). Collapsible via the edge arrow on
- * desktop; slides in as a drawer on mobile.
+ * Left nav for the authenticated app shell: deeds, workspace tools, settings.
+ * Collapsible via the edge arrow on desktop; slides in as a drawer on mobile.
  */
 export function Sidebar({
   mobileOpen = false,
@@ -62,7 +60,6 @@ export function Sidebar({
   const collapsed = mobileOpen ? false : collapsedPref;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
-  const isPlatformAdmin = !!user?.isPlatformAdmin;
 
   return (
     <aside className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}>
@@ -117,22 +114,6 @@ export function Sidebar({
             to="/team"
             icon={<Users size={17} strokeWidth={2.2} />}
             label={t("sidebarTeam")}
-            collapsed={collapsed}
-          />
-        )}
-        {isStaff && (
-          <SidebarLink
-            to="/properties"
-            icon={<Home size={17} strokeWidth={2.2} />}
-            label={t("appPropertiesName")}
-            collapsed={collapsed}
-          />
-        )}
-        {isPlatformAdmin && (
-          <SidebarLink
-            to="/platform/organizations"
-            icon={<Building2 size={17} strokeWidth={2.2} />}
-            label={t("appPlatformName")}
             collapsed={collapsed}
           />
         )}

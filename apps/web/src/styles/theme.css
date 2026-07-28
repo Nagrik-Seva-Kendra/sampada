@@ -2220,10 +2220,11 @@ h3 {
   }
 }
 
-/* ---------- dashboard shell (top header + sidebar + content) ---------- */
+/* ---------- dashboard shell (sidebar + content, row on desktop; the mobile
+   media query further down switches this to column with a top bar) ---------- */
 .dashboard-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-height: 100svh;
 }
 .dashboard-body {
