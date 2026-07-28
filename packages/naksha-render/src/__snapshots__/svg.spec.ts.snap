@@ -1,0 +1,173 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildNakshaSvg > 5-plot snapshot set > decimal measurements 1`] = `
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="678" viewBox="0 0 794 678" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif">
+  <rect x="0" y="0" width="794" height="678" fill="#ffffff"/>
+<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Thatipur, Gwalior में स्थित है।</text>
+<text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
+<text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
+<text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1582.88 वर्गफुट</text>
+<text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 147.05 वर्गमीटर</text>
+<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="1.5"/>
+<text x="390" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 19-B</text>
+<text x="390" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – B</text>
+<text x="230" y="366" font-size="13" text-anchor="end" fill="#111">(उत्तर)</text>
+<text x="230" y="386" font-size="13" text-anchor="end" fill="#111">प्लाट क्रमांक – 172</text>
+
+    <line x1="556" y1="204" x2="556" y2="544" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="204" x2="562" y2="204" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="544" x2="562" y2="544" stroke="#333" stroke-width="1"/>
+    <text x="570" y="374" font-size="12" text-anchor="middle" fill="#111"
+      transform="rotate(-90 570 374)">47.25 फुट</text>
+<text x="590" y="366" font-size="13" fill="#111">(दक्षिण)</text>
+<text x="590" y="386" font-size="13" fill="#111">प्लाट क्रमांक – 174</text>
+
+    <line x1="250" y1="558" x2="530" y2="558" stroke="#333" stroke-width="1"/>
+    <line x1="250" y1="552" x2="250" y2="564" stroke="#333" stroke-width="1"/>
+    <line x1="530" y1="552" x2="530" y2="564" stroke="#333" stroke-width="1"/>
+    <text x="390" y="568" font-size="12" text-anchor="middle" fill="#111">33.50 फुट</text>
+<text x="390" y="588" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="608" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+<text x="100" y="658" font-size="13" fill="#111">हस्ता.विक्रेता</text>
+<text x="694" y="658" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
+</svg>"
+`;
+
+exports[`buildNakshaSvg > 5-plot snapshot set > meter unit 1`] = `
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="678" viewBox="0 0 794 678" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif">
+  <rect x="0" y="0" width="794" height="678" fill="#ffffff"/>
+<text x="60" y="30" font-size="11" fill="#111">Naksha of the property plot situated at Hazira, Gwalior.</text>
+<text x="60" y="60" font-size="14" fill="#111">Seller – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
+<text x="60" y="80" font-size="14" fill="#111">Buyer – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
+<text x="734" y="110" font-size="14" text-anchor="end" fill="#111">Area – 2429.41 sq ft</text>
+<text x="734" y="130" font-size="14" text-anchor="end" fill="#111">i.e. – 225.70 sq m</text>
+<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(East)</text>
+<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="1.5"/>
+<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">Plot No. – 56</text>
+<text x="230" y="366" font-size="13" text-anchor="end" fill="#111">(North)</text>
+<text x="230" y="386" font-size="13" text-anchor="end" fill="#111">प्लाट क्रमांक – 172</text>
+
+    <line x1="556" y1="204" x2="556" y2="544" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="204" x2="562" y2="204" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="544" x2="562" y2="544" stroke="#333" stroke-width="1"/>
+    <text x="570" y="374" font-size="12" text-anchor="middle" fill="#111"
+      transform="rotate(-90 570 374)">18.50 m</text>
+<text x="590" y="366" font-size="13" fill="#111">(South)</text>
+<text x="590" y="386" font-size="13" fill="#111">प्लाट क्रमांक – 174</text>
+
+    <line x1="250" y1="558" x2="530" y2="558" stroke="#333" stroke-width="1"/>
+    <line x1="250" y1="552" x2="250" y2="564" stroke="#333" stroke-width="1"/>
+    <line x1="530" y1="552" x2="530" y2="564" stroke="#333" stroke-width="1"/>
+    <text x="390" y="568" font-size="12" text-anchor="middle" fill="#111">12.20 m</text>
+<text x="390" y="588" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="608" font-size="13" text-anchor="middle" fill="#111">(West)</text>
+<text x="100" y="658" font-size="13" fill="#111">Seller&apos;s Signature</text>
+<text x="694" y="658" font-size="13" text-anchor="end" fill="#111">Buyer&apos;s Signature</text>
+</svg>"
+`;
+
+exports[`buildNakshaSvg > 5-plot snapshot set > reference plot (matches the office's real naksha format) 1`] = `
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="678" viewBox="0 0 794 678" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif">
+  <rect x="0" y="0" width="794" height="678" fill="#ffffff"/>
+<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित सरस्वती विहार कॉलोनी, ग्राम धनेली, प.ह.नं. 114, जिला ग्वालियर म.प्र. में स्थित है।</text>
+<text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
+<text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
+<text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1000 वर्गफुट</text>
+<text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 92.90 वर्गमीटर</text>
+<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="1.5"/>
+<text x="390" y="366" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 173</text>
+<text x="390" y="388" font-size="13" text-anchor="middle" fill="#111">ब्लॉक – ई</text>
+<text x="230" y="366" font-size="13" text-anchor="end" fill="#111">(उत्तर)</text>
+<text x="230" y="386" font-size="13" text-anchor="end" fill="#111">प्लाट क्रमांक – 172</text>
+
+    <line x1="556" y1="204" x2="556" y2="544" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="204" x2="562" y2="204" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="544" x2="562" y2="544" stroke="#333" stroke-width="1"/>
+    <text x="570" y="374" font-size="12" text-anchor="middle" fill="#111"
+      transform="rotate(-90 570 374)">50 फुट</text>
+<text x="590" y="366" font-size="13" fill="#111">(दक्षिण)</text>
+<text x="590" y="386" font-size="13" fill="#111">प्लाट क्रमांक – 174</text>
+
+    <line x1="250" y1="558" x2="530" y2="558" stroke="#333" stroke-width="1"/>
+    <line x1="250" y1="552" x2="250" y2="564" stroke="#333" stroke-width="1"/>
+    <line x1="530" y1="552" x2="530" y2="564" stroke="#333" stroke-width="1"/>
+    <text x="390" y="568" font-size="12" text-anchor="middle" fill="#111">20 फुट</text>
+<text x="390" y="588" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="608" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+<text x="100" y="658" font-size="13" fill="#111">हस्ता.विक्रेता</text>
+<text x="694" y="658" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
+</svg>"
+`;
+
+exports[`buildNakshaSvg > 5-plot snapshot set > tall rectangle 1`] = `
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="678" viewBox="0 0 794 678" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif">
+  <rect x="0" y="0" width="794" height="678" fill="#ffffff"/>
+<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Lashkar, Gwalior में स्थित है।</text>
+<text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
+<text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
+<text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1400 वर्गफुट</text>
+<text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 130.06 वर्गमीटर</text>
+<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="1.5"/>
+<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 3</text>
+<text x="230" y="366" font-size="13" text-anchor="end" fill="#111">(उत्तर)</text>
+<text x="230" y="386" font-size="13" text-anchor="end" fill="#111">प्लाट क्रमांक – 172</text>
+
+    <line x1="556" y1="204" x2="556" y2="544" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="204" x2="562" y2="204" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="544" x2="562" y2="544" stroke="#333" stroke-width="1"/>
+    <text x="570" y="374" font-size="12" text-anchor="middle" fill="#111"
+      transform="rotate(-90 570 374)">70 फुट</text>
+<text x="590" y="366" font-size="13" fill="#111">(दक्षिण)</text>
+<text x="590" y="386" font-size="13" fill="#111">प्लाट क्रमांक – 174</text>
+
+    <line x1="250" y1="558" x2="530" y2="558" stroke="#333" stroke-width="1"/>
+    <line x1="250" y1="552" x2="250" y2="564" stroke="#333" stroke-width="1"/>
+    <line x1="530" y1="552" x2="530" y2="564" stroke="#333" stroke-width="1"/>
+    <text x="390" y="568" font-size="12" text-anchor="middle" fill="#111">20 फुट</text>
+<text x="390" y="588" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="608" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+<text x="100" y="658" font-size="13" fill="#111">हस्ता.विक्रेता</text>
+<text x="694" y="658" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
+</svg>"
+`;
+
+exports[`buildNakshaSvg > 5-plot snapshot set > wide rectangle 1`] = `
+"<svg xmlns="http://www.w3.org/2000/svg" width="794" height="678" viewBox="0 0 794 678" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif">
+  <rect x="0" y="0" width="794" height="678" fill="#ffffff"/>
+<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Morar, Gwalior में स्थित है।</text>
+<text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
+<text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
+<text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 2000 वर्गफुट</text>
+<text x="734" y="130" font-size="14" text-anchor="end" fill="#111">यानि – 185.81 वर्गमीटर</text>
+<text x="390" y="170" font-size="13" text-anchor="middle" fill="#111">(पूरब)</text>
+<text x="390" y="190" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 163</text>
+<rect x="250" y="204" width="280" height="340" fill="none" stroke="#111" stroke-width="1.5"/>
+<text x="390" y="374" font-size="13" text-anchor="middle" fill="#111">प्लाट क्रमांक – 8</text>
+<text x="230" y="366" font-size="13" text-anchor="end" fill="#111">(उत्तर)</text>
+<text x="230" y="386" font-size="13" text-anchor="end" fill="#111">प्लाट क्रमांक – 172</text>
+
+    <line x1="556" y1="204" x2="556" y2="544" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="204" x2="562" y2="204" stroke="#333" stroke-width="1"/>
+    <line x1="550" y1="544" x2="562" y2="544" stroke="#333" stroke-width="1"/>
+    <text x="570" y="374" font-size="12" text-anchor="middle" fill="#111"
+      transform="rotate(-90 570 374)">25 फुट</text>
+<text x="590" y="366" font-size="13" fill="#111">(दक्षिण)</text>
+<text x="590" y="386" font-size="13" fill="#111">प्लाट क्रमांक – 174</text>
+
+    <line x1="250" y1="558" x2="530" y2="558" stroke="#333" stroke-width="1"/>
+    <line x1="250" y1="552" x2="250" y2="564" stroke="#333" stroke-width="1"/>
+    <line x1="530" y1="552" x2="530" y2="564" stroke="#333" stroke-width="1"/>
+    <text x="390" y="568" font-size="12" text-anchor="middle" fill="#111">80 फुट</text>
+<text x="390" y="588" font-size="13" text-anchor="middle" fill="#111">25 फुट कॉलोनी रोड</text>
+<text x="390" y="608" font-size="13" text-anchor="middle" fill="#111">(पश्चिम)</text>
+<text x="100" y="658" font-size="13" fill="#111">हस्ता.विक्रेता</text>
+<text x="694" y="658" font-size="13" text-anchor="end" fill="#111">हस्ता.क्रेता</text>
+</svg>"
+`;

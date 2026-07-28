@@ -8,3 +8,6 @@ export * from "./organization.js";
 export * from "./invite.js";
 export * from "./ownership-transfer.js";
 export * from "./permission.js";
+export * from "./property.js";
+export * from "./deed-property.js";
+export * from "./platform.js";

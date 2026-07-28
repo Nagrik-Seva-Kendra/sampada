@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, ChevronLeft, ChevronRight, FileStack, Settings, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
-import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { NotificationBell } from "./NotificationBell";
+import { matchApp } from "./appsRegistry";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
 
@@ -33,13 +31,14 @@ function SidebarLink({
   );
 }
 
-/** Left nav for the authenticated app shell: deeds, workspace tools, settings. Collapsible via the edge arrow. */
+/** Left nav for the authenticated app shell — shows whichever app's pages match the current route. Collapsible via the edge arrow. */
 export function Sidebar() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const isStaff = useIsStaff();
   const activeOrganization = useActiveOrganization();
   const user = useAuthStore((s) => s.user);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
   useEffect(() => {
@@ -47,15 +46,19 @@ export function Sidebar() {
   }, [collapsed]);
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
+  const ctx = { isStaff, isPlatformAdmin: !!user?.isPlatformAdmin, canManageTeam };
+  const activeApp = matchApp(pathname);
+  const navItems = activeApp.navItems.filter((i) => !i.visible || i.visible(ctx));
 
   return (
     <aside className={"sidebar" + (collapsed ? " collapsed" : "")}>
       <div className="sidebar-top">
-        <Link to="/" className="sidebar-brand" title={collapsed ? t("brandName") : undefined}>
-          <BrandMark />
-          {!collapsed && <span className="sidebar-brand-text">{t("brandName")}</span>}
-        </Link>
-        {!collapsed && <NotificationBell collapsed={collapsed} />}
+        {!collapsed && (
+          <div className="sidebar-app-heading">
+            <div className="sidebar-app-name">{t(activeApp.labelKey)}</div>
+            <div className="sidebar-app-desc">{t(activeApp.descriptionKey)}</div>
+          </div>
+        )}
         <button
           type="button"
           className="sidebar-collapse-btn"
@@ -66,54 +69,30 @@ export function Sidebar() {
           {collapsed ? <ChevronRight size={13} strokeWidth={2.5} /> : <ChevronLeft size={13} strokeWidth={2.5} />}
         </button>
       </div>
-      {collapsed && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "0 0 8px" }}>
-          <NotificationBell collapsed={collapsed} />
+
+      {activeApp.id === "e-registry" && (
+        <div style={{ padding: "0 8px 10px" }}>
+          <CreateDeedMenu
+            triggerClassName="btn-calc"
+            triggerStyle={{ width: "100%", justifyContent: "center" }}
+            triggerLabel={collapsed ? "" : undefined}
+          />
         </div>
       )}
 
-      <div style={{ padding: "0 8px 10px" }}>
-        <CreateDeedMenu
-          triggerClassName="btn-calc"
-          triggerStyle={{ width: "100%", justifyContent: "center" }}
-          triggerLabel={collapsed ? "" : undefined}
-        />
-      </div>
-
       <nav className="sidebar-nav">
-        <SidebarLink
-          to="/deeds"
-          icon={<FileStack size={17} strokeWidth={2.2} />}
-          label={t("sidebarAllDeeds")}
-          collapsed={collapsed}
-        />
-        {isStaff && (
+        {navItems.map((item) => (
           <SidebarLink
-            to="/guideline"
-            icon={<BookOpen size={17} strokeWidth={2.2} />}
-            label={t("sidebarGuideline")}
+            key={item.to}
+            to={item.to}
+            icon={<item.icon size={17} strokeWidth={2.2} />}
+            label={t(item.labelKey)}
             collapsed={collapsed}
           />
-        )}
-        {canManageTeam && (
-          <SidebarLink
-            to="/team"
-            icon={<Users size={17} strokeWidth={2.2} />}
-            label={t("sidebarTeam")}
-            collapsed={collapsed}
-          />
-        )}
-        <SidebarLink
-          to="/settings"
-          icon={<Settings size={17} strokeWidth={2.2} />}
-          label={t("sidebarSettings")}
-          collapsed={collapsed}
-        />
+        ))}
       </nav>
 
       <div className="sidebar-spacer" />
-
-      {user && <WorkspaceSwitcher collapsed={collapsed} />}
     </aside>
   );
 }

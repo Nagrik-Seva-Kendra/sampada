@@ -11,6 +11,8 @@ import { GuidelineModule } from "./guideline/guideline.module.js";
 import { OrganizationsModule } from "./organizations/organizations.module.js";
 import { InvitesModule } from "./invites/invites.module.js";
 import { OwnershipTransfersModule } from "./ownership-transfers/ownership-transfers.module.js";
+import { PropertiesModule } from "./properties/properties.module.js";
+import { PlatformModule } from "./platform/platform.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
 
 @Module({
@@ -28,6 +30,8 @@ import { PrismaModule } from "./prisma/prisma.module.js";
     OrganizationsModule,
     InvitesModule,
     OwnershipTransfersModule,
+    PropertiesModule,
+    PlatformModule,
   ],
   controllers: [HealthController, StatsController],
 })

@@ -75,19 +75,20 @@ enum CorrectionStatus {
 // `createdById` is not a User foreign key: legacy-imported rows carry
 // synthetic ids ("legacy", "admin") that don't correspond to real users.
 model DeedTemplate {
-  id             String       @id
+  id             String                  @id
   type           String
   title          String
-  content        String       @db.Text
-  status         String       @default("active")
+  content        String                  @db.Text
+  status         String                  @default("active")
   createdById    String
   createdByName  String
   createdByRole  String?
   createdAt      DateTime
-  updatedAt      DateTime     @updatedAt
+  updatedAt      DateTime                @updatedAt
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization            @relation(fields: [organizationId], references: [id])
   corrections    DeedCorrectionRequest[]
+  propertyDetail DeedPropertyDetail?
 
   @@index([type])
   @@index([createdById])
@@ -145,21 +146,21 @@ model DeedTemplateRevision {
 }
 
 model User {
-  id                       String        @id @default(cuid())
-  email                    String        @unique
+  id                       String                  @id @default(cuid())
+  email                    String                  @unique
   /**
    * Login handle the employee sets themselves; null until they do.
    */
-  username                 String?       @unique
+  username                 String?                 @unique
   passwordHash             String
   /**
    * Bumped to revoke all existing sessions (access + refresh tokens) for this
    * user — on password change and on deactivation. Tokens carry the version
    * they were minted at; guards reject any token whose version is stale.
    */
-  tokenVersion             Int           @default(0)
-  role                     Role          @default(PUBLIC)
-  status                   UserStatus    @default(ACTIVE)
+  tokenVersion             Int                     @default(0)
+  role                     Role                    @default(PUBLIC)
+  status                   UserStatus              @default(ACTIVE)
   fname                    String
   lname                    String
   mobile                   String?
@@ -178,9 +179,9 @@ model User {
    * Platform staff (me/my team) — NOT a customer role. Gates the Phase 5
    * back-office. Independent of any Membership.
    */
-  isPlatformAdmin          Boolean       @default(false)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
+  isPlatformAdmin          Boolean                 @default(false)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
   memberships              Membership[]
   /**
    * Which org this user last acted under — lets login/refresh land back in
@@ -188,7 +189,7 @@ model User {
    * org is ever deleted.
    */
   lastActiveOrganizationId String?
-  lastActiveOrganization   Organization? @relation("UserLastActiveOrganization", fields: [lastActiveOrganizationId], references: [id], onDelete: SetNull)
+  lastActiveOrganization   Organization?           @relation("UserLastActiveOrganization", fields: [lastActiveOrganizationId], references: [id], onDelete: SetNull)
   resolvedCorrections      DeedCorrectionRequest[]
 }
 
@@ -218,8 +219,9 @@ model Organization {
   parties             Party[]
   deedParties         DeedParty[]
   deedNaxas           DeedNaxa[]
+  deedPropertyDetails DeedPropertyDetail[]
   guidelineDocuments  GuidelineDocument[]
-  usersLastActiveHere User[]                 @relation("UserLastActiveOrganization")
+  usersLastActiveHere User[]                  @relation("UserLastActiveOrganization")
   correctionRequests  DeedCorrectionRequest[]
 }
 
@@ -320,6 +322,58 @@ model DeedNaxa {
   @@index([organizationId, deedId])
 }
 
+/// Structured property data for a deed (plot no., E-W/N-S measurements,
+/// chauhaddi) — the single source of truth that both the deed text and the
+/// auto-generated naksha (site plan) drawing render from, so the two can
+/// never disagree. `location` is one free-text address block (colony,
+/// village, patwari halka, district, etc. together — deeds phrase this too
+/// differently to split into fixed fields without cost). `sellerName`/
+/// `buyerName` are read from the deed's own text, not the separate
+/// Party/DeedParty records. At most one row per deed. `source` distinguishes
+/// staff-entered data from Phase-5 regex-extracted data pending verification
+/// (never trusted until `verifiedAt`/`verifiedBy` are set). Only
+/// rectangle/square plots are supported today (`shape`). Soft-deleted via
+/// `deletedAt` — the first model in this codebase to use that pattern (see
+/// tenant-scope.core.ts's MODELS_WITH_SOFT_DELETE) rather than Organization's
+/// status-flip style, since a per-row (not per-tenant) delete needs a
+/// timestamp, not an enum.
+model DeedPropertyDetail {
+  id             String       @id @default(cuid())
+  deedId         String       @unique
+  deed           DeedTemplate @relation(fields: [deedId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  plotNo         String?
+  block          String?
+  location       String
+  sellerName     String?
+  buyerName      String?
+  shape          String       @default("rectangle")
+  ewLength       Decimal
+  nsLength       Decimal
+  unit           String
+  statedArea     Decimal?
+  statedAreaUnit String?
+  boundaryNorth  String
+  boundarySouth  String
+  boundaryEast   String
+  boundaryWest   String
+
+  /// "manual" (staff-entered via the deed form) | "extracted" (Phase 5
+  /// backfill, only ever written once a human approves it).
+  source     String    @default("manual")
+  verifiedAt DateTime?
+  verifiedBy String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([organizationId, plotNo])
+  @@index([deedId])
+}
+
 /// Guideline documents (official circulars/rate PDFs) uploaded by admins via
 /// the Manage Guideline admin page. Visible and downloadable by everyone —
 /// list/download endpoints are public, only upload/delete require admin auth.
@@ -404,4 +458,66 @@ model OwnershipTransfer {
   createdAt      DateTime  @default(now())
 
   @@index([organizationId])
+}
+
+enum PropertyCategory {
+  PLOT
+  VILLA
+  FLAT
+  AGRICULTURAL_LAND
+}
+
+enum PropertyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// A property listing for the public sales website (plots/villas/flats/
+/// agricultural land). Shared across the whole business, not tenant-scoped —
+/// same precedent as GuidelineDocument. Public read (published only) + staff
+/// write, managed from the internal "Property upload" app.
+model Property {
+  id            String           @id @default(cuid())
+  title         String
+  category      PropertyCategory
+  description   String?
+  addressLine   String
+  city          String
+  district      String?
+  state         String           @default("Madhya Pradesh")
+  pincode       String?
+  areaValue     Float?
+  areaUnit      String?
+  priceValue    Float?
+  priceLabel    String?
+  status        PropertyStatus   @default(DRAFT)
+  contactName   String?
+  contactPhone  String?
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  images        PropertyImage[]
+
+  @@index([category, status])
+  @@index([city, status])
+}
+
+/// One image for a Property, ordered by sortOrder. data/r2Key mirror the
+/// dual-path pattern in GuidelineDocument/r2.ts: prefer R2 when configured,
+/// fall back to storing bytes in Postgres otherwise.
+model PropertyImage {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  fileName   String
+  mimeType   String
+  size       Int
+  data       Bytes?
+  r2Key      String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId, sortOrder])
 }

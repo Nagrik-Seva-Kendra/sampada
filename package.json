@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Nagrik Seva Kendra — property valuation & deed registry (modernized)",
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "scripts": {
     "dev": "turbo run dev",

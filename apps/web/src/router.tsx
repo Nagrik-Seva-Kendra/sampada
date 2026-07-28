@@ -4,6 +4,7 @@ import {
   createRouter,
   Navigate,
   Outlet,
+  useRouterState,
 } from "@tanstack/react-router";
 import { hasPermission } from "@sampada/shared";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -21,18 +22,53 @@ import { OnboardingPage } from "./features/onboarding/OnboardingPage";
 import { DashboardLayout } from "./features/dashboard/DashboardLayout";
 import { SettingsPage } from "./features/dashboard/SettingsPage";
 import { WelcomePage } from "./features/dashboard/WelcomePage";
+import { PlatformOrganizationsPage } from "./features/platform/PlatformOrganizationsPage";
+import { PlatformOrganizationDetailPage } from "./features/platform/PlatformOrganizationDetailPage";
+import { PropertiesListPage } from "./features/properties/PropertiesListPage";
+import { PropertyFormPage } from "./features/properties/PropertyFormPage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
-const rootRoute = createRootRoute({
-  component: () => (
+// Routes deliberately outside the dashboard shell (see the comment above
+// dashboardLayoutRoute below) — matched by pathname rather than routeId so
+// this stays a plain string check, not a typed-router internal.
+const STANDALONE_PATHS = new Set([
+  "/onboarding",
+  "/login",
+  "/signup",
+  "/reset-password",
+  "/accept-invite",
+  "/confirm-ownership-transfer",
+  "/welcome",
+]);
+function isStandaloneRoute(pathname: string): boolean {
+  if (STANDALONE_PATHS.has(pathname)) return true;
+  if (pathname.startsWith("/d/")) return true; // public deed share link
+  if (/^\/deeds\/[^/]+\/edit\/[^/]+/.test(pathname)) return true; // standalone deed editor
+  return false;
+}
+
+// The dashboard shell (DashboardLayout -> TopHeader) renders its own
+// LangToggle/ThemeToggle in-flow; every other route (login, onboarding, the
+// standalone deed editor, the public share link, etc.) still gets the fixed
+// corner toggle from here so it's never left without one.
+function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const inDashboard = !isStandaloneRoute(pathname);
+  return (
     <>
-      <div className="top-controls-fab">
-        <LangToggle />
-        <ThemeToggle />
-      </div>
+      {!inDashboard && (
+        <div className="top-controls-fab">
+          <LangToggle />
+          <ThemeToggle />
+        </div>
+      )}
       <Outlet />
     </>
-  ),
+  );
+}
+
+const rootRoute = createRootRoute({
+  component: RootComponent,
   notFoundComponent: () => <Navigate to="/" />,
 });
 
@@ -166,6 +202,53 @@ const profileRedirectRoute = createRoute({
   component: () => <Navigate to="/settings" />,
 });
 
+// Platform back-office ("Sampada management" app) — platform-admin only,
+// spans every organization, independent of the caller's own org/role.
+function GuardedPlatformOrganizationsPage() {
+  const isPlatformAdmin = useAuthStore((s) => !!s.user?.isPlatformAdmin);
+  return isPlatformAdmin ? <PlatformOrganizationsPage /> : <Navigate to="/deeds" />;
+}
+function GuardedPlatformOrganizationDetailPage() {
+  const isPlatformAdmin = useAuthStore((s) => !!s.user?.isPlatformAdmin);
+  return isPlatformAdmin ? <PlatformOrganizationDetailPage /> : <Navigate to="/deeds" />;
+}
+const platformOrganizationsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/platform/organizations",
+  component: GuardedPlatformOrganizationsPage,
+});
+const platformOrganizationDetailRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/platform/organizations/$id",
+  component: GuardedPlatformOrganizationDetailPage,
+});
+
+// Property upload app — any staff login (EMPLOYEE/ADMIN), feeds the public property site.
+function GuardedPropertiesListPage() {
+  return useIsStaff() ? <PropertiesListPage /> : <Navigate to="/deeds" />;
+}
+function GuardedPropertyCreatePage() {
+  return useIsStaff() ? <PropertyFormPage mode="create" /> : <Navigate to="/deeds" />;
+}
+function GuardedPropertyEditPage() {
+  return useIsStaff() ? <PropertyFormPage mode="edit" /> : <Navigate to="/deeds" />;
+}
+const propertiesListRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/properties",
+  component: GuardedPropertiesListPage,
+});
+const propertyCreateRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/properties/new",
+  component: GuardedPropertyCreatePage,
+});
+const propertyEditRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/properties/$id/edit",
+  component: GuardedPropertyEditPage,
+});
+
 const dashboardRoute = dashboardLayoutRoute.addChildren([
   dashboardIndexRoute,
   allDeedsRoute,
@@ -176,6 +259,11 @@ const dashboardRoute = dashboardLayoutRoute.addChildren([
   guidelineRoute,
   settingsRoute,
   profileRedirectRoute,
+  platformOrganizationsRoute,
+  platformOrganizationDetailRoute,
+  propertiesListRoute,
+  propertyCreateRoute,
+  propertyEditRoute,
 ]);
 
 const routes = [

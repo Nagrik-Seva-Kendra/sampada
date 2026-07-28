@@ -10,8 +10,17 @@ export const TENANT_MODELS = [
   "DeedParty",
   "DeedNaxa",
   "DeedCorrectionRequest",
+  "DeedPropertyDetail",
 ] as const;
 export const TENANT_MODEL_SET = new Set<string>(TENANT_MODELS);
+
+/**
+ * Models with a `deletedAt` column, auto-filtered out of read results below.
+ * DeedPropertyDetail is the first model in this codebase to use a timestamp
+ * soft-delete (existing models like Organization use a status-enum flip
+ * instead) — a per-row delete needs a timestamp, not a tenant-wide enum.
+ */
+export const MODELS_WITH_SOFT_DELETE = new Set<string>(["DeedPropertyDetail"]);
 
 /** "DeedTemplate" -> "deedTemplate" (Prisma client accessor). */
 export function prop(model: string): string {
@@ -53,6 +62,12 @@ export async function applyTenantScope(p: ScopeParams): Promise<unknown> {
 
   const a = args ?? {};
   const base = getBase()[prop(model)];
+  const softDelete = MODELS_WITH_SOFT_DELETE.has(model);
+  const readWhere = (where: any) => ({
+    ...where,
+    organizationId: orgId,
+    ...(softDelete ? { deletedAt: null } : {}),
+  });
 
   switch (operation) {
     case "findMany":
@@ -61,14 +76,16 @@ export async function applyTenantScope(p: ScopeParams): Promise<unknown> {
     case "count":
     case "aggregate":
     case "groupBy":
+      return query({ ...a, where: readWhere(a.where ?? {}) });
+
     case "updateMany":
     case "deleteMany":
       return query({ ...a, where: { ...(a.where ?? {}), organizationId: orgId } });
 
     case "findUnique":
-      return base.findFirst({ ...a, where: { ...(a.where ?? {}), organizationId: orgId } });
+      return base.findFirst({ ...a, where: readWhere(a.where ?? {}) });
     case "findUniqueOrThrow":
-      return base.findFirstOrThrow({ ...a, where: { ...(a.where ?? {}), organizationId: orgId } });
+      return base.findFirstOrThrow({ ...a, where: readWhere(a.where ?? {}) });
 
     case "create":
       return query({ ...a, data: { ...(a.data ?? {}), organizationId: orgId } });

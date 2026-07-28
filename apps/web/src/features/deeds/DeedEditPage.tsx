@@ -10,6 +10,7 @@ import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
+import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
@@ -293,6 +294,8 @@ export function DeedEditPage() {
             </button>
           </div>
         </form>
+
+        <DeedPropertyDetailSection deedId={id} />
       </div>
 
       {showHistory && <DeedHistoryModal deedId={id} onClose={() => setShowHistory(false)} />}

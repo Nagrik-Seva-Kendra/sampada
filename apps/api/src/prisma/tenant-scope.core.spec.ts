@@ -18,7 +18,7 @@ function harness(orgId?: string) {
       return { id: "row1" };
     }),
   };
-  const getBase = () => ({ deedTemplate: baseModel, party: baseModel });
+  const getBase = () => ({ deedTemplate: baseModel, party: baseModel, deedPropertyDetail: baseModel });
   const query = vi.fn(async (args: any) => {
     calls.push(["query", args]);
     return { ok: true, args };
@@ -86,5 +86,58 @@ describe("tenant scope (deny-by-default)", () => {
       applyTenantScope({ model: "DeedTemplate", operation: "update", args: { where: { id: "other" }, data: {} }, ...h }),
     ).rejects.toThrow(/not found in the current organization/);
     expect(h.query).not.toHaveBeenCalled();
+  });
+
+  describe("soft delete (DeedPropertyDetail)", () => {
+    it("injects deletedAt: null on findMany for a soft-delete model", async () => {
+      const h = harness(ORG);
+      await applyTenantScope({
+        model: "DeedPropertyDetail",
+        operation: "findMany",
+        args: { where: { plotNo: "12" } },
+        ...h,
+      });
+      expect(h.query).toHaveBeenCalledWith({
+        where: { plotNo: "12", organizationId: ORG, deletedAt: null },
+      });
+    });
+
+    it("rewrites findUnique to a scoped findFirst with deletedAt: null", async () => {
+      const h = harness(ORG);
+      await applyTenantScope({
+        model: "DeedPropertyDetail",
+        operation: "findUnique",
+        args: { where: { deedId: "d1" } },
+        ...h,
+      });
+      expect(h.baseModel.findFirst).toHaveBeenCalledWith({
+        where: { deedId: "d1", organizationId: ORG, deletedAt: null },
+      });
+    });
+
+    it("does not inject deletedAt for a model without the soft-delete convention", async () => {
+      const h = harness(ORG);
+      await applyTenantScope({
+        model: "DeedTemplate",
+        operation: "findMany",
+        args: { where: { type: "sale" } },
+        ...h,
+      });
+      expect(h.query).toHaveBeenCalledWith({ where: { type: "sale", organizationId: ORG } });
+    });
+
+    it("does not inject deletedAt on updateMany/deleteMany (soft delete is an explicit service-layer update)", async () => {
+      const h = harness(ORG);
+      await applyTenantScope({
+        model: "DeedPropertyDetail",
+        operation: "updateMany",
+        args: { where: { plotNo: "12" }, data: { location: "x" } },
+        ...h,
+      });
+      expect(h.query).toHaveBeenCalledWith({
+        where: { plotNo: "12", organizationId: ORG },
+        data: { location: "x" },
+      });
+    });
   });
 });

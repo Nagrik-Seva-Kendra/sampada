@@ -26,26 +26,38 @@ class FakeCls {
 }
 
 describe.skipIf(!HAS_DB)("tenant isolation (e2e)", () => {
-  const base = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
+  // Vitest still runs a skipped describe's body during collection, so this
+  // constructor must not throw when TEST_DATABASE_URL is unset — otherwise
+  // `skipIf` never gets a chance to actually skip anything.
+  const base = HAS_DB
+    ? new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } })
+    : (undefined as unknown as PrismaClient);
   const cls = new FakeCls();
-  const prisma = base.$extends(tenantScopeExtension(cls as any, () => base));
+  const prisma = HAS_DB ? base.$extends(tenantScopeExtension(cls as any, () => base)) : (undefined as any);
 
   const setOrg = (organizationId: string) =>
     cls.set(TENANT_KEY, { userId: "u", organizationId, membershipId: "m", role: "ADMIN" } as TenantContext);
 
   let orgA = "";
   let orgB = "";
+  let deedA = "";
+  let deedB = "";
+
+  const boundaries = { boundaryNorth: "N", boundarySouth: "S", boundaryEast: "E", boundaryWest: "W" };
 
   beforeAll(async () => {
     const a = await base.organization.create({ data: { name: "A", slug: `a-${Date.now()}`, joinCode: `A${Date.now()}` } });
     const b = await base.organization.create({ data: { name: "B", slug: `b-${Date.now()}`, joinCode: `B${Date.now()}` } });
     orgA = a.id; orgB = b.id;
     const now = new Date();
-    await base.deedTemplate.create({ data: { id: `dA-${Date.now()}`, type: "sale", title: "A deed", content: "x", createdById: "x", createdByName: "x", createdAt: now, organizationId: orgA } });
-    await base.deedTemplate.create({ data: { id: `dB-${Date.now()}`, type: "sale", title: "B deed", content: "x", createdById: "x", createdByName: "x", createdAt: now, organizationId: orgB } });
+    deedA = `dA-${Date.now()}`;
+    deedB = `dB-${Date.now()}`;
+    await base.deedTemplate.create({ data: { id: deedA, type: "sale", title: "A deed", content: "x", createdById: "x", createdByName: "x", createdAt: now, organizationId: orgA } });
+    await base.deedTemplate.create({ data: { id: deedB, type: "sale", title: "B deed", content: "x", createdById: "x", createdByName: "x", createdAt: now, organizationId: orgB } });
   });
 
   afterAll(async () => {
+    await base.deedPropertyDetail.deleteMany({ where: { organizationId: { in: [orgA, orgB] } } });
     await base.deedTemplate.deleteMany({ where: { organizationId: { in: [orgA, orgB] } } });
     await base.organization.deleteMany({ where: { id: { in: [orgA, orgB] } } });
     await base.$disconnect();
@@ -86,5 +98,40 @@ describe.skipIf(!HAS_DB)("tenant isolation (e2e)", () => {
     setOrg(orgB);
     const b = await prisma.deedTemplate.findMany();
     expect(a.map((d: any) => d.id).sort()).not.toEqual(b.map((d: any) => d.id).sort());
+  });
+
+  describe("DeedPropertyDetail", () => {
+    it("Org A cannot read Org B's property detail by deedId", async () => {
+      setOrg(orgB);
+      await prisma.deedPropertyDetail.create({
+        data: { deedId: deedB, plotNo: "B-1", location: "B City", ewLength: 40, nsLength: 60, unit: "ft", ...boundaries },
+      });
+
+      setOrg(orgA);
+      const leaked = await prisma.deedPropertyDetail.findUnique({ where: { deedId: deedB } });
+      expect(leaked).toBeNull();
+      const list = await prisma.deedPropertyDetail.findMany();
+      expect(list.some((r: any) => r.deedId === deedB)).toBe(false);
+    });
+
+    it("Org A cannot update Org B's property detail", async () => {
+      setOrg(orgA);
+      await expect(
+        prisma.deedPropertyDetail.update({ where: { deedId: deedB }, data: { plotNo: "hacked" } }),
+      ).rejects.toThrow(/not found in the current organization/);
+    });
+
+    it("a soft-deleted row (deletedAt set) is excluded from findMany/findUnique", async () => {
+      setOrg(orgA);
+      await prisma.deedPropertyDetail.create({
+        data: { deedId: deedA, plotNo: "A-1", location: "A City", ewLength: 30, nsLength: 30, unit: "ft", ...boundaries },
+      });
+      await base.deedPropertyDetail.update({ where: { deedId: deedA }, data: { deletedAt: new Date() } });
+
+      const found = await prisma.deedPropertyDetail.findUnique({ where: { deedId: deedA } });
+      expect(found).toBeNull();
+      const list = await prisma.deedPropertyDetail.findMany();
+      expect(list.some((r: any) => r.deedId === deedA)).toBe(false);
+    });
   });
 });
