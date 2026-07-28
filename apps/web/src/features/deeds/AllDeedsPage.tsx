@@ -255,27 +255,30 @@ export function AllDeedsPage() {
               </SelectContent>
             </Select>
 
-            <input
-              type="date"
-              className="district-input"
-              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(e) => setDateFrom(e.target.value)}
-              aria-label={t("allDeedsFilterDateFrom")}
-              title={t("allDeedsFilterDateFrom")}
-            />
-            <span style={{ opacity: 0.5, fontSize: 12 }}>–</span>
-            <input
-              type="date"
-              className="district-input"
-              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)}
-              aria-label={t("allDeedsFilterDateTo")}
-              title={t("allDeedsFilterDateTo")}
-            />
+            {/* Kept as one unit so the pair never splits across two rows. */}
+            <div className="dr-date-range">
+              <input
+                type="date"
+                className="district-input dr-date-input"
+                style={FILTER_CONTROL_STYLE}
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label={t("allDeedsFilterDateFrom")}
+                title={t("allDeedsFilterDateFrom")}
+              />
+              <span className="dr-date-sep">–</span>
+              <input
+                type="date"
+                className="district-input dr-date-input"
+                style={FILTER_CONTROL_STYLE}
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label={t("allDeedsFilterDateTo")}
+                title={t("allDeedsFilterDateTo")}
+              />
+            </div>
 
             {hasFilters && (
               <button
