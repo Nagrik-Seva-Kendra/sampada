@@ -8,7 +8,6 @@ import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { NotificationBell } from "./NotificationBell";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
 
@@ -68,7 +67,6 @@ export function Sidebar({
           <BrandMark />
           {!collapsed && <span className="sidebar-brand-text">{t("brandName")}</span>}
         </Link>
-        {!collapsed && <NotificationBell collapsed={collapsed} />}
         <button
           type="button"
           className="sidebar-collapse-btn"
@@ -87,12 +85,6 @@ export function Sidebar({
           <X size={18} strokeWidth={2.4} />
         </button>
       </div>
-      {collapsed && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "0 0 8px" }}>
-          <NotificationBell collapsed={collapsed} />
-        </div>
-      )}
-
       <div style={{ padding: "0 8px 10px" }}>
         <CreateDeedMenu
           triggerClassName="btn-calc"
