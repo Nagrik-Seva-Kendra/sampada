@@ -255,27 +255,30 @@ export function AllDeedsPage() {
               </SelectContent>
             </Select>
 
-            <input
-              type="date"
-              className="district-input"
-              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(e) => setDateFrom(e.target.value)}
-              aria-label={t("allDeedsFilterDateFrom")}
-              title={t("allDeedsFilterDateFrom")}
-            />
-            <span style={{ opacity: 0.5, fontSize: 12 }}>–</span>
-            <input
-              type="date"
-              className="district-input"
-              style={{ ...FILTER_CONTROL_STYLE, width: 150 }}
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)}
-              aria-label={t("allDeedsFilterDateTo")}
-              title={t("allDeedsFilterDateTo")}
-            />
+            {/* Kept as one unit so the pair never splits across two rows. */}
+            <div className="dr-date-range">
+              <input
+                type="date"
+                className="district-input dr-date-input"
+                style={FILTER_CONTROL_STYLE}
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label={t("allDeedsFilterDateFrom")}
+                title={t("allDeedsFilterDateFrom")}
+              />
+              <span className="dr-date-sep">–</span>
+              <input
+                type="date"
+                className="district-input dr-date-input"
+                style={FILTER_CONTROL_STYLE}
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label={t("allDeedsFilterDateTo")}
+                title={t("allDeedsFilterDateTo")}
+              />
+            </div>
 
             {hasFilters && (
               <button
@@ -320,9 +323,11 @@ export function AllDeedsPage() {
                   pageRows.map((d, i) => (
                     <Fragment key={d.id}>
                       <tr>
-                        <td>{(current - 1) * PAGE_SIZE + i + 1}</td>
-                        <td>{formatDate(d.createdAt)}</td>
-                        <td>
+                        <td className="dr-cell-sno" data-label={t("deedsColId")}>
+                          {(current - 1) * PAGE_SIZE + i + 1}
+                        </td>
+                        <td data-label={t("deedsColDate")}>{formatDate(d.createdAt)}</td>
+                        <td className="dr-cell-name" data-label={t("deedsColName")}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             {d.title}
                             {flaggedIds.has(d.id) && (
@@ -343,14 +348,14 @@ export function AllDeedsPage() {
                             )}
                           </span>
                         </td>
-                        <td>{findDeed(d.type)?.name[lang] ?? d.type}</td>
-                        <td>
+                        <td data-label={t("deedsColCategory")}>{findDeed(d.type)?.name[lang] ?? d.type}</td>
+                        <td data-label={t("deedsColStatus")}>
                           <span className={d.status === "active" ? "dr-status-active" : "modal-error"}>
                             {t(d.status === "active" ? "deedStatusActive" : "deedStatusInactive")}
                           </span>
                         </td>
-                        <td>{d.createdByName}</td>
-                        <td>
+                        <td data-label={t("deedsColUser")}>{d.createdByName}</td>
+                        <td className="dr-cell-action" data-label={t("deedsAction")}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

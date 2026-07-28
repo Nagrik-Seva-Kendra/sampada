@@ -11,3 +11,5 @@ export * from "./permission.js";
 export * from "./property.js";
 export * from "./deed-property.js";
 export * from "./platform.js";
+export * from "./hindi-numerals.js";
+export * from "./verify-amounts.js";

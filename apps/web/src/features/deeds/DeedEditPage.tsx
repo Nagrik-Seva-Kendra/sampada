@@ -11,6 +11,7 @@ import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
 import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
+import { AmountAudit, confirmAmountsBeforePrint } from "../../components/AmountAudit";
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
@@ -257,19 +258,32 @@ export function DeedEditPage() {
               />
             </div>
           </label>
+          <AmountAudit
+            content={content}
+            onJumpTo={(start, end) => {
+              const el = textareaRef.current;
+              if (!el) return;
+              el.focus();
+              el.setSelectionRange(start, end);
+            }}
+          />
           {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
           {linkCopyFailed && <p className="modal-error">{t("deedsLinkCopyFailed")}</p>}
           <div className="deed-edit-actions">
             <button className="btn-calc" type="submit" disabled={status === "saving"}>
               {status === "saving" ? "…" : t("deedsSave")}
             </button>
-            <button type="button" className="doc-btn" onClick={() => printDeed(title, content)}>
+            <button type="button" className="doc-btn" onClick={() => {
+                if (confirmAmountsBeforePrint(content)) printDeed(title, content);
+              }}>
               {t("deedsPrintDeed")}
             </button>
             <button
               type="button"
               className="doc-btn"
-              onClick={() => void onDownloadPdf()}
+              onClick={() => {
+                if (confirmAmountsBeforePrint(content)) void onDownloadPdf();
+              }}
               disabled={pdfBusy}
             >
               {pdfBusy ? "…" : t("deedsDownloadPdf")}

@@ -1,14 +1,8 @@
-import {
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Navigate,
-  Outlet,
-  useRouterState,
-} from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, Navigate, Outlet } from "@tanstack/react-router";
 import { hasPermission } from "@sampada/shared";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { LangToggle } from "./components/LangToggle";
+import { NotificationBell } from "./features/dashboard/NotificationBell";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
@@ -28,47 +22,25 @@ import { PropertiesListPage } from "./features/properties/PropertiesListPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
-// Routes deliberately outside the dashboard shell (see the comment above
-// dashboardLayoutRoute below) — matched by pathname rather than routeId so
-// this stays a plain string check, not a typed-router internal.
-const STANDALONE_PATHS = new Set([
-  "/onboarding",
-  "/login",
-  "/signup",
-  "/reset-password",
-  "/accept-invite",
-  "/confirm-ownership-transfer",
-  "/welcome",
-]);
-function isStandaloneRoute(pathname: string): boolean {
-  if (STANDALONE_PATHS.has(pathname)) return true;
-  if (pathname.startsWith("/d/")) return true; // public deed share link
-  if (/^\/deeds\/[^/]+\/edit\/[^/]+/.test(pathname)) return true; // standalone deed editor
-  return false;
-}
-
-// The dashboard shell (DashboardLayout -> TopHeader) renders its own
-// LangToggle/ThemeToggle in-flow; every other route (login, onboarding, the
-// standalone deed editor, the public share link, etc.) still gets the fixed
-// corner toggle from here so it's never left without one.
-function RootComponent() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const inDashboard = !isStandaloneRoute(pathname);
+function TopControls() {
+  // The bell only means anything once there's a session behind it.
+  const token = useAuthStore((s) => s.token);
   return (
-    <>
-      {!inDashboard && (
-        <div className="top-controls-fab">
-          <LangToggle />
-          <ThemeToggle />
-        </div>
-      )}
-      <Outlet />
-    </>
+    <div className="top-controls-fab">
+      <LangToggle />
+      <ThemeToggle />
+      {token && <NotificationBell />}
+    </div>
   );
 }
 
 const rootRoute = createRootRoute({
-  component: RootComponent,
+  component: () => (
+    <>
+      <TopControls />
+      <Outlet />
+    </>
+  ),
   notFoundComponent: () => <Navigate to="/" />,
 });
 

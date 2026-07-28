@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BookOpen, Building2, ChevronLeft, ChevronRight, FileStack, Home, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
+import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
-import { matchApp } from "./appsRegistry";
+import { LangToggle } from "../../components/LangToggle";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
 
@@ -31,68 +33,125 @@ function SidebarLink({
   );
 }
 
-/** Left nav for the authenticated app shell — shows whichever app's pages match the current route. Collapsible via the edge arrow. */
-export function Sidebar() {
+/**
+ * Left nav for the authenticated app shell: deeds, workspace tools, settings,
+ * plus the platform-admin and property-upload back-office pages (each gated
+ * to who can actually reach them). Collapsible via the edge arrow on
+ * desktop; slides in as a drawer on mobile.
+ */
+export function Sidebar({
+  mobileOpen = false,
+  onCloseMobile,
+}: {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const isStaff = useIsStaff();
   const activeOrganization = useActiveOrganization();
   const user = useAuthStore((s) => s.user);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
+  const [collapsedPref, setCollapsedPref] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
   useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
-  }, [collapsed]);
+    localStorage.setItem(COLLAPSE_KEY, collapsedPref ? "1" : "0");
+  }, [collapsedPref]);
+
+  // The drawer is the only nav on mobile, so it always shows labels — a
+  // collapsed preference set on desktop would otherwise leave bare icons.
+  const collapsed = mobileOpen ? false : collapsedPref;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
-  const ctx = { isStaff, isPlatformAdmin: !!user?.isPlatformAdmin, canManageTeam };
-  const activeApp = matchApp(pathname);
-  const navItems = activeApp.navItems.filter((i) => !i.visible || i.visible(ctx));
+  const isPlatformAdmin = !!user?.isPlatformAdmin;
 
   return (
-    <aside className={"sidebar" + (collapsed ? " collapsed" : "")}>
+    <aside className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}>
       <div className="sidebar-top">
-        {!collapsed && (
-          <div className="sidebar-app-heading">
-            <div className="sidebar-app-name">{t(activeApp.labelKey)}</div>
-            <div className="sidebar-app-desc">{t(activeApp.descriptionKey)}</div>
-          </div>
-        )}
+        <Link to="/" className="sidebar-brand" title={collapsed ? t("brandName") : undefined}>
+          <BrandMark />
+          {!collapsed && <span className="sidebar-brand-text">{t("brandName")}</span>}
+        </Link>
         <button
           type="button"
           className="sidebar-collapse-btn"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={() => setCollapsedPref((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight size={13} strokeWidth={2.5} /> : <ChevronLeft size={13} strokeWidth={2.5} />}
         </button>
+        <button
+          type="button"
+          className="sidebar-close-btn"
+          onClick={onCloseMobile}
+          aria-label="Close menu"
+        >
+          <X size={18} strokeWidth={2.4} />
+        </button>
+      </div>
+      <div style={{ padding: "0 8px 10px" }}>
+        <CreateDeedMenu
+          triggerClassName="btn-calc"
+          triggerStyle={{ width: "100%", justifyContent: "center" }}
+          triggerLabel={collapsed ? "" : undefined}
+        />
       </div>
 
-      {activeApp.id === "e-registry" && (
-        <div style={{ padding: "0 8px 10px" }}>
-          <CreateDeedMenu
-            triggerClassName="btn-calc"
-            triggerStyle={{ width: "100%", justifyContent: "center" }}
-            triggerLabel={collapsed ? "" : undefined}
-          />
-        </div>
-      )}
-
       <nav className="sidebar-nav">
-        {navItems.map((item) => (
+        <SidebarLink
+          to="/deeds"
+          icon={<FileStack size={17} strokeWidth={2.2} />}
+          label={t("sidebarAllDeeds")}
+          collapsed={collapsed}
+        />
+        {isStaff && (
           <SidebarLink
-            key={item.to}
-            to={item.to}
-            icon={<item.icon size={17} strokeWidth={2.2} />}
-            label={t(item.labelKey)}
+            to="/guideline"
+            icon={<BookOpen size={17} strokeWidth={2.2} />}
+            label={t("sidebarGuideline")}
             collapsed={collapsed}
           />
-        ))}
+        )}
+        {canManageTeam && (
+          <SidebarLink
+            to="/team"
+            icon={<Users size={17} strokeWidth={2.2} />}
+            label={t("sidebarTeam")}
+            collapsed={collapsed}
+          />
+        )}
+        {isStaff && (
+          <SidebarLink
+            to="/properties"
+            icon={<Home size={17} strokeWidth={2.2} />}
+            label={t("appPropertiesName")}
+            collapsed={collapsed}
+          />
+        )}
+        {isPlatformAdmin && (
+          <SidebarLink
+            to="/platform/organizations"
+            icon={<Building2 size={17} strokeWidth={2.2} />}
+            label={t("appPlatformName")}
+            collapsed={collapsed}
+          />
+        )}
+        <SidebarLink
+          to="/settings"
+          icon={<Settings size={17} strokeWidth={2.2} />}
+          label={t("sidebarSettings")}
+          collapsed={collapsed}
+        />
       </nav>
 
       <div className="sidebar-spacer" />
+
+      {/* On mobile the top-right corner is crowded, so language lives here. */}
+      <div className="sidebar-lang">
+        <LangToggle />
+      </div>
+
+      {user && <WorkspaceSwitcher collapsed={collapsed} />}
     </aside>
   );
 }
