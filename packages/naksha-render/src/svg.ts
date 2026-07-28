@@ -88,6 +88,25 @@ function renderSideBlock(
   });
 }
 
+/**
+ * Renders one line of words stretched to fill exactly [x0, x1] — every line of a wrapped
+ * paragraph except its last gets this (the standard print-justify convention), spacing words
+ * apart using the same naive char-count width estimate as `wrapText`.
+ */
+function renderJustifiedLine(x0: number, x1: number, words: string[], charWidth: number): string {
+  if (words.length <= 1) return `<tspan x="${x0}">${escapeXml(words[0] ?? "")}</tspan>`;
+  const naturalWidths = words.map((w) => w.length * charWidth);
+  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
+  const gap = Math.max((x1 - x0 - totalNatural) / (words.length - 1), charWidth * 0.4);
+  let cx = x0;
+  const tspans = words.map((w, i) => {
+    const tspan = `<tspan x="${cx.toFixed(1)}">${escapeXml(w)}</tspan>`;
+    cx += (naturalWidths[i] ?? 0) + gap;
+    return tspan;
+  });
+  return tspans.join("");
+}
+
 /** Naive word-based wrap — approximates Devanagari width by character count, good enough for a print layout. */
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(" ");
@@ -159,15 +178,24 @@ export function buildNakshaSvg(
   let y = 30;
   const lineGap = 20;
 
-  // Header font is smaller than the rest of the page (11 vs 13-14): this
+  // Header font is smaller than the rest of the page (10 vs 13-14): this
   // line is a full postal address plus the fixed "नक्शा सम्पत्ति प्लाट
-  // स्थित ... में स्थित है।" wrapper text, easily 100+ characters, and it
-  // should read as one line rather than wrapping mid-address.
-  const headerLines = wrapText(buildHeaderSentence(d, lang), 115);
-  for (const line of headerLines) {
-    parts.push(`<text x="${MARGIN_X}" y="${y}" font-size="11" fill="#111">${escapeXml(line)}</text>`);
+  // स्थित ... में स्थित है।" wrapper text, easily 100-120+ characters, and
+  // it should read as one line rather than wrapping mid-address for all but
+  // the longest real addresses. When it does wrap, every line but the last
+  // is justified edge-to-edge (matching the deed text's own justified body).
+  const headerCharWidth = (WIDTH - 2 * MARGIN_X) / 130;
+  const headerLines = wrapText(buildHeaderSentence(d, lang), 130);
+  headerLines.forEach((line, i) => {
+    const isLast = i === headerLines.length - 1;
+    if (isLast) {
+      parts.push(`<text x="${MARGIN_X}" y="${y}" font-size="10" fill="#111">${escapeXml(line)}</text>`);
+    } else {
+      const justified = renderJustifiedLine(MARGIN_X, WIDTH - MARGIN_X, line.split(" "), headerCharWidth);
+      parts.push(`<text y="${y}" font-size="10" fill="#111">${justified}</text>`);
+    }
     y += lineGap;
-  }
+  });
   y += 10;
 
   if (parties.sellerName) {

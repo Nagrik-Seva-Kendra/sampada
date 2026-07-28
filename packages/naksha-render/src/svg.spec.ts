@@ -86,6 +86,31 @@ describe("buildNakshaSvg", () => {
     expect(svg).toContain(`>${fullLine}</text>`);
   });
 
+  it("keeps a 116-char real-world address on one header line too", () => {
+    const longerAddressPlot = {
+      ...referencePlot,
+      location: "प्रमिला प्लाजा, कुम्हरपुरा, नगर निगम वार्ड क्रमांक 28, जिला ग्वालियर, म.प्र.",
+    };
+    const svg = buildNakshaSvg(longerAddressPlot, {}, "hi");
+    const fullLine =
+      "नक्शा सम्पत्ति प्लाट स्थित प्रमिला प्लाजा, कुम्हरपुरा, नगर निगम वार्ड क्रमांक 28, जिला ग्वालियर, म.प्र. में स्थित है।";
+    expect(svg).toContain(`>${fullLine}</text>`);
+  });
+
+  it("justifies the header's non-last lines when an address is too long even for one wide line", () => {
+    const veryLongAddressPlot = {
+      ...referencePlot,
+      location:
+        "प्रमिला प्लाजा, कुम्हरपुरा, नगर निगम वार्ड क्रमांक 28, जिला ग्वालियर, म.प्र., पिन कोड 474001, यह पता बहुत लंबा है और एक पंक्ति में नहीं आ सकता",
+    };
+    const svg = buildNakshaSvg(veryLongAddressPlot, {}, "hi");
+    // Forced onto 2+ lines: the first line is rendered as justified <tspan>s (no single
+    // un-split <text>...</text> line contains the whole sentence), the words still all appear.
+    expect(svg).toContain("<tspan x=");
+    expect(svg).toContain("प्रमिला");
+    expect(svg).toContain("बहुत लंबा है");
+  });
+
   it("includes seller and buyer names when provided, and omits them when not", () => {
     const withParties = buildNakshaSvg(referencePlot, parties, "hi");
     expect(withParties).toContain(parties.sellerName);

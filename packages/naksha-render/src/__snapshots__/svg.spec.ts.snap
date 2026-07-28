@@ -3,7 +3,7 @@
 exports[`buildNakshaSvg > 5-plot snapshot set > decimal measurements 1`] = `
 "<svg xmlns="http://www.w3.org/2000/svg" width="794" height="690" viewBox="0 0 794 690" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
   <rect x="0" y="0" width="794" height="690" fill="#ffffff"/>
-<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Thatipur, Gwalior में स्थित है।</text>
+<text x="60" y="30" font-size="10" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Thatipur, Gwalior में स्थित है।</text>
 <text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1582.88 वर्गफुट</text>
@@ -38,7 +38,7 @@ exports[`buildNakshaSvg > 5-plot snapshot set > decimal measurements 1`] = `
 exports[`buildNakshaSvg > 5-plot snapshot set > meter unit 1`] = `
 "<svg xmlns="http://www.w3.org/2000/svg" width="794" height="690" viewBox="0 0 794 690" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
   <rect x="0" y="0" width="794" height="690" fill="#ffffff"/>
-<text x="60" y="30" font-size="11" fill="#111">Naksha of the property plot situated at Hazira, Gwalior.</text>
+<text x="60" y="30" font-size="10" fill="#111">Naksha of the property plot situated at Hazira, Gwalior.</text>
 <text x="60" y="60" font-size="14" fill="#111">Seller – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">Buyer – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">Area – 2429.41 sq ft</text>
@@ -72,7 +72,7 @@ exports[`buildNakshaSvg > 5-plot snapshot set > meter unit 1`] = `
 exports[`buildNakshaSvg > 5-plot snapshot set > reference plot (matches the office's real naksha format) 1`] = `
 "<svg xmlns="http://www.w3.org/2000/svg" width="794" height="690" viewBox="0 0 794 690" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
   <rect x="0" y="0" width="794" height="690" fill="#ffffff"/>
-<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित सरस्वती विहार कॉलोनी, ग्राम धनेली, प.ह.नं. 114, जिला ग्वालियर म.प्र. में स्थित है।</text>
+<text x="60" y="30" font-size="10" fill="#111">नक्शा सम्पत्ति प्लाट स्थित सरस्वती विहार कॉलोनी, ग्राम धनेली, प.ह.नं. 114, जिला ग्वालियर म.प्र. में स्थित है।</text>
 <text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1000 वर्गफुट</text>
@@ -107,7 +107,7 @@ exports[`buildNakshaSvg > 5-plot snapshot set > reference plot (matches the offi
 exports[`buildNakshaSvg > 5-plot snapshot set > tall rectangle 1`] = `
 "<svg xmlns="http://www.w3.org/2000/svg" width="794" height="690" viewBox="0 0 794 690" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
   <rect x="0" y="0" width="794" height="690" fill="#ffffff"/>
-<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Lashkar, Gwalior में स्थित है।</text>
+<text x="60" y="30" font-size="10" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Lashkar, Gwalior में स्थित है।</text>
 <text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 1400 वर्गफुट</text>
@@ -141,7 +141,7 @@ exports[`buildNakshaSvg > 5-plot snapshot set > tall rectangle 1`] = `
 exports[`buildNakshaSvg > 5-plot snapshot set > wide rectangle 1`] = `
 "<svg xmlns="http://www.w3.org/2000/svg" width="794" height="450" viewBox="0 0 794 450" font-family="'Noto Sans Devanagari','Nirmala UI','Mangal',sans-serif" font-weight="bold">
   <rect x="0" y="0" width="794" height="450" fill="#ffffff"/>
-<text x="60" y="30" font-size="11" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Morar, Gwalior में स्थित है।</text>
+<text x="60" y="30" font-size="10" fill="#111">नक्शा सम्पत्ति प्लाट स्थित Morar, Gwalior में स्थित है।</text>
 <text x="60" y="60" font-size="14" fill="#111">विक्रेता पक्ष – श्री संजय पाण्डेय पुत्र स्व.श्री किशोरी शरण पाण्डेय</text>
 <text x="60" y="80" font-size="14" fill="#111">क्रेता पक्ष – श्रीमती सरिता देवी पत्नी श्री आनंद कुमार</text>
 <text x="734" y="110" font-size="14" text-anchor="end" fill="#111">क्षेत्रफल – 2000 वर्गफुट</text>
