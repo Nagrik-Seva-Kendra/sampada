@@ -7,6 +7,7 @@ import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/au
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
+import { LangToggle } from "../../components/LangToggle";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
@@ -125,6 +126,11 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-spacer" />
+
+      {/* On mobile the top-right corner is crowded, so language lives here. */}
+      <div className="sidebar-lang">
+        <LangToggle />
+      </div>
 
       {user && <WorkspaceSwitcher collapsed={collapsed} />}
     </aside>
