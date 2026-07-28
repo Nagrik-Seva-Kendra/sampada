@@ -69,12 +69,16 @@ export async function downloadNakshaPdf(svg: string, filename: string): Promise<
   // than an A4 page top-to-bottom, but this guards against a very tall one).
   const naturalWidthPt = (width * 72) / 96;
   const naturalHeightPt = (height * 72) / 96;
-  const fitScale = Math.min(availableWidthPt / naturalWidthPt, availableHeightPt / naturalHeightPt, 1);
+  // No upper cap here: a naksha's natural (unscaled) height is usually much shorter than a
+  // full A4 page, and it should scale UP to fill the printable area (bounded by whichever of
+  // width/height is tighter) rather than sit small at the top with the rest of the page blank.
+  const fitScale = Math.min(availableWidthPt / naturalWidthPt, availableHeightPt / naturalHeightPt);
   const imgWidthPt = naturalWidthPt * fitScale;
   const imgHeightPt = naturalHeightPt * fitScale;
   const x = (A4_WIDTH_PT - imgWidthPt) / 2;
+  const y = (A4_HEIGHT_PT - imgHeightPt) / 2;
 
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
-  pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, PAGE_MARGIN_PT, imgWidthPt, imgHeightPt);
+  pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, imgWidthPt, imgHeightPt);
   pdf.save(`${sanitizeFilename(filename)}.pdf`);
 }

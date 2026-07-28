@@ -168,7 +168,7 @@ export function buildNakshaSvg(
   y += 14;
 
   const rectY = y;
-  parts.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectH}" fill="none" stroke="#111" stroke-width="1.5"/>`);
+  parts.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectH}" fill="none" stroke="#111" stroke-width="2.5"/>`);
 
   // Rectangle center: this plot's own plot number (optional) and block (optional).
   const plotCenterY = rectY + rectH / 2;
@@ -185,44 +185,46 @@ export function buildNakshaSvg(
     );
   }
 
-  // Left margin: North direction label + boundary text, vertically centered on the rectangle.
-  const leftX = rectX - 20;
+  // Left margin: North direction label + boundary text, centered in the left margin column —
+  // same centering convention as East/West (which are centered above/below the rectangle).
+  const leftColCenterX = MARGIN_X + LEFT_MARGIN_W / 2;
   parts.push(
-    `<text x="${leftX}" y="${plotCenterY - 8}" font-size="13" text-anchor="end" fill="#111">${escapeXml(side.north)}</text>`,
+    `<text x="${leftColCenterX}" y="${plotCenterY - 8}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.north)}</text>`,
   );
   parts.push(
-    `<text x="${leftX}" y="${plotCenterY + 12}" font-size="13" text-anchor="end" fill="#111">${escapeXml(d.boundaries.north)}</text>`,
+    `<text x="${leftColCenterX}" y="${plotCenterY + 12}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.north)}</text>`,
   );
 
-  // Right margin: vertical dimension (E-W length) directly against the rectangle, then the
-  // South direction label + boundary text further out.
-  const dimX = rectX + rectW + 26;
-  const tick = 6;
+  // Right margin: vertical dimension (E-W length) directly against the rectangle, drawn as a
+  // double-headed arrow with the length on the line (matching this office's reference naksha
+  // style), then the South direction label + boundary text centered further out.
+  const dimX = rectX + rectW + 34;
+  const arrow = 8;
   parts.push(`
-    <line x1="${dimX}" y1="${rectY}" x2="${dimX}" y2="${rectY + rectH}" stroke="#333" stroke-width="1"/>
-    <line x1="${dimX - tick}" y1="${rectY}" x2="${dimX + tick}" y2="${rectY}" stroke="#333" stroke-width="1"/>
-    <line x1="${dimX - tick}" y1="${rectY + rectH}" x2="${dimX + tick}" y2="${rectY + rectH}" stroke="#333" stroke-width="1"/>
-    <text x="${dimX + 14}" y="${plotCenterY}" font-size="12" text-anchor="middle" fill="#111"
-      transform="rotate(-90 ${dimX + 14} ${plotCenterY})">${fmt(d.ewLength)} ${unitLabel}</text>`);
+    <line x1="${dimX}" y1="${rectY}" x2="${dimX}" y2="${rectY + rectH}" stroke="#111" stroke-width="1.75"/>
+    <path d="M ${dimX} ${rectY} L ${dimX - arrow / 2} ${rectY + arrow} L ${dimX + arrow / 2} ${rectY + arrow} Z" fill="#111"/>
+    <path d="M ${dimX} ${rectY + rectH} L ${dimX - arrow / 2} ${rectY + rectH - arrow} L ${dimX + arrow / 2} ${rectY + rectH - arrow} Z" fill="#111"/>
+    <text x="${dimX}" y="${plotCenterY}" font-size="19" font-weight="bold" text-anchor="middle" fill="#111"
+      transform="rotate(-90 ${dimX} ${plotCenterY})">${fmt(d.ewLength)} ${unitLabel}</text>`);
 
-  const southX = rectX + rectW + 60;
+  const rightColCenterX = rectX + rectW + RIGHT_MARGIN_W / 2 + 20;
   parts.push(
-    `<text x="${southX}" y="${plotCenterY - 8}" font-size="13" fill="#111">${escapeXml(side.south)}</text>`,
+    `<text x="${rightColCenterX}" y="${plotCenterY - 8}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(side.south)}</text>`,
   );
   parts.push(
-    `<text x="${southX}" y="${plotCenterY + 12}" font-size="13" fill="#111">${escapeXml(d.boundaries.south)}</text>`,
+    `<text x="${rightColCenterX}" y="${plotCenterY + 12}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.south)}</text>`,
   );
 
-  // Bottom margin: horizontal dimension (N-S length) against the rectangle, then the West
-  // boundary text, then the direction label at the outer edge.
-  let by = rectY + rectH + 24;
-  const dimY = rectY + rectH + 14;
+  // Bottom margin: horizontal dimension (N-S length) against the rectangle, drawn as a
+  // double-headed arrow with the length on the line (same convention as the vertical
+  // dimension above), then the West boundary text, then the direction label at the outer edge.
+  const dimY = rectY + rectH + 26;
   parts.push(`
-    <line x1="${rectX}" y1="${dimY}" x2="${rectX + rectW}" y2="${dimY}" stroke="#333" stroke-width="1"/>
-    <line x1="${rectX}" y1="${dimY - tick}" x2="${rectX}" y2="${dimY + tick}" stroke="#333" stroke-width="1"/>
-    <line x1="${rectX + rectW}" y1="${dimY - tick}" x2="${rectX + rectW}" y2="${dimY + tick}" stroke="#333" stroke-width="1"/>
-    <text x="${centerX}" y="${by}" font-size="12" text-anchor="middle" fill="#111">${fmt(d.nsLength)} ${unitLabel}</text>`);
-  by += lineGap;
+    <line x1="${rectX}" y1="${dimY}" x2="${rectX + rectW}" y2="${dimY}" stroke="#111" stroke-width="1.75"/>
+    <path d="M ${rectX} ${dimY} L ${rectX + arrow} ${dimY - arrow / 2} L ${rectX + arrow} ${dimY + arrow / 2} Z" fill="#111"/>
+    <path d="M ${rectX + rectW} ${dimY} L ${rectX + rectW - arrow} ${dimY - arrow / 2} L ${rectX + rectW - arrow} ${dimY + arrow / 2} Z" fill="#111"/>
+    <text x="${centerX}" y="${dimY - 6}" font-size="19" font-weight="bold" text-anchor="middle" fill="#111">${fmt(d.nsLength)} ${unitLabel}</text>`);
+  let by = dimY + lineGap + 10;
   parts.push(
     `<text x="${centerX}" y="${by}" font-size="13" text-anchor="middle" fill="#111">${escapeXml(d.boundaries.west)}</text>`,
   );
@@ -240,7 +242,7 @@ export function buildNakshaSvg(
   by += 20;
 
   const height = by;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" font-family="${FONT_STACK}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" font-family="${FONT_STACK}" font-weight="bold">
   <rect x="0" y="0" width="${WIDTH}" height="${height}" fill="#ffffff"/>
 ${parts.join("\n")}
 </svg>`;
