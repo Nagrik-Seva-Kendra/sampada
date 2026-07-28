@@ -3559,3 +3559,76 @@ h3 {
     font-size: 13px;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Deeds list on mobile, second pass.
+   The labelled-rows version was ~225px per card, so barely two deeds fit
+   on a phone. This makes each row a headline plus one muted meta line,
+   with the actions parked in the top-right corner: ~66px per card.
+   --------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .dr-table tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    padding: 11px 82px 11px 14px;
+    margin-bottom: 8px;
+  }
+  .dr-table td {
+    display: inline;
+    flex: 0 0 auto;
+    padding: 0;
+    border: none;
+    text-align: left;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: normal;
+  }
+  .dr-table td::before {
+    content: none;
+  }
+
+  .dr-table td.dr-cell-name {
+    order: 1;
+    flex: 1 1 100%;
+    margin-bottom: 4px;
+    font-size: 14.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--fg);
+  }
+  /* date · category · user · status */
+  .dr-table td:nth-child(2) { order: 2; }
+  .dr-table td:nth-child(4) { order: 3; }
+  .dr-table td:nth-child(6) { order: 4; }
+  .dr-table td:nth-child(5) { order: 5; }
+  .dr-table td:nth-child(4)::before,
+  .dr-table td:nth-child(6)::before,
+  .dr-table td:nth-child(5)::before {
+    content: "\00B7";
+    margin: 0 5px;
+    color: var(--border);
+  }
+
+  .dr-table td.dr-cell-action {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    display: flex;
+    gap: 4px;
+    padding: 0;
+  }
+
+  /* The expanded detail row keeps the full width of the card. */
+  .dr-table td[colspan] {
+    order: 0;
+    flex: 1 1 100%;
+    display: block;
+    font-size: 13px;
+    color: var(--fg);
+  }
+  .dr-table td[colspan]::before {
+    content: none;
+  }
+}
