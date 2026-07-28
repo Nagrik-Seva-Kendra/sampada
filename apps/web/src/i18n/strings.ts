@@ -291,7 +291,6 @@ export const strings = {
   deedsCopyLink: { en: "Copy Share Link", hi: "शेयर लिंक कॉपी करें" },
   deedsLinkCopied: { en: "Link copied!", hi: "लिंक कॉपी हो गया!" },
   deedsLinkCopyFailed: { en: "Couldn't copy the link.", hi: "लिंक कॉपी नहीं हो सका।" },
-  deedsNakshaBtn: { en: "Naksha", hi: "नक्शा" },
   deedsHistoryBtn: { en: "History", hi: "इतिहास" },
   deedHistoryTitle: { en: "Version History", hi: "संस्करण इतिहास" },
   deedHistoryLoading: { en: "Loading history…", hi: "इतिहास लोड हो रहा है…" },

@@ -58,7 +58,12 @@ function fmtArea(n: number): string {
  * separate Party/DeedParty records, since the deed text is the authoritative
  * naming format for the naksha.
  */
-export function DeedPropertyDetailSection({ deedId }: { deedId: string }) {
+/**
+ * `started` is lifted to the caller (the "Naksha" button in the deed's action bar) — nothing
+ * saved yet for this deed means the section renders nothing until staff explicitly asks for a
+ * naksha there, rather than firing the AI extraction on every page load.
+ */
+export function DeedPropertyDetailSection({ deedId, started }: { deedId: string; started: boolean }) {
   const lang = useLang();
   const t = (k: StringKey) => translate(k, lang);
 
@@ -74,9 +79,6 @@ export function DeedPropertyDetailSection({ deedId }: { deedId: string }) {
   const [extractError, setExtractError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
-  // Nothing saved yet for this deed — wait for staff to explicitly ask for a naksha (via the
-  // "Generate Naksha" button below) rather than firing the AI extraction on every page load.
-  const [started, setStarted] = useState(false);
 
   // Seed from the server's copy exactly once per deed.
   const seededRef = useRef<string | null>(null);
@@ -223,19 +225,7 @@ export function DeedPropertyDetailSection({ deedId }: { deedId: string }) {
   }
 
   if (record.isLoading) return null;
-
-  if (!record.data && !started) {
-    return (
-      <div className="modal-form" style={{ marginTop: 28 }}>
-        <h3 className="page-title" style={{ fontSize: 18, margin: 0 }}>
-          {t("propDetailHeading")}
-        </h3>
-        <button type="button" className="btn-calc" onClick={() => setStarted(true)}>
-          {t("propDetailGenerateBtn")}
-        </button>
-      </div>
-    );
-  }
+  if (!record.data && !started) return null;
 
   return (
     <div className="modal-form" style={{ marginTop: 28 }}>

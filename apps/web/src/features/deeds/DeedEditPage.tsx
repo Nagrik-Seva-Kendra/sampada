@@ -40,6 +40,7 @@ export function DeedEditPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [linkCopyFailed, setLinkCopyFailed] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [nakshaStarted, setNakshaStarted] = useState(false);
 
   // Live view of whatever text range the party is currently highlighting on
   // the public share-link page (/d/:id), pushed over SSE — lets staff see
@@ -295,11 +296,12 @@ export function DeedEditPage() {
               <button
                 type="button"
                 className="doc-btn"
-                onClick={() =>
-                  document.getElementById("naksha-section")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
+                onClick={() => {
+                  setNakshaStarted(true);
+                  document.getElementById("naksha-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
               >
-                {t("deedsNakshaBtn")}
+                {t("propDetailGenerateBtn")}
               </button>
             )}
             <button type="button" className="doc-btn" onClick={() => setShowHistory(true)}>
@@ -322,7 +324,7 @@ export function DeedEditPage() {
 
         {type === "sale-deed" && (
           <div id="naksha-section">
-            <DeedPropertyDetailSection deedId={id} />
+            <DeedPropertyDetailSection deedId={id} started={nakshaStarted} />
           </div>
         )}
       </div>
