@@ -291,6 +291,17 @@ export function DeedEditPage() {
             <button type="button" className="doc-btn" onClick={() => void onCopyShareLink()}>
               {linkCopied ? t("deedsLinkCopied") : t("deedsCopyLink")}
             </button>
+            {type === "sale-deed" && (
+              <button
+                type="button"
+                className="doc-btn"
+                onClick={() =>
+                  document.getElementById("naksha-section")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              >
+                {t("deedsNakshaBtn")}
+              </button>
+            )}
             <button type="button" className="doc-btn" onClick={() => setShowHistory(true)}>
               {t("deedsHistoryBtn")}
             </button>
@@ -309,7 +320,11 @@ export function DeedEditPage() {
           </div>
         </form>
 
-        {type === "sale-deed" && <DeedPropertyDetailSection deedId={id} />}
+        {type === "sale-deed" && (
+          <div id="naksha-section">
+            <DeedPropertyDetailSection deedId={id} />
+          </div>
+        )}
       </div>
 
       {showHistory && <DeedHistoryModal deedId={id} onClose={() => setShowHistory(false)} />}
