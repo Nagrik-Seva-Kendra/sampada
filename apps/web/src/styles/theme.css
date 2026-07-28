@@ -3591,3 +3591,29 @@ h3 {
     background: none;
   }
 }
+
+/* The from/to dates read as a single control, so they travel together when
+   the filter bar wraps rather than leaving the dash stranded on its own row. */
+.dr-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dr-date-input {
+  width: 150px;
+}
+.dr-date-sep {
+  flex: 0 0 auto;
+  font-size: 12px;
+  opacity: 0.5;
+}
+@media (max-width: 860px) {
+  .dr-date-range {
+    flex: 1 1 100%;
+  }
+  .dr-date-input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+}
