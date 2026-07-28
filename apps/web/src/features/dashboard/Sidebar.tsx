@@ -50,10 +50,14 @@ export function Sidebar({
   const activeOrganization = useActiveOrganization();
   const user = useAuthStore((s) => s.user);
 
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
+  const [collapsedPref, setCollapsedPref] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
   useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
-  }, [collapsed]);
+    localStorage.setItem(COLLAPSE_KEY, collapsedPref ? "1" : "0");
+  }, [collapsedPref]);
+
+  // The drawer is the only nav on mobile, so it always shows labels — a
+  // collapsed preference set on desktop would otherwise leave bare icons.
+  const collapsed = mobileOpen ? false : collapsedPref;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 
@@ -68,7 +72,7 @@ export function Sidebar({
         <button
           type="button"
           className="sidebar-collapse-btn"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={() => setCollapsedPref((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
