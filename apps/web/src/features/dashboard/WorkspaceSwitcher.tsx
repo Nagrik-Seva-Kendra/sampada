@@ -46,7 +46,8 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
   }
 
   if (!user) return null;
-  const initial = (activeOrganization?.name ?? user.fname).trim().charAt(0).toUpperCase() || "?";
+  const fullName = `${user.fname} ${user.lname}`.trim();
+  const initial = fullName.charAt(0).toUpperCase() || "?";
 
   return (
     <div className="ws-switcher" ref={ref}>
@@ -56,15 +57,17 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
         className="ws-switcher-trigger"
         onClick={toggleOpen}
         aria-expanded={open}
-        title={collapsed ? (activeOrganization?.name ?? `${user.fname} ${user.lname}`) : undefined}
+        title={collapsed ? fullName : undefined}
       >
         <span className="ws-switcher-avatar">{initial}</span>
         {!collapsed && (
           <>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span className="ws-switcher-name">{activeOrganization?.name ?? `${user.fname} ${user.lname}`}</span>
+              <span className="ws-switcher-name">{fullName}</span>
               <br />
-              <span className="ws-switcher-role">{activeOrganization?.role}</span>
+              <span className="ws-switcher-role">
+                {activeOrganization ? `${activeOrganization.role} · ${activeOrganization.name}` : null}
+              </span>
             </span>
             <ChevronsUpDown size={15} strokeWidth={2} style={{ opacity: 0.6, flexShrink: 0 }} />
           </>
