@@ -3514,3 +3514,48 @@ h3 {
     font-size: 12px;
   }
 }
+
+/* The bell shares the floating group with the theme toggle, so it should
+   carry the same weight — the base 30px pill looked undersized next to it. */
+.top-controls-fab .notif-bell-trigger {
+  width: 34px;
+  height: 34px;
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+.top-controls-fab .notif-bell-trigger:hover {
+  color: var(--primary);
+  border-color: var(--accent);
+}
+
+/* Language lives in the drawer on mobile; on desktop it stays in the corner. */
+.sidebar-lang {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .top-controls-fab .lang-toggle-fab {
+    display: none;
+  }
+  .top-controls-fab .notif-bell-trigger {
+    width: 36px;
+    height: 36px;
+  }
+  .mobile-topbar {
+    padding-right: 100px;
+  }
+  .sidebar-lang {
+    display: flex;
+    justify-content: center;
+    padding: 4px 8px 12px;
+  }
+  .sidebar-lang .lang-toggle-fab {
+    width: 100%;
+    box-shadow: none;
+  }
+  .sidebar-lang .lang-toggle-fab button {
+    flex: 1;
+    min-height: 38px;
+    font-size: 13px;
+  }
+}
