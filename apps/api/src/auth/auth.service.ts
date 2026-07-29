@@ -114,7 +114,11 @@ export class AuthService {
     if (stored.status === "INACTIVE") {
       throw new ForbiddenException("Your services have been discontinued by the admin.");
     }
-    if (!(await this.users.hasLiveMembership(stored.id))) {
+    // Platform service/staff accounts (isPlatformAdmin) aren't org-scoped — they
+    // authenticate for the platform/back-office APIs, which are gated by
+    // isPlatformAdmin (see JwtPlatformAdminGuard), not by a per-org membership.
+    // So they're exempt from the live-membership requirement below.
+    if (!stored.isPlatformAdmin && !(await this.users.hasLiveMembership(stored.id))) {
       throw new ForbiddenException("This organisation has been deleted.");
     }
     return stored;

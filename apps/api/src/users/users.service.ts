@@ -227,11 +227,21 @@ export class UsersService {
     return row ? toStoredUser(row) : undefined;
   }
 
-  /** Login by username if set, else email (keeps accounts without a username usable). */
+  /**
+   * Login by username if set, else email (keeps accounts without a username usable).
+   * Also finds platform service/staff accounts (isPlatformAdmin) even though their
+   * role isn't a customer-facing EMPLOYEE/ADMIN — they authenticate for the
+   * platform/back-office APIs (e.g. the NSK ERP "Sampada Management" service account).
+   */
   async findByLogin(login: string): Promise<StoredUser | undefined> {
     const needle = login.trim().toLowerCase();
     const row = await this.prisma.user.findFirst({
-      where: { role: { in: LOGIN_ROLES }, OR: [{ username: needle }, { email: needle }] },
+      where: {
+        AND: [
+          { OR: [{ role: { in: LOGIN_ROLES } }, { isPlatformAdmin: true }] },
+          { OR: [{ username: needle }, { email: needle }] },
+        ],
+      },
     });
     return row ? toStoredUser(row) : undefined;
   }
