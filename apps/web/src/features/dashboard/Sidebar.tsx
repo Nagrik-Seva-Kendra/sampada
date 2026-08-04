@@ -61,12 +61,16 @@ export function Sidebar({
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 
+  // The shell belongs to whichever workspace is active, so the brand line shows
+  // that organization; the product name is only the fallback before one loads.
+  const brandLabel = activeOrganization?.name || t("brandName");
+
   return (
     <aside className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}>
       <div className="sidebar-top">
-        <Link to="/" className="sidebar-brand" title={collapsed ? t("brandName") : undefined}>
+        <Link to="/" className="sidebar-brand" title={brandLabel}>
           <BrandMark />
-          {!collapsed && <span className="sidebar-brand-text">{t("brandName")}</span>}
+          {!collapsed && <span className="sidebar-brand-text">{brandLabel}</span>}
         </Link>
         <button
           type="button"
