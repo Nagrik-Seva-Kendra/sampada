@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
@@ -36,8 +36,22 @@ function peerColor(userId: string): string {
  * textarea on top of it.
  */
 function PeerCarets({ peers }: { peers: DeedPeer[] }) {
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  // A caret at the end of a line is the normal case while typing, and its
+  // badge would run off the right edge into the backdrop's clip. Nothing in
+  // CSS can see that coming, so measure once per position and hang the badge
+  // off the other side when it wouldn't fit.
+  const [flip, setFlip] = useState(false);
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    const box = anchor?.offsetParent as HTMLElement | null;
+    const label = anchor?.querySelector<HTMLElement>(".deed-peer-name");
+    if (!anchor || !box || !label) return;
+    setFlip(anchor.offsetLeft + label.offsetWidth + 12 > box.clientWidth);
+  }, [peers]);
+
   return (
-    <span className="deed-peer-anchor">
+    <span className={"deed-peer-anchor" + (flip ? " flip" : "")} ref={anchorRef}>
       {peers.map((peer, i) => (
         <span
           key={peer.sessionId}

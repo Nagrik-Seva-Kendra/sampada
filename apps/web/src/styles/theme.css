@@ -301,19 +301,71 @@ h3 {
 }
 .deed-peer-name {
   position: absolute;
-  bottom: 100%;
-  left: -1px;
-  margin-bottom: 2px;
-  padding: 1px 6px;
-  border-radius: 4px 4px 4px 0;
-  font-size: 10.5px;
+  /* Beside the caret, on its own line -- not above it. The backdrop has to
+     clip (it scrolls with the textarea), so a badge that reaches above its
+     line is cut in half whenever the cursor sits on the topmost visible line,
+     which happens constantly as people scroll. Keeping it within the line box
+     means it can never be clipped vertically. */
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border-radius: 3px 5px 5px 3px;
+  /* The deed body is justified and set in the document font at a wide line
+     height; a name badge inheriting any of that comes out stretched and
+     loose. It is chrome, not deed text, so it takes the UI font. */
+  font-family: var(--font-body);
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.45;
+  text-align: left;
   color: #fff;
   white-space: nowrap;
+  box-shadow: 0 2px 8px -3px rgb(0 0 0 / 0.5);
   /* The backdrop renders its text transparent to stay invisible under the
      textarea; the label is the one thing in there meant to be read. */
   -webkit-text-fill-color: #fff;
+  /* A badge parked on the line above is covering deed text that the reader
+     can't move it off. Show it while the cursor is actually moving, then get
+     out of the way and leave just the caret -- the header chips still say who
+     is in the deed. Each move remounts the anchor at a new offset, which is
+     what replays this. */
+  animation:
+    deedPeerNameIn 0.18s ease both,
+    deedPeerNameOut 0.45s ease 2.6s both;
+}
+/* The centring translate has to be carried through the keyframes, or the
+   animation's own transform would drop it and the badge would jump. */
+@keyframes deedPeerNameIn {
+  from {
+    opacity: 0;
+    transform: translate(-3px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+@keyframes deedPeerNameOut {
+  to {
+    opacity: 0;
+  }
+}
+/* No room to the right of the caret: hang the badge off its left instead. */
+.deed-peer-anchor.flip .deed-peer-name {
+  left: auto;
+  right: 4px;
+  border-radius: 5px 3px 3px 5px;
+}
+
+/* Someone who asked not to be moved at gets the badge without the motion --
+   but it must still end up out of the way, so it settles at a low opacity
+   instead of animating. */
+@media (prefers-reduced-motion: reduce) {
+  .deed-peer-name {
+    animation: none;
+    opacity: 0.45;
+  }
 }
 
 .propdetail-chips {
