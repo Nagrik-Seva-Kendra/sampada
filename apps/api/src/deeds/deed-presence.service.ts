@@ -66,6 +66,21 @@ export class DeedPresenceService implements OnModuleDestroy {
     return this.subjectFor(deedId).asObservable();
   }
 
+  /**
+   * Everyone currently in any deed, for the deeds list. Returns every room
+   * this instance knows about -- the caller is responsible for narrowing it
+   * to deeds the requester is allowed to see, since this service has no idea
+   * which organization a deed belongs to.
+   */
+  occupiedDeeds(): Map<string, DeedPeer[]> {
+    const snapshot = new Map<string, DeedPeer[]>();
+    for (const deedId of this.rooms.keys()) {
+      const peers = this.roster(deedId);
+      if (peers.length > 0) snapshot.set(deedId, peers);
+    }
+    return snapshot;
+  }
+
   private subjectFor(deedId: string): BehaviorSubject<DeedPeer[]> {
     let subject = this.subjects.get(deedId);
     if (!subject) {

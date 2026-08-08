@@ -184,6 +184,20 @@ function truncateExample(content: string, maxLen = 6000): string {
         return row ? toItem(row) : null;
   }
 
+  /**
+   * Narrows a list of deed ids to the ones the caller can see. Used to filter
+   * process-wide state (the live-cursor rooms) down to this tenant before any
+   * of it is returned, without loading the deeds themselves.
+   */
+  async findVisibleIds(ids: string[]): Promise<string[]> {
+        if (ids.length === 0) return [];
+        const rows = await this.prisma.deedTemplate.findMany({
+                where: { id: { in: ids } },
+                select: { id: true },
+        });
+        return rows.map((r) => r.id);
+  }
+
 /**
      * Read-only lookup for the party-facing share link: no auth, keyed by the
      * deed's own id (a random UUID, unguessable, the same trust model as a

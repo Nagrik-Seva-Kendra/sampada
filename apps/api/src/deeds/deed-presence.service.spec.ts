@@ -110,6 +110,25 @@ describe("DeedPresenceService", () => {
     expect(seen.at(-1)).toEqual([]);
   });
 
+  it("reports which deeds have someone in them", () => {
+    service.touch(DEED, peer("tab-a"));
+    service.touch(OTHER_DEED, peer("tab-b", "user-2"));
+
+    const occupied = service.occupiedDeeds();
+    expect([...occupied.keys()].sort()).toEqual([DEED, OTHER_DEED]);
+    expect(occupied.get(DEED)?.[0]?.sessionId).toBe("tab-a");
+  });
+
+  it("leaves an emptied deed out of the occupancy list entirely", async () => {
+    service.touch(DEED, peer("tab-a"));
+    service.leave(DEED, "tab-a");
+    expect(service.occupiedDeeds().has(DEED)).toBe(false);
+
+    service.touch(OTHER_DEED, peer("tab-b"));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(service.occupiedDeeds().size).toBe(0);
+  });
+
   it("does not leak the internal lastSeenAt bookkeeping to clients", async () => {
     service.touch(DEED, peer("tab-a"));
     const seen = await roster(service);

@@ -7,26 +7,13 @@ import { findDeed } from "./deedData";
 import type { DeedPeer } from "@sampada/shared";
 import { useDeedCorrections, useResolveCorrection, useSampleDeed, useSaveSampleDeed } from "./useSampleDeeds";
 import { useAutoSaveDeed } from "./useAutoSaveDeed";
-import { useDeedPresence } from "./useDeedPresence";
+import { peerColor, useDeedPresence } from "./useDeedPresence";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
 import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
 import { AmountAudit, confirmAmountsBeforePrint } from "../../components/AmountAudit";
-
-/**
- * Stable per-person cursor colours. Picked by hashing the user id rather than
- * by arrival order, so the same colleague is the same colour in every tab and
- * on every reconnect — the colour becomes a way to recognise them.
- */
-const PEER_COLORS = ["#c2410c", "#2f7d5d", "#4a6fd4", "#a2529b", "#b4761f", "#2b8a9e"] as const;
-
-function peerColor(userId: string): string {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  return PEER_COLORS[hash % PEER_COLORS.length] ?? PEER_COLORS[0];
-}
 
 /**
  * Other people's cursors at one character offset, drawn inside the backdrop

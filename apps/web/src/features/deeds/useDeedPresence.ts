@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { DeedCaret, DeedPeer } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
@@ -12,6 +13,50 @@ const MOVE_THROTTLE_MS = 120;
 /** Well inside the server's 25s staleness window, so two dropped beats still don't drop the cursor. */
 const HEARTBEAT_MS = 8_000;
 const RECONNECT_MS = 3_000;
+
+/**
+ * Stable per-person colours, shared by the in-document cursors and the deed
+ * list. Hashed from the user id rather than assigned by arrival order, so the
+ * same colleague is the same colour everywhere and on every reconnect.
+ */
+const PEER_COLORS = ["#c2410c", "#2f7d5d", "#4a6fd4", "#a2529b", "#b4761f", "#2b8a9e"] as const;
+
+export function peerColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  return PEER_COLORS[hash % PEER_COLORS.length] ?? PEER_COLORS[0];
+}
+
+export interface DeedOccupant {
+  userId: string;
+  name: string;
+}
+
+/**
+ * Who is in which deed right now, for the deeds list.
+ *
+ * Polled rather than streamed: a per-deed SSE connection for every row would
+ * be absurd, and an organization-wide stream would mean a second pub/sub
+ * keyed by organization for a view where a few seconds of lag is invisible.
+ * The payload only covers deeds someone actually has open, so it is small.
+ */
+export function useDeedsOccupancy(enabled = true) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["deeds-occupancy"],
+    enabled: enabled && !!token,
+    refetchInterval: 5_000,
+    // Nobody needs to know that a "who's here" poll failed; the next tick
+    // recovers, and an error toast every 5s offline would be its own problem.
+    retry: false,
+    queryFn: async () => {
+      const rows = await api
+        .get("deeds/presence", { headers: authHeaders(token) })
+        .json<{ deedId: string; people: DeedOccupant[] }[]>();
+      return new Map(rows.map((r) => [r.deedId, r.people]));
+    },
+  });
+}
 
 /** Per browser tab. Not from the user id: the same person with the deed open twice is genuinely in two places. */
 function newSessionId(): string {

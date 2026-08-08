@@ -15,6 +15,7 @@ import {
   useFetchSampleDeed,
   usePendingCorrectionIds,
 } from "./useSampleDeeds";
+import { peerColor, useDeedsOccupancy, type DeedOccupant } from "./useDeedPresence";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { DeedDocumentsPanel } from "./DeedDocumentsPanel";
@@ -50,11 +51,32 @@ function formatDate(iso: string): string {
 }
 
 /** Admin/Employee: every deed across all users/types in one searchable, filterable table. */
+/**
+ * "Someone is in this deed right now." A live dot rather than a static badge,
+ * because the whole point is that it means *now* — a name sitting there with
+ * no sign of life reads like a stored field, e.g. the deed's owner.
+ */
+function DeedOccupants({ people, lang }: { people: DeedOccupant[]; lang: "en" | "hi" }) {
+  if (people.length === 0) return null;
+  const names = people.map((p) => p.name).join(", ");
+  const title = lang === "hi" ? `${names} abhi is deed par kaam kar rahe hain` : `${names} — working on this now`;
+
+  return (
+    <span className="deed-live-badge" title={title}>
+      <span className="deed-live-dot" style={{ backgroundColor: peerColor(people[0]?.userId ?? "") }} />
+      {people[0]?.name}
+      {people.length > 1 && <span className="deed-live-more">+{people.length - 1}</span>}
+    </span>
+  );
+}
+
 export function AllDeedsPage() {
   const lang = useUiStore((s) => s.lang);
   const t = (k: StringKey) => translate(k, lang);
   const isStaff = useIsStaff();
   const canDelete = useCanDeleteDeeds();
+  // Who has a deed open right now, keyed by deed id — polled, see the hook.
+  const occupancy = useDeedsOccupancy(isStaff);
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [createdById, setCreatedById] = useState("");
@@ -330,6 +352,10 @@ export function AllDeedsPage() {
                         <td className="dr-cell-name" data-label={t("deedsColName")}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             {d.title}
+                            <DeedOccupants
+                                people={occupancy.data?.get(d.id) ?? []}
+                                lang={lang}
+                            />
                             {flaggedIds.has(d.id) && (
                               <span
                                 title={lang === "hi" ? "Party ne correction bataya hai" : "Party flagged a correction"}
