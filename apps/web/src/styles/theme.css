@@ -2736,7 +2736,11 @@ h3 {
   background: radial-gradient(circle, rgba(255, 255, 255, 0.14), transparent 70%);
   pointer-events: none;
 }
-.auth-brand--deco > * {
+/* Lift the real content above the overlays. Must exclude the overlays
+   themselves — as a blanket `> *` this also reset their `position: absolute`,
+   dropping a 360px mark and a 320px glow into the flex column and making the
+   panel ~680px taller than the viewport, so the whole page scrolled. */
+.auth-brand--deco > *:not(.auth-brand-deco-mark):not(.auth-brand-deco-glow) {
   position: relative;
 }
 
@@ -2744,6 +2748,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-top: 30px;
 }
 .ob-tracker-row {
   display: flex;
