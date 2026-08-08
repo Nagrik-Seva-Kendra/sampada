@@ -11,8 +11,8 @@ export interface DeedSelection {
  * highlights text on the public share-link page, staff editing the same
  * deed sees it appear live. Deliberately not a database table or queue --
  * this is ephemeral, per-viewing-session state nobody needs once the
- * browser tab closes, and Render's free-tier web service runs a single
- * instance, so an in-memory Map is visible to every connection without
+ * browser tab closes, and the API runs as a single container on our own
+ * Coolify host, so an in-memory Map is visible to every connection without
  * needing Redis or similar.
  *
  * BehaviorSubject (not plain Subject): a staff member can open the editor

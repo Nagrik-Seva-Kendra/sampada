@@ -6,8 +6,8 @@ Migrates the legacy PHP/MariaDB app to a decoupled TypeScript stack.
 ## Structure
 ```
 apps/
-  api/         NestJS REST API                → deploy: Render (Neon Postgres + Cloudflare R2)
-  web/         Vite + React SPA               → deploy: Vercel
+  api/         NestJS REST API                → deploy: Coolify (api.nsk.mpe-registry.com)
+  web/         Vite + React SPA               → deploy: Coolify (app.nsk.mpe-registry.com)
 packages/
   shared/      Zod schemas + shared types (the API contract)
 infra/
