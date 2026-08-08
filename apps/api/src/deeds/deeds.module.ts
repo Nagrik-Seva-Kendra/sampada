@@ -8,6 +8,9 @@ import { DeedPropertyDetailService } from "./deed-property-detail.service.js";
 import { PublicDeedsController } from "./public-deeds.controller.js";
 import { PublicDeedDocumentsController } from "./public-deed-documents.controller.js";
 import { DeedLiveService } from "./deed-live.service.js";
+import { DeedPresenceController } from "./deed-presence.controller.js";
+import { DeedPresenceService } from "./deed-presence.service.js";
+import { DeedVisibleGuard } from "./deed-visible.guard.js";
 import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
 
 @Module({
@@ -15,6 +18,7 @@ import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interc
     SampleDeedsController,
     DeedDocumentsController,
     DeedPropertyDetailController,
+    DeedPresenceController,
     PublicDeedsController,
     PublicDeedDocumentsController,
   ],
@@ -23,6 +27,8 @@ import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interc
     DeedDocumentsService,
     DeedPropertyDetailService,
     DeedLiveService,
+    DeedPresenceService,
+    DeedVisibleGuard,
     PublicDeedTenantInterceptor,
   ],
   exports: [SampleDeedsService],

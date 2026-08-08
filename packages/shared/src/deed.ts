@@ -104,6 +104,38 @@ export const DeedSelectionInput = z.object({
 });
 export type DeedSelectionInput = z.infer<typeof DeedSelectionInput>;
 
+/** A caret in the deed body: plain character offsets, collapsed when start === end. */
+export const DeedCaret = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative(),
+});
+export type DeedCaret = z.infer<typeof DeedCaret>;
+
+/**
+ * A heartbeat from one staff member with the deed editor open, so everyone
+ * else editing it sees their cursor live. `sessionId` identifies the browser
+ * tab rather than the person: someone with the same deed open twice really is
+ * in two places, and showing two cursors is less confusing than picking one.
+ * `caret` is null while the editor isn't focused — the person is present but
+ * not pointing at anything. `leaving` marks the final beat sent on unload, so
+ * the cursor disappears immediately instead of after the staleness timeout.
+ */
+export const DeedPresenceInput = z.object({
+  sessionId: z.string().min(8).max(64),
+  caret: DeedCaret.nullable(),
+  leaving: z.boolean().optional(),
+});
+export type DeedPresenceInput = z.infer<typeof DeedPresenceInput>;
+
+/** One other person currently in the deed, as broadcast to every editor of it. */
+export const DeedPeer = z.object({
+  sessionId: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  caret: DeedCaret.nullable(),
+});
+export type DeedPeer = z.infer<typeof DeedPeer>;
+
 export const CorrectionStatus = z.enum(["PENDING", "RESOLVED"]);
 export type CorrectionStatus = z.infer<typeof CorrectionStatus>;
 

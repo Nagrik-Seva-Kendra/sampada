@@ -257,6 +257,65 @@ h3 {
   white-space: nowrap;
 }
 
+/* ---------- live cursors: who else has this deed open ---------- */
+.deed-peer-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.deed-peer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.deed-peer-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+/* Zero-width so a caret sitting between two characters can never push the
+   mirrored text out of alignment with the textarea layered over it. */
+.deed-peer-anchor {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 0;
+}
+/* Anchored from the bottom, not the top: the anchor is a zero-height inline
+   box sitting on the text baseline, so a `top` offset would hang the caret
+   below the line it belongs to instead of standing on it. */
+.deed-peer-caret {
+  position: absolute;
+  bottom: -0.3em;
+  width: 2px;
+  height: 1.4em;
+  border-radius: 1px;
+}
+.deed-peer-name {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  border-radius: 4px 4px 4px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #fff;
+  white-space: nowrap;
+  /* The backdrop renders its text transparent to stay invisible under the
+     textarea; the label is the one thing in there meant to be read. */
+  -webkit-text-fill-color: #fff;
+}
+
 .propdetail-chips {
   display: flex;
   gap: 8px;

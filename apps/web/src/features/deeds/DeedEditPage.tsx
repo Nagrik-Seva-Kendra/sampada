@@ -4,14 +4,56 @@ import type { DeedType } from "@sampada/shared";
 import { useLang } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { findDeed } from "./deedData";
+import type { DeedPeer } from "@sampada/shared";
 import { useDeedCorrections, useResolveCorrection, useSampleDeed, useSaveSampleDeed } from "./useSampleDeeds";
 import { useAutoSaveDeed } from "./useAutoSaveDeed";
+import { useDeedPresence } from "./useDeedPresence";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
 import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
 import { AmountAudit, confirmAmountsBeforePrint } from "../../components/AmountAudit";
+
+/**
+ * Stable per-person cursor colours. Picked by hashing the user id rather than
+ * by arrival order, so the same colleague is the same colour in every tab and
+ * on every reconnect — the colour becomes a way to recognise them.
+ */
+const PEER_COLORS = ["#c2410c", "#2f7d5d", "#4a6fd4", "#a2529b", "#b4761f", "#2b8a9e"] as const;
+
+function peerColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  return PEER_COLORS[hash % PEER_COLORS.length] ?? PEER_COLORS[0];
+}
+
+/**
+ * Other people's cursors at one character offset, drawn inside the backdrop
+ * that already mirrors the textarea and scrolls with it — so they follow the
+ * real text without measuring a single coordinate. The anchor is zero-width:
+ * a caret must never shift the mirrored text out of alignment with the
+ * textarea on top of it.
+ */
+function PeerCarets({ peers }: { peers: DeedPeer[] }) {
+  return (
+    <span className="deed-peer-anchor">
+      {peers.map((peer, i) => (
+        <span
+          key={peer.sessionId}
+          className="deed-peer-caret"
+          // Two people on the same character would sit exactly on top of each
+          // other; nudge each subsequent one aside so both stay readable.
+          style={{ backgroundColor: peerColor(peer.userId), left: i * 3 }}
+        >
+          <span className="deed-peer-name" style={{ backgroundColor: peerColor(peer.userId) }}>
+            {peer.name}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** Full-page deed editor — opened in a new tab from the deed table's Edit action. */
 export function DeedEditPage() {
@@ -48,6 +90,12 @@ export function DeedEditPage() {
   const remoteSelection = useLiveSelection(id);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  // Colleagues with this same deed open, and where each of them is typing.
+  const peers = useDeedPresence(id, textareaRef);
+  // One chip per person, not per tab: someone with the deed open twice is one
+  // colleague to greet, even though both of their cursors are worth drawing.
+  const peopleHere = peers.filter((p, i) => peers.findIndex((q) => q.userId === p.userId) === i);
 
   const draft = useMemo(() => ({ title, content }), [title, content]);
 
@@ -136,6 +184,47 @@ export function DeedEditPage() {
     ));
   }
 
+  /**
+   * The backdrop's contents: the deed text, cut at every offset that needs
+   * something drawn on it — the party's highlight, and each colleague's
+   * cursor. Cutting the highlight into more pieces is harmless, since every
+   * piece is marked the same way.
+   */
+  function renderBackdrop() {
+    const caretsAt = new Map<number, DeedPeer[]>();
+    for (const peer of peers) {
+      if (!peer.caret) continue;
+      // A cursor can outlive the text it sat in (they deleted a paragraph
+      // while we were mid-keystroke), so never index past the end.
+      const at = Math.min(Math.max(peer.caret.start, 0), content.length);
+      const existing = caretsAt.get(at);
+      if (existing) existing.push(peer);
+      else caretsAt.set(at, [peer]);
+    }
+
+    const cuts = new Set<number>([0, content.length, ...caretsAt.keys()]);
+    if (remoteSelection) {
+      cuts.add(Math.min(remoteSelection.start, content.length));
+      cuts.add(Math.min(remoteSelection.end, content.length));
+    }
+    const points = [...cuts].sort((a, b) => a - b);
+
+    const nodes: React.ReactNode[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const at = points[i];
+      if (at === undefined) continue;
+      const carets = caretsAt.get(at);
+      if (carets) nodes.push(<PeerCarets key={`caret-${at}`} peers={carets} />);
+
+      const next = points[i + 1];
+      if (next === undefined) continue;
+      const text = content.slice(at, next);
+      const highlighted = !!remoteSelection && at >= remoteSelection.start && next <= remoteSelection.end;
+      nodes.push(<Fragment key={`text-${at}`}>{highlighted ? renderHighlightedRange(text) : text}</Fragment>);
+    }
+    return nodes;
+  }
+
   if (record.isLoading) {
     return (
       <section className="page">
@@ -165,6 +254,16 @@ export function DeedEditPage() {
           </h2>
           <span className="deed-type-tag">{deed ? deed.name[lang] : type}</span>
           <AutoSaveStatusLine status={status} t={t} />
+          {peopleHere.length > 0 && (
+            <div className="deed-peer-chips">
+              {peopleHere.map((peer) => (
+                <span key={peer.userId} className="deed-peer-chip">
+                  <span className="deed-peer-chip-dot" style={{ backgroundColor: peerColor(peer.userId) }} />
+                  {peer.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {pendingCorrections.length > 0 && (
@@ -227,15 +326,7 @@ export function DeedEditPage() {
                   minHeight: "65vh",
                 }}
               >
-                {remoteSelection ? (
-                  <>
-                    {content.slice(0, remoteSelection.start)}
-                    {renderHighlightedRange(content.slice(remoteSelection.start, remoteSelection.end))}
-                    {content.slice(remoteSelection.end)}
-                  </>
-                ) : (
-                  content
-                )}
+                {renderBackdrop()}
               </div>
               <textarea
                 ref={textareaRef}
