@@ -92,10 +92,12 @@ function StartHerePanel({
   lang,
   district,
   canInviteTeam,
+  onDismiss,
 }: {
   lang: "en" | "hi";
   district: string | null;
   canInviteTeam: boolean;
+  onDismiss: () => void;
 }) {
   const hi = lang === "hi";
   return (
@@ -105,6 +107,12 @@ function StartHerePanel({
         <p className="start-here-sub">
           {hi ? "तीन छोटे कदम, और आपका पहला विलेख तैयार।" : "Three short steps and your first deed is done."}
         </p>
+        {/* Theirs to close. Nothing here can tell whether a deed in the list
+            is one they drafted or a starter that was copied in for them, so
+            guessing when they are "done" would get it wrong either way. */}
+        <button type="button" className="start-here-dismiss" onClick={onDismiss}>
+          {hi ? "समझ गया" : "Got it"}
+        </button>
       </div>
 
       <div className="start-here-steps">
@@ -294,10 +302,30 @@ export function AllDeedsPage() {
     );
   }
 
-  // Only for a workspace that genuinely has nothing in it — a search or filter
-  // that happens to match nothing is a different situation, and answering it
-  // with a getting-started panel would be wrong twice over.
-  const workspaceEmpty = !deeds.isLoading && rows.length === 0 && !hasFilters && !debounced.trim();
+  /**
+   * The getting-started panel, for a workspace still finding its feet: one
+   * that has nothing in it at all, or one still on trial — a partner seeded
+   * with starter deeds has a full-looking list on day one and needs the three
+   * steps more than anyone, not less.
+   *
+   * Never while a search or filter is on: an empty result there is a
+   * different situation, and answering it with a welcome panel would be wrong
+   * twice over.
+   */
+  const dismissKey = activeOrganization ? `nsk-start-here-done:${activeOrganization.id}` : null;
+  const [startHereDismissed, setStartHereDismissed] = useState(() =>
+    dismissKey ? localStorage.getItem(dismissKey) === "1" : false,
+  );
+  function dismissStartHere() {
+    if (dismissKey) localStorage.setItem(dismissKey, "1");
+    setStartHereDismissed(true);
+  }
+  const showStartHere =
+    !deeds.isLoading &&
+    !startHereDismissed &&
+    !hasFilters &&
+    !debounced.trim() &&
+    (rows.length === 0 || activeOrganization?.status === "TRIALING");
 
   return (
     <section className="page">
@@ -323,11 +351,12 @@ export function AllDeedsPage() {
           )}
         </div>
 
-        {workspaceEmpty && (
+        {showStartHere && (
           <StartHerePanel
             lang={lang}
             district={activeOrganization?.district ?? null}
             canInviteTeam={!!activeOrganization && hasPermission(activeOrganization.role, "members.invite")}
+            onDismiss={dismissStartHere}
           />
         )}
 
