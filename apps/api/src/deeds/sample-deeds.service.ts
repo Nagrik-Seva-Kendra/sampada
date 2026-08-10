@@ -16,7 +16,9 @@ import type {
     UpdateSampleDeedInput,
 } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
+import { ClsService } from "nestjs-cls";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { requireTenantContext } from "../tenant/current-tenant.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import type { DeedCorrectionRequest, DeedTemplate, DeedTemplateRevision, Prisma } from "@prisma/client";
 
@@ -127,7 +129,10 @@ function truncateExample(content: string, maxLen = 6000): string {
  */
 @Injectable()
   export class SampleDeedsService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+          private readonly prisma: PrismaService,
+          private readonly cls: ClsService,
+    ) {}
 
   /** ADMIN and EMPLOYEE see every deed of this type; either may draft their own. Newest first. */
   async listByType(type: DeedType, user: StaffUser): Promise<SampleDeedListItem[]> {
@@ -170,8 +175,17 @@ function truncateExample(content: string, maxLen = 6000): string {
 
   /** Every admin/employee account, for the "All Deeds" creator filter dropdown. */
   async listCreators(): Promise<DeedCreator[]> {
+        // User is deliberately not a tenant model — one person can belong to
+        // several organizations — so the org filter has to be written out here
+        // rather than left to the Prisma extension. Without it this listed
+        // every staff account on the platform, leaking colleagues' names and
+        // usernames into other partners' filter dropdowns.
+        const { organizationId } = requireTenantContext(this.cls);
         const rows = await this.prisma.user.findMany({
-                where: { role: { in: ["ADMIN", "EMPLOYEE"] } },
+                where: {
+                        role: { in: ["ADMIN", "EMPLOYEE"] },
+                        memberships: { some: { organizationId, status: { in: ["ACTIVE", "INACTIVE"] } } },
+                },
                 select: { id: true, username: true, fname: true, lname: true },
                 orderBy: { fname: "asc" },
         });
