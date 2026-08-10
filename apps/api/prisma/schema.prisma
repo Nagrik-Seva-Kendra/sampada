@@ -90,9 +90,17 @@ model DeedTemplate {
   corrections    DeedCorrectionRequest[]
   propertyDetail DeedPropertyDetail?
 
+  /// Marked by platform staff as a starting point: copied into every new
+  /// workspace at onboarding, so a partner's first deed is an edit rather
+  /// than a blank page. Must only ever be set on a redacted skeleton — a
+  /// real deed carries party names, Aadhaar/PAN and amounts, and this field
+  /// hands the row to every organization that signs up from now on.
+  isStarter      Boolean                 @default(false)
+
   @@index([type])
   @@index([createdById])
   @@index([organizationId, type])
+  @@index([isStarter])
 }
 
 // A correction a party flags via the public share link ("/d/:id"). Scoped to
@@ -210,6 +218,20 @@ model Organization {
    * other.
    */
   isPersonal       Boolean   @default(false)
+  /**
+   * What the founder told the onboarding wizard they do, and what they came
+   * for. Until now the wizard asked and threw the answers away. Kept because
+   * it personalises the first-run checklist, and because it is the only thing
+   * we know about a partner before they have done anything at all.
+   */
+  onboardingRole   String?
+  onboardingGoal   String?
+  /**
+   * The district this partner works in, asked at onboarding. Points the
+   * first-run checklist straight at their own guideline rates instead of a
+   * district picker they have to solve first.
+   */
+  district         String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

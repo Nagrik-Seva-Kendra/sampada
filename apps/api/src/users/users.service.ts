@@ -126,7 +126,7 @@ export class UsersService {
       id: true,
       organizationId: true,
       role: true,
-      organization: { select: { name: true, slug: true, status: true } },
+      organization: { select: { name: true, slug: true, status: true, district: true } },
     } as const;
     // CANCELLED marks a soft-deleted org (see OrganizationsService.deleteOwn) —
     // its data stays intact for recovery, but it must stop resolving as anyone's

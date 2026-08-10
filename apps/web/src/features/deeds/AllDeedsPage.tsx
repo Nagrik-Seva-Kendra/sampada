@@ -14,7 +14,12 @@ import {
   useDeleteAnyDeed,
   useFetchSampleDeed,
   usePendingCorrectionIds,
+  useSetDeedStarter,
 } from "./useSampleDeeds";
+import { Link } from "@tanstack/react-router";
+import { hasPermission } from "@sampada/shared";
+import { useActiveOrganization, useAuthStore } from "../../stores/authStore";
+import { CreateDeedMenu } from "./CreateDeedMenu";
 import { peerColor, useDeedsOccupancy, type DeedOccupant } from "./useDeedPresence";
 import { DeedViewModal } from "./DeedViewModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -52,6 +57,105 @@ function formatDate(iso: string): string {
 
 /** Admin/Employee: every deed across all users/types in one searchable, filterable table. */
 /**
+ * What a brand-new workspace sees instead of "No deeds yet".
+ *
+ * An empty table is a dead end: it states a fact and offers nothing to do
+ * with it, and the numbers said most partners who signed up never got past
+ * it. Three concrete first moves, in the order they actually matter — draft
+ * something, look up the rates you need to draft it, bring in the people who
+ * will use it.
+ */
+function StartHereStep({
+  n,
+  title,
+  body,
+  children,
+}: {
+  n: number;
+  title: string;
+  body: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="start-here-step">
+      <span className="start-here-num">{n}</span>
+      <div className="start-here-body">
+        <div className="start-here-step-title">{title}</div>
+        <div className="start-here-step-sub">{body}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function StartHerePanel({
+  lang,
+  district,
+  canInviteTeam,
+}: {
+  lang: "en" | "hi";
+  district: string | null;
+  canInviteTeam: boolean;
+}) {
+  const hi = lang === "hi";
+  return (
+    <div className="start-here">
+      <div className="start-here-head">
+        <h3 className="start-here-title">{hi ? "यहाँ से शुरू करें" : "Start here"}</h3>
+        <p className="start-here-sub">
+          {hi ? "तीन छोटे कदम, और आपका पहला विलेख तैयार।" : "Three short steps and your first deed is done."}
+        </p>
+      </div>
+
+      <div className="start-here-steps">
+        <StartHereStep
+          n={1}
+          title={hi ? "पहला विलेख बनाएँ" : "Draft your first deed"}
+          body={hi ? "कोई भी प्रकार चुनें और नाम भर दें।" : "Pick a type and fill in the names."}
+        >
+          <CreateDeedMenu
+            triggerClassName="doc-btn start-here-btn"
+            triggerLabel={hi ? "विलेख बनाएँ" : "Create a deed"}
+          />
+        </StartHereStep>
+
+        <StartHereStep
+          n={2}
+          title={hi ? "गाइडलाइन दरें देखें" : "Look up guideline rates"}
+          // Naming their own district is the whole reason onboarding asks for
+          // it: the step reads as something already set up for them.
+          body={
+            district
+              ? hi
+                ? `${district} की मौजूदा दरें।`
+                : `Current rates for ${district}.`
+              : hi
+                ? "जिला और वर्ष चुनकर दरें देखें।"
+                : "Pick a district and year to see the rates."
+          }
+        >
+          <Link to="/guideline" className="doc-btn start-here-btn">
+            {hi ? "दरें खोलें" : "Open rates"}
+          </Link>
+        </StartHereStep>
+
+        {canInviteTeam && (
+          <StartHereStep
+            n={3}
+            title={hi ? "अपनी टीम जोड़ें" : "Add your team"}
+            body={hi ? "साथ काम करने वालों को बुलाएँ।" : "Invite the people who work with you."}
+          >
+            <Link to="/team" className="doc-btn start-here-btn">
+              {hi ? "टीम खोलें" : "Open team"}
+            </Link>
+          </StartHereStep>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * "Someone is in this deed right now." A live dot rather than a static badge,
  * because the whole point is that it means *now* — a name sitting there with
  * no sign of life reads like a stored field, e.g. the deed's owner.
@@ -77,6 +181,9 @@ export function AllDeedsPage() {
   const canDelete = useCanDeleteDeeds();
   // Who has a deed open right now, keyed by deed id — polled, see the hook.
   const occupancy = useDeedsOccupancy(isStaff);
+  const activeOrganization = useActiveOrganization();
+  const isPlatformAdmin = useAuthStore((s) => s.user?.isPlatformAdmin ?? false);
+  const setStarter = useSetDeedStarter();
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [createdById, setCreatedById] = useState("");
@@ -187,6 +294,11 @@ export function AllDeedsPage() {
     );
   }
 
+  // Only for a workspace that genuinely has nothing in it — a search or filter
+  // that happens to match nothing is a different situation, and answering it
+  // with a getting-started panel would be wrong twice over.
+  const workspaceEmpty = !deeds.isLoading && rows.length === 0 && !hasFilters && !debounced.trim();
+
   return (
     <section className="page">
       <div className="wrap">
@@ -210,6 +322,14 @@ export function AllDeedsPage() {
             </span>
           )}
         </div>
+
+        {workspaceEmpty && (
+          <StartHerePanel
+            lang={lang}
+            district={activeOrganization?.district ?? null}
+            canInviteTeam={!!activeOrganization && hasPermission(activeOrganization.role, "members.invite")}
+          />
+        )}
 
         <div
           style={{
@@ -356,6 +476,19 @@ export function AllDeedsPage() {
                                 people={occupancy.data?.get(d.id) ?? []}
                                 lang={lang}
                             />
+                            {/* Only staff who can change it need to see it. */}
+                            {isPlatformAdmin && d.isStarter && (
+                              <span
+                                className="deed-starter-tag"
+                                title={
+                                  lang === "hi"
+                                    ? "हर नए workspace में यह कॉपी होता है"
+                                    : "Copied into every new workspace"
+                                }
+                              >
+                                ★ {lang === "hi" ? "स्टार्टर" : "Starter"}
+                              </span>
+                            )}
                             {flaggedIds.has(d.id) && (
                               <span
                                 title={lang === "hi" ? "Party ne correction bataya hai" : "Party flagged a correction"}
@@ -415,6 +548,28 @@ export function AllDeedsPage() {
                                         {t("deedsDeleteDeed")}
                                       </DropdownMenuItem>
                                     )}
+                                  </>
+                                )}
+
+                                {/* Platform staff only: this decides what every
+                                    partner's workspace starts with, so it is
+                                    deliberately not a customer-admin control. */}
+                                {isPlatformAdmin && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        setStarter.mutate({ id: d.id, isStarter: !d.isStarter })
+                                      }
+                                    >
+                                      {d.isStarter
+                                        ? lang === "hi"
+                                          ? "स्टार्टर से हटाएँ"
+                                          : "Remove from starters"
+                                        : lang === "hi"
+                                          ? "स्टार्टर टेम्पलेट बनाएँ"
+                                          : "Use as starter template"}
+                                    </DropdownMenuItem>
                                   </>
                                 )}
 

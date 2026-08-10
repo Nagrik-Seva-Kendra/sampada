@@ -281,6 +281,95 @@ h3 {
   border-radius: 50%;
   flex-shrink: 0;
 }
+/* ---------- first run: what an empty workspace sees ---------- */
+.start-here {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 20px 22px;
+  margin: 0 0 26px;
+}
+.start-here-head {
+  margin-bottom: 16px;
+}
+.start-here-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  color: var(--accent);
+}
+.start-here-sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.start-here-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.start-here-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.start-here-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+}
+.start-here-body {
+  flex: 1;
+  min-width: 0;
+}
+.start-here-step-title {
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.start-here-step-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.start-here-btn {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+@media (max-width: 640px) {
+  .start-here-step {
+    flex-wrap: wrap;
+  }
+  .start-here-btn {
+    margin-left: 40px;
+  }
+}
+
+.deed-starter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
 /* "Someone is in this deed", in the deeds list. */
 .deed-live-badge {
   display: inline-flex;

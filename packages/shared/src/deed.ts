@@ -43,8 +43,20 @@ export const SampleDeedItem = z.object({
   createdByName: z.string(),
   createdByRole: Role.optional(),
   createdAt: z.string(),
+  /** Copied into every new workspace at onboarding. Platform staff only. */
+  isStarter: z.boolean().default(false),
 });
 export type SampleDeedItem = z.infer<typeof SampleDeedItem>;
+
+/**
+ * Platform staff marking a deed as a starting point for new workspaces.
+ * Deliberately a whole-body flag rather than a toggle route, so turning it
+ * back off is the same call with the same shape.
+ */
+export const SetDeedStarterInput = z.object({
+  isStarter: z.boolean(),
+});
+export type SetDeedStarterInput = z.infer<typeof SetDeedStarterInput>;
 
 /** Lightweight row for the "All Deeds" listing (drops the heavy content body). */
 export const SampleDeedListItem = SampleDeedItem.omit({ content: true });

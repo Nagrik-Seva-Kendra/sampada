@@ -17,6 +17,7 @@ import { translate, type StringKey } from "../../i18n/strings";
 import { PasswordInput } from "../../components/PasswordInput";
 import { BrandMark } from "../../components/icons";
 import { useOnboard, useSendEmailOtp, useVerifyEmailOtp } from "../auth/useAuth";
+import { MP_DISTRICTS } from "../guideline/useGuideline";
 
 type Role = "agent" | "writer" | "legal" | "office";
 type Goal = "rates" | "deeds" | "team" | "eregistry";
@@ -57,6 +58,7 @@ export function OnboardingPage() {
   const [role, setRole] = useState<Role | "">("");
   const [goal, setGoal] = useState<Goal | "">("");
   const [orgName, setOrgName] = useState("");
+  const [district, setDistrict] = useState("");
   const [fname, setFname] = useState("");
   const [lname, setLname] = useState("");
   const [email, setEmail] = useState("");
@@ -133,6 +135,11 @@ export function OnboardingPage() {
     onboard.mutate(
       {
         orgName: orgName.trim(),
+        // The wizard used to ask these three and throw the answers away.
+        // All optional server-side: a skipped step must never cost an account.
+        onboardingRole: role || undefined,
+        onboardingGoal: goal || undefined,
+        district: district || undefined,
         fname: fname.trim(),
         lname: lname.trim(),
         email: email.trim(),
@@ -318,6 +325,21 @@ export function OnboardingPage() {
                 <label className="modal-field">
                   {t("authOrgName")}
                   <input value={orgName} onChange={(e) => setOrgName(e.target.value)} minLength={2} maxLength={200} autoFocus />
+                </label>
+                <label className="modal-field">
+                  {/* Optional on purpose: an unfamiliar district list is a bad
+                      thing to make someone solve before they have an account.
+                      Answering it points their first-run checklist at their own
+                      guideline rates instead of a picker. */}
+                  {lang === "hi" ? "जिला (वैकल्पिक)" : "District (optional)"}
+                  <select value={district} onChange={(e) => setDistrict(e.target.value)}>
+                    <option value="">{lang === "hi" ? "— चुनें —" : "— Select —"}</option>
+                    {MP_DISTRICTS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="modal-field">
                   {t("profileFname")}

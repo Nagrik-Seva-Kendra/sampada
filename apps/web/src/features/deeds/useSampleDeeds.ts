@@ -120,6 +120,26 @@ export function useCreateSampleDeed() {
  * carry the title, so they're staled — they're inactive while the editor is
  * open, so this costs no request until one is next viewed.
  */
+/**
+ * Platform staff: mark a deed as a starter copied into every new workspace.
+ * Only the "all deeds" list shows the flag, so that is the only cache that
+ * needs refreshing.
+ */
+export function useSetDeedStarter() {
+    const token = useAuthStore((s) => s.token);
+    const qc = useQueryClient();
+    return useMutation<SampleDeedItem, Error, { id: string; isStarter: boolean }>({
+          mutationFn: ({ id, isStarter }) =>
+                  api
+              .patch(`sample-deeds/${id}/starter`, { headers: authHeaders(token), json: { isStarter } })
+              .json<SampleDeedItem>(),
+          retry: false,
+          onSuccess: () => {
+                  void qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });
+          },
+    });
+}
+
 export function useSaveSampleDeed(type: DeedType) {
     const token = useAuthStore((s) => s.token);
     const qc = useQueryClient();

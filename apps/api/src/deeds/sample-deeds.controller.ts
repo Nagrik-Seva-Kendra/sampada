@@ -14,8 +14,16 @@ import {
     UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { CreateSampleDeedInput, DeedType, ListDeedsQuery, ResolveCorrectionInput, UpdateSampleDeedInput } from "@sampada/shared";
+import {
+    CreateSampleDeedInput,
+    DeedType,
+    ListDeedsQuery,
+    ResolveCorrectionInput,
+    SetDeedStarterInput,
+    UpdateSampleDeedInput,
+} from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
+import { JwtPlatformAdminGuard } from "../auth/jwt-platform-admin.guard.js";
 import { SampleDeedsService } from "./sample-deeds.service.js";
 
 type StaffRequest = Request & { user: StaffUser };
@@ -111,6 +119,22 @@ type StaffRequest = Request & { user: StaffUser };
   @Patch(":id")
     update(@Param("id") id: string, @Body() body: unknown, @Req() req: StaffRequest) {
           return this.service.update(id, UpdateSampleDeedInput.parse(body), req.user);
+    }
+
+  /**
+     * Platform staff: mark this deed as a starter, copied into every workspace
+     * created from here on.
+     *
+     * Declared above the plain ":id" routes so "starter" is never read as part
+     * of one, and guarded twice on purpose: the class-level staff guard is what
+     * establishes the tenant context the update runs in, and the platform-admin
+     * guard is the actual permission — a customer's own ADMIN has no business
+     * deciding what every future partner's workspace starts with.
+     */
+  @Patch(":id/starter")
+  @UseGuards(JwtPlatformAdminGuard)
+    setStarter(@Param("id") id: string, @Body() body: unknown) {
+          return this.service.setStarter(id, SetDeedStarterInput.parse(body).isStarter);
     }
 
   /** Delete own deed (ADMIN: any deed). */

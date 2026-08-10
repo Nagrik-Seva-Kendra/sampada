@@ -17,6 +17,16 @@ export const OrgSignupInput = z.object({
     .optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   emailOtp: z.string().trim().length(6, "Enter the 6-digit code"),
+  /**
+   * What the onboarding wizard asked before the account existed: what they do,
+   * what they came for, and where they work. All optional — every one of them
+   * can be skipped, and none of them may stand between someone and an
+   * account. They personalise the first-run checklist; the district also
+   * points it at the right guideline rates.
+   */
+  onboardingRole: z.string().trim().max(40).optional(),
+  onboardingGoal: z.string().trim().max(40).optional(),
+  district: z.string().trim().max(80).optional(),
 });
 export type OrgSignupInput = z.infer<typeof OrgSignupInput>;
 
@@ -27,5 +37,7 @@ export const OrganizationSummary = z.object({
   slug: z.string(),
   status: OrgStatus,
   role: OrgRole,
+  /** Where this partner works, from onboarding. Null until they say. */
+  district: z.string().nullable().default(null),
 });
 export type OrganizationSummary = z.infer<typeof OrganizationSummary>;

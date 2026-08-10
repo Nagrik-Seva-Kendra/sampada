@@ -75,6 +75,7 @@ export class AuthService {
             slug: membership.organization.slug,
             status: membership.organization.status,
             role: membership.role,
+            district: membership.organization.district,
           }
         : null,
     };

@@ -31,6 +31,7 @@ function toItem(row: DeedTemplate): SampleDeedItem {
           createdByName: row.createdByName,
           createdByRole: (row.createdByRole ?? undefined) as SampleDeedItem["createdByRole"],
           createdAt: row.createdAt.toISOString(),
+          isStarter: row.isStarter,
     };
 }
 
@@ -74,6 +75,7 @@ const LIST_SELECT = {
     createdByName: true,
     createdByRole: true,
     createdAt: true,
+    isStarter: true,
 } as const;
 
 type ListRow = Pick<DeedTemplate, keyof typeof LIST_SELECT>;
@@ -88,6 +90,7 @@ function toListItem(row: ListRow): SampleDeedListItem {
           createdByName: row.createdByName,
           createdByRole: (row.createdByRole ?? undefined) as SampleDeedListItem["createdByRole"],
           createdAt: row.createdAt.toISOString(),
+          isStarter: row.isStarter,
     };
 }
 
@@ -182,6 +185,22 @@ function truncateExample(content: string, maxLen = 6000): string {
   async getOne(id: string): Promise<SampleDeedItem | null> {
         const row = await this.prisma.deedTemplate.findUnique({ where: { id } });
         return row ? toItem(row) : null;
+  }
+
+  /**
+   * Platform staff: mark (or unmark) this deed as a starter — copied into
+   * every workspace created from here on.
+   *
+   * Tenant-scoped like any other update, so staff can only ever promote a
+   * deed from their own organization. That is the intended boundary: the
+   * starters are the platform's own curated skeletons, not someone else's
+   * work handed out to every new partner.
+   */
+  async setStarter(id: string, isStarter: boolean): Promise<SampleDeedItem> {
+        const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundException("Deed not found.");
+        const row = await this.prisma.deedTemplate.update({ where: { id }, data: { isStarter } });
+        return toItem(row);
   }
 
   /**
