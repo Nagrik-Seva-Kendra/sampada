@@ -105,6 +105,7 @@ export function PlatformOrganizationDetailPage() {
                     <th>{t("platformColMemberName")}</th>
                     <th>{t("platformColRole")}</th>
                     <th>{t("platformColStatus")}</th>
+                    <th>{t("platformColMobile")}</th>
                     <th>{t("platformColEmployeeCode")}</th>
                   </tr>
                 </thead>
@@ -158,6 +159,7 @@ export function PlatformOrganizationDetailPage() {
                           {m.status}
                         </span>
                       </td>
+                      <td>{m.mobile ? <a href={`tel:${m.mobile}`}>{m.mobile}</a> : "—"}</td>
                       <td>{m.employeeCode ?? "—"}</td>
                     </tr>
                   ))}

@@ -20,6 +20,7 @@ export const PlatformOrgMember = z.object({
   email: z.string(),
   role: OrgRole,
   status: MemberStatus,
+  mobile: z.string().nullable(),
   employeeCode: z.string().nullable(),
   createdAt: z.string(),
 });

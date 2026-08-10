@@ -619,6 +619,7 @@ export const strings = {
   platformMembersHeading: { en: "Members", hi: "सदस्य" },
   platformColMemberName: { en: "Name", hi: "नाम" },
   platformColRole: { en: "Role", hi: "भूमिका" },
+  platformColMobile: { en: "Mobile", hi: "मोबाइल" },
   platformColEmployeeCode: { en: "Employee code", hi: "कर्मचारी कोड" },
 
   // Properties (public-site listing upload app)
