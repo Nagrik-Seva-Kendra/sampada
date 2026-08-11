@@ -375,6 +375,33 @@ h3 {
   }
 }
 
+/* What marking or unmarking a starter just did to other workspaces. */
+.starter-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.starter-note-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+}
+.starter-note-close:hover {
+  opacity: 1;
+}
+
 .deed-starter-tag {
   display: inline-flex;
   align-items: center;

@@ -96,11 +96,17 @@ model DeedTemplate {
   /// real deed carries party names, Aadhaar/PAN and amounts, and this field
   /// hands the row to every organization that signs up from now on.
   isStarter      Boolean                 @default(false)
+  /// The starter this deed was copied from at onboarding, if it was. Kept so
+  /// that retiring a starter can find its copies exactly, instead of guessing
+  /// from the title — which would eventually delete the wrong partner's work.
+  /// Not a relation: the copy must survive the starter being deleted outright.
+  starterSourceId String?
 
   @@index([type])
   @@index([createdById])
   @@index([organizationId, type])
   @@index([isStarter])
+  @@index([starterSourceId])
 }
 
 // A correction a party flags via the public share link ("/d/:id"). Scoped to

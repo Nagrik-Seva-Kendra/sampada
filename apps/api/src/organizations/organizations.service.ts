@@ -118,7 +118,7 @@ export class OrganizationsService {
     try {
       const starters = await this.prisma.$unscoped.deedTemplate.findMany({
         where: { isStarter: true, status: "active" },
-        select: { type: true, title: true, content: true },
+        select: { id: true, type: true, title: true, content: true },
         orderBy: { title: "asc" },
       });
       if (starters.length === 0) return;
@@ -144,6 +144,11 @@ export class OrganizationsService {
           createdAt: now,
           updatedAt: now,
           isStarter: false,
+          // Where this copy came from, so retiring the starter later can find
+          // it without guessing. createdAt and updatedAt are stamped equal on
+          // purpose: that is how an untouched copy is told apart from one the
+          // partner has since made their own.
+          starterSourceId: starter.id,
         })),
       });
     } catch (err) {

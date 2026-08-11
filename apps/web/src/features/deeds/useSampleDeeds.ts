@@ -11,6 +11,7 @@ import type {
     PublicDeedItem,
     ResolveCorrectionInput,
     SampleDeedItem,
+    SetDeedStarterResult,
     SampleDeedListItem,
     UpdateSampleDeedInput,
 } from "@sampada/shared";
@@ -128,11 +129,11 @@ export function useCreateSampleDeed() {
 export function useSetDeedStarter() {
     const token = useAuthStore((s) => s.token);
     const qc = useQueryClient();
-    return useMutation<SampleDeedItem, Error, { id: string; isStarter: boolean }>({
+    return useMutation<SetDeedStarterResult, Error, { id: string; isStarter: boolean }>({
           mutationFn: ({ id, isStarter }) =>
                   api
               .patch(`sample-deeds/${id}/starter`, { headers: authHeaders(token), json: { isStarter } })
-              .json<SampleDeedItem>(),
+              .json<SetDeedStarterResult>(),
           retry: false,
           onSuccess: () => {
                   void qc.invalidateQueries({ queryKey: ["sample-deeds", "all"] });

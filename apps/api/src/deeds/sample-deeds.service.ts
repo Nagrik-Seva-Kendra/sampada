@@ -13,6 +13,7 @@ import type {
     ResolveCorrectionInput,
     SampleDeedItem,
     SampleDeedListItem,
+    SetDeedStarterResult,
     UpdateSampleDeedInput,
 } from "@sampada/shared";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
@@ -210,11 +211,125 @@ function truncateExample(content: string, maxLen = 6000): string {
    * starters are the platform's own curated skeletons, not someone else's
    * work handed out to every new partner.
    */
-  async setStarter(id: string, isStarter: boolean): Promise<SampleDeedItem> {
+  async setStarter(id: string, isStarter: boolean): Promise<SetDeedStarterResult> {
         const existing = await this.prisma.deedTemplate.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException("Deed not found.");
         const row = await this.prisma.deedTemplate.update({ where: { id }, data: { isStarter } });
-        return toItem(row);
+
+        const effect = isStarter
+          ? { ...(await this.pushStarterToWorkspaces(row)), removedCopies: 0, keptWorkedOnCopies: 0 }
+          : { addedCopies: 0, ...(await this.withdrawUnusedCopies(id)) };
+        return { deed: toItem(row), ...effect };
+  }
+
+  /**
+   * Copies a newly marked starter into every existing workspace, so marking
+   * one takes effect for the partners who are already here rather than only
+   * for whoever signs up next.
+   *
+   * Skips its own organization (that is where the original lives) and any
+   * workspace that already has a copy, so re-marking is harmless. Each copy is
+   * attributed to that workspace's own owner, exactly as the copy made at
+   * signup is.
+   *
+   * Unscoped by necessity: the destinations are other organizations.
+   */
+  private async pushStarterToWorkspaces(starter: DeedTemplate): Promise<{ addedCopies: number }> {
+        const db = this.prisma.$unscoped;
+        const targets = await db.organization.findMany({
+                where: {
+                        id: { not: starter.organizationId },
+                        status: { not: "CANCELLED" },
+                        deeds: { none: { starterSourceId: starter.id } },
+                },
+                select: {
+                        id: true,
+                        memberships: {
+                                where: { role: "OWNER", status: "ACTIVE" },
+                                select: { user: { select: { id: true, fname: true, lname: true } } },
+                                orderBy: { createdAt: "asc" },
+                                take: 1,
+                        },
+                },
+        });
+
+        const now = new Date();
+        const rows = targets.flatMap((org) => {
+                const owner = org.memberships[0]?.user;
+                // A workspace with no active owner has nobody to attribute the
+                // copy to; leave it alone rather than invent an author.
+                if (!owner) return [];
+                return [
+                        {
+                                id: randomUUID(),
+                                organizationId: org.id,
+                                type: starter.type,
+                                title: starter.title,
+                                content: starter.content,
+                                status: "active",
+                                createdById: owner.id,
+                                createdByName: `${owner.fname} ${owner.lname}`.trim(),
+                                createdByRole: "OWNER",
+                                createdAt: now,
+                                updatedAt: now,
+                                isStarter: false,
+                                starterSourceId: starter.id,
+                        },
+                ];
+        });
+
+        if (rows.length === 0) return { addedCopies: 0 };
+        await db.deedTemplate.createMany({ data: rows });
+        return { addedCopies: rows.length };
+  }
+
+  /**
+   * Deletes the copies of a starter that nobody ever used, and reports how
+   * many were left alone.
+   *
+   * "Never used" is deliberately strict. An unchanged body is not enough:
+   * deleting a deed silently cascades its correction requests and property
+   * detail away, and orphans its revisions, parties and naksha rows — those
+   * carry the deed id as a plain column, with no foreign key to stop it. So a
+   * copy only goes if nothing at all hangs off it. Anything a partner has
+   * actually worked on stays theirs.
+   */
+  private async withdrawUnusedCopies(starterId: string): Promise<{ removedCopies: number; keptWorkedOnCopies: number }> {
+        const db = this.prisma.$unscoped;
+        const copies = await db.deedTemplate.findMany({
+                where: { starterSourceId: starterId },
+                select: { id: true, createdAt: true, updatedAt: true },
+        });
+        if (copies.length === 0) return { removedCopies: 0, keptWorkedOnCopies: 0 };
+
+        // Seeding stamps createdAt and updatedAt identically, so any drift
+        // between them means the title or body has been edited since.
+        const candidates = copies.filter((c) => c.updatedAt.getTime() === c.createdAt.getTime()).map((c) => c.id);
+        if (candidates.length === 0) return { removedCopies: 0, keptWorkedOnCopies: copies.length };
+
+        const [revisions, parties, naxas, details, corrections] = await Promise.all([
+                db.deedTemplateRevision.findMany({ where: { deedId: { in: candidates } }, select: { deedId: true } }),
+                db.deedParty.findMany({ where: { deedId: { in: candidates } }, select: { deedId: true } }),
+                db.deedNaxa.findMany({ where: { deedId: { in: candidates } }, select: { deedId: true } }),
+                db.deedPropertyDetail.findMany({ where: { deedId: { in: candidates } }, select: { deedId: true } }),
+                db.deedCorrectionRequest.findMany({
+                        where: { deedTemplateId: { in: candidates } },
+                        select: { deedTemplateId: true },
+                }),
+        ]);
+        const worked = new Set<string>([
+                ...revisions.map((r) => r.deedId),
+                ...parties.map((r) => r.deedId),
+                ...naxas.map((r) => r.deedId),
+                ...details.map((r) => r.deedId),
+                ...corrections.map((r) => r.deedTemplateId),
+        ]);
+
+        const removable = candidates.filter((deedId) => !worked.has(deedId));
+        if (removable.length > 0) {
+                await db.deedTemplate.deleteMany({ where: { id: { in: removable } } });
+        }
+        return { removedCopies: removable.length, keptWorkedOnCopies: copies.length - removable.length };
   }
 
   /**

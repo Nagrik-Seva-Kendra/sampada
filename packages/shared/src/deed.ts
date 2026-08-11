@@ -58,6 +58,20 @@ export const SetDeedStarterInput = z.object({
 });
 export type SetDeedStarterInput = z.infer<typeof SetDeedStarterInput>;
 
+/**
+ * What marking (or unmarking) a starter did to everyone's workspaces, so the
+ * person who clicked can see it rather than having to trust it happened.
+ * `keptWorkedOnCopies` is the important one: copies a partner has already
+ * worked on are never withdrawn, and this is what says so.
+ */
+export const SetDeedStarterResult = z.object({
+  deed: SampleDeedItem,
+  addedCopies: z.number().int().nonnegative(),
+  removedCopies: z.number().int().nonnegative(),
+  keptWorkedOnCopies: z.number().int().nonnegative(),
+});
+export type SetDeedStarterResult = z.infer<typeof SetDeedStarterResult>;
+
 /** Lightweight row for the "All Deeds" listing (drops the heavy content body). */
 export const SampleDeedListItem = SampleDeedItem.omit({ content: true });
 export type SampleDeedListItem = z.infer<typeof SampleDeedListItem>;

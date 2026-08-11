@@ -65,6 +65,11 @@ function formatDate(iso: string): string {
  * something, look up the rates you need to draft it, bring in the people who
  * will use it.
  */
+/** "1 workspace" / "3 workspaces" — only the English copy needs the distinction. */
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 function StartHereStep({
   n,
   title,
@@ -192,6 +197,41 @@ export function AllDeedsPage() {
   const activeOrganization = useActiveOrganization();
   const isPlatformAdmin = useAuthStore((s) => s.user?.isPlatformAdmin ?? false);
   const setStarter = useSetDeedStarter();
+  // Marking a starter changes other people's workspaces, so say what it did
+  // rather than leave the person who clicked to take it on trust.
+  const [starterNote, setStarterNote] = useState<string | null>(null);
+
+  function toggleStarter(deed: SampleDeedListItem) {
+    const marking = !deed.isStarter;
+    setStarter.mutate(
+      { id: deed.id, isStarter: marking },
+      {
+        onSuccess: (r) => {
+          const hi = lang === "hi";
+          if (marking) {
+            setStarterNote(
+              hi
+                ? `स्टार्टर बना दिया — ${r.addedCopies} workspace में भेज दिया।`
+                : `Marked as a starter — sent to ${plural(r.addedCopies, "workspace", "workspaces")}.`,
+            );
+          } else {
+            const kept = r.keptWorkedOnCopies
+              ? hi
+                ? ` ${r.keptWorkedOnCopies} रहने दीं — उन पर काम हो चुका है।`
+                : ` Kept ${plural(r.keptWorkedOnCopies, "copy", "copies")} that had been worked on.`
+              : "";
+            setStarterNote(
+              (hi
+                ? `स्टार्टर हटाया — ${r.removedCopies} बिना इस्तेमाल की copy वापस लीं।`
+                : `No longer a starter — withdrew ${plural(r.removedCopies, "unused copy", "unused copies")}.`) +
+                kept,
+            );
+          }
+        },
+        onError: (e) => setStarterNote(e.message),
+      },
+    );
+  }
 
   const [selectedTypes, setSelectedTypes] = useState<Set<DeedType>>(new Set());
   const [createdById, setCreatedById] = useState("");
@@ -350,6 +390,15 @@ export function AllDeedsPage() {
             </span>
           )}
         </div>
+
+        {starterNote && (
+          <div className="starter-note">
+            {starterNote}
+            <button type="button" className="starter-note-close" onClick={() => setStarterNote(null)}>
+              ✕
+            </button>
+          </div>
+        )}
 
         {showStartHere && (
           <StartHerePanel
@@ -586,11 +635,7 @@ export function AllDeedsPage() {
                                 {isPlatformAdmin && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onSelect={() =>
-                                        setStarter.mutate({ id: d.id, isStarter: !d.isStarter })
-                                      }
-                                    >
+                                    <DropdownMenuItem onSelect={() => toggleStarter(d)}>
                                       {d.isStarter
                                         ? lang === "hi"
                                           ? "स्टार्टर से हटाएँ"
