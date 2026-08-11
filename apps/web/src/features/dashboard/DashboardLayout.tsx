@@ -6,6 +6,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { Sidebar } from "./Sidebar";
+import { InstallAppPrompt } from "./InstallAppPrompt";
 
 /** Shell for every authenticated app route: top header + per-app sidebar + content. */
 export function DashboardLayout() {
@@ -63,6 +64,7 @@ export function DashboardLayout() {
       <Sidebar mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
 
       <div className="sidebar-content">
+        <InstallAppPrompt />
         <Outlet />
       </div>
     </div>

@@ -281,6 +281,66 @@ h3 {
   border-radius: 50%;
   flex-shrink: 0;
 }
+/* ---------- offer to install the workspace as a desktop app ---------- */
+.install-prompt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 24px 0;
+  /* The language, theme and bell controls float over this corner (see
+     .top-controls-fab, which is fixed). Anything sitting at the top of the
+     page has to keep clear of them or it ends up underneath. */
+  padding: 12px 150px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.install-prompt-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.install-prompt-body {
+  flex: 1;
+  min-width: 0;
+}
+.install-prompt-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+.install-prompt-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.install-prompt-btn {
+  flex-shrink: 0;
+}
+.install-prompt-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+}
+.install-prompt-close:hover {
+  color: var(--fg);
+}
+@media (max-width: 640px) {
+  .install-prompt {
+    margin: 14px 16px 0;
+    padding: 12px 14px;
+    flex-wrap: wrap;
+  }
+  /* On a phone the floating controls sit above the banner rather than beside
+     it, so the text needs its own line under them instead of side padding. */
+  .install-prompt-body {
+    flex-basis: 100%;
+    order: -1;
+    padding-right: 120px;
+  }
+}
+
 /* ---------- first run: what an empty workspace sees ---------- */
 .start-here {
   border: 1px solid var(--border);
