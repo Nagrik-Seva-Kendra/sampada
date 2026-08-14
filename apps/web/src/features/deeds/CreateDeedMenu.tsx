@@ -35,7 +35,18 @@ export function CreateDeedMenu({
   function onCreate(type: DeedType) {
     create.mutate(
       { type, title: t("deedsUntitledTitle"), content: "" },
-      { onSuccess: (item) => window.open(`/deeds/${type}/edit/${item.id}?new=1`, "_blank") },
+      {
+        onSuccess: (item) => {
+          const url = `/deeds/${type}/edit/${item.id}?new=1`;
+          // The draft has to exist before there's an editor URL to open, and by
+          // the time it does, mobile browsers have expired the tap's user
+          // activation and block the new tab. A blocked window.open returns
+          // null, which on a phone would otherwise leave the tap looking dead —
+          // so fall back to this tab, where the editor is a full page anyway.
+          const tab = window.open(url, "_blank");
+          if (!tab) window.location.assign(url);
+        },
+      },
     );
   }
 
