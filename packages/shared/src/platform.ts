@@ -28,6 +28,17 @@ export type PlatformOrgMember = z.infer<typeof PlatformOrgMember>;
 
 export const PlatformOrgDetail = PlatformOrgSummary.omit({ memberCount: true }).extend({
   joinCode: z.string(),
+  /**
+   * What the founder told the onboarding wizard: where they work, what they
+   * do, and what they came for. Null for anyone who signed up before the
+   * wizard started keeping the answers, or who skipped the question.
+   */
+  district: z.string().nullable(),
+  onboardingRole: z.string().nullable(),
+  onboardingGoal: z.string().nullable(),
+  /** Enough to tell a workspace that is being used from one that never was. */
+  deedCount: z.number().int(),
+  lastDeedAt: z.string().nullable(),
   members: z.array(PlatformOrgMember),
 });
 export type PlatformOrgDetail = z.infer<typeof PlatformOrgDetail>;

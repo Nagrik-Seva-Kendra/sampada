@@ -79,6 +79,15 @@ function fakePrisma(seed: {
     },
     $transaction: vi.fn(async (fn: any) => fn(client)),
   };
+  // Deed counts are read through the unscoped client on purpose (this guard
+  // puts the caller's own org in context, which would filter every other
+  // organization's deeds to zero), so the fake has to expose it too.
+  client.$unscoped = {
+    deedTemplate: {
+      count: vi.fn(async () => 0),
+      findFirst: vi.fn(async () => null),
+    },
+  };
   return { client, users };
 }
 

@@ -75,6 +75,9 @@ export class PlatformOrganizationsService {
         isPersonal: true,
         joinCode: true,
         createdAt: true,
+        district: true,
+        onboardingRole: true,
+        onboardingGoal: true,
         memberships: {
           orderBy: { createdAt: "asc" },
           select: {
@@ -89,6 +92,24 @@ export class PlatformOrganizationsService {
       },
     });
     if (!org) throw new NotFoundException("Organization not found.");
+
+    // Whether the workspace is actually being used is the first thing anyone
+    // opening this page wants to know, and it isn't answerable from the
+    // membership list alone.
+    //
+    // Unscoped deliberately: DeedTemplate is a tenant model, and this guard
+    // puts the *caller's* organization in context — so the scoped client would
+    // quietly filter every other organization's deeds away and report zero for
+    // all of them. The organization being counted is named explicitly here.
+    const [deedCount, newest] = await Promise.all([
+      this.prisma.$unscoped.deedTemplate.count({ where: { organizationId: id } }),
+      this.prisma.$unscoped.deedTemplate.findFirst({
+        where: { organizationId: id },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
+    ]);
+
     return {
       id: org.id,
       name: org.name,
@@ -97,6 +118,11 @@ export class PlatformOrganizationsService {
       isPersonal: org.isPersonal,
       joinCode: org.joinCode,
       createdAt: org.createdAt.toISOString(),
+      district: org.district,
+      onboardingRole: org.onboardingRole,
+      onboardingGoal: org.onboardingGoal,
+      deedCount,
+      lastDeedAt: newest?.createdAt.toISOString() ?? null,
       members: org.memberships.map((m) => ({
         membershipId: m.id,
         userId: m.user.id,
