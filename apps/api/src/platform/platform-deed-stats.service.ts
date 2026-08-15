@@ -29,17 +29,6 @@ export interface PartyDeedStat {
   lastDeedAt: string | null;
 }
 
-export interface PartyDeed {
-  deedId: string;
-  title: string;
-  type: string;
-  organizationName: string;
-  /** Every role this party holds in the deed — "seller", "buyer", … */
-  roles: string[];
-  createdAt: string;
-  createdByName: string;
-}
-
 export interface DeedStats {
   totals: { organizations: number; deeds: number; parties: number };
   organizations: OrgDeedStat[];
@@ -130,56 +119,6 @@ export class PlatformDeedStatsService {
       members,
       parties,
     };
-  }
-
-  /**
-   * The actual deeds one party appears in — the drill-down behind their row
-   * on the activity page, where a count alone doesn't answer "which ones".
-   *
-   * Ordered newest first, and each deed appears once however many roles the
-   * party holds in it; the roles are listed on the row instead.
-   */
-  async partyDeeds(partyId: string): Promise<PartyDeed[]> {
-    const db = this.prisma.$unscoped;
-    const links = await db.deedParty.findMany({
-      where: { partyId },
-      select: { deedId: true, role: true },
-    });
-    if (links.length === 0) return [];
-
-    const rolesByDeed = new Map<string, string[]>();
-    for (const l of links) {
-      const roles = rolesByDeed.get(l.deedId) ?? [];
-      if (!roles.includes(l.role)) roles.push(l.role);
-      rolesByDeed.set(l.deedId, roles);
-    }
-
-    const [deeds, orgs] = await Promise.all([
-      db.deedTemplate.findMany({
-        where: { id: { in: [...rolesByDeed.keys()] } },
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          organizationId: true,
-          createdAt: true,
-          createdByName: true,
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      db.organization.findMany({ select: { id: true, name: true } }),
-    ]);
-    const orgName = new Map(orgs.map((o) => [o.id, o.name]));
-
-    return deeds.map((d) => ({
-      deedId: d.id,
-      title: d.title,
-      type: d.type,
-      organizationName: orgName.get(d.organizationId) ?? "—",
-      roles: rolesByDeed.get(d.id) ?? [],
-      createdAt: d.createdAt.toISOString(),
-      createdByName: d.createdByName,
-    }));
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from "@nestjs/common";
+import { Controller, Get, UseGuards } from "@nestjs/common";
 import { JwtPlatformAdminGuard } from "../auth/jwt-platform-admin.guard.js";
 import { PlatformDeedStatsService } from "./platform-deed-stats.service.js";
 
@@ -15,11 +15,5 @@ export class PlatformDeedStatsController {
   @Get()
   get() {
     return this.service.getStats();
-  }
-
-  /** The deeds one party appears in — the drill-down behind their activity row. */
-  @Get("parties/:partyId/deeds")
-  partyDeeds(@Param("partyId") partyId: string) {
-    return this.service.partyDeeds(partyId);
   }
 }
