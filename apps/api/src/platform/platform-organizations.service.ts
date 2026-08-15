@@ -123,6 +123,37 @@ export class PlatformOrganizationsService {
   }
 
   /**
+   * One deed of one organization, body included — what the back office opens
+   * when someone needs to see what a partner actually wrote.
+   *
+   * The organization id is part of the lookup rather than trusted from the
+   * deed: it means a deed id from one partner cannot be read by asking under
+   * another partner's page, and a mistyped pair reads as absent instead of
+   * quietly returning somebody else's document.
+   */
+  async deed(organizationId: string, deedId: string) {
+    const row = await this.prisma.$unscoped.deedTemplate.findFirst({
+      where: { id: deedId, organizationId },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        content: true,
+        createdByName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!row) throw new NotFoundException("Deed not found.");
+    return {
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  /**
    * Districts that actually have partners in them, with how many, for the
    * filter control. Built from the data rather than from the full list of 52
    * Madhya Pradesh districts, so the dropdown never offers a choice that

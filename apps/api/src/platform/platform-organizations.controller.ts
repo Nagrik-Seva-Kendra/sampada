@@ -39,6 +39,12 @@ export class PlatformOrganizationsController {
     return this.service.getDetail(id);
   }
 
+  /** One deed of one organization, body included. Declared above ":id/deeds". */
+  @Get(":id/deeds/:deedId")
+  deed(@Param("id") id: string, @Param("deedId") deedId: string) {
+    return this.service.deed(id, deedId);
+  }
+
   /** One organization's deeds, newest first, paged. */
   @Get(":id/deeds")
   deeds(@Param("id") id: string, @Query("cursor") cursor?: string, @Query("limit") limit?: string) {
