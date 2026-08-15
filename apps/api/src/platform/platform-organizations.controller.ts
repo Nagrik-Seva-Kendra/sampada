@@ -39,6 +39,12 @@ export class PlatformOrganizationsController {
     return this.service.getDetail(id);
   }
 
+  /** One organization's deeds, newest first, paged. */
+  @Get(":id/deeds")
+  deeds(@Param("id") id: string, @Query("cursor") cursor?: string, @Query("limit") limit?: string) {
+    return this.service.deeds(id, cursor || undefined, Math.min(Math.max(Number(limit) || 25, 1), 100));
+  }
+
   /** Reversible: blocks the org's access immediately (revokes every member's session). */
   @Post(":id/suspend")
   suspend(@Param("id") id: string) {

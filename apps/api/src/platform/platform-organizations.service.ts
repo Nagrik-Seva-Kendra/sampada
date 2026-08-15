@@ -72,6 +72,57 @@ export class PlatformOrganizationsService {
   }
 
   /**
+   * One organization's deeds, newest first — the same list the partner sees in
+   * their own workspace, read from the outside.
+   *
+   * Paged by cursor rather than returned whole: the largest workspace is past
+   * eight thousand deeds, and the body is never selected here (one deed runs
+   * to ~30KB, so a full page of bodies would be megabytes for a table that
+   * shows titles).
+   *
+   * Unscoped deliberately — the platform guard puts the *caller's*
+   * organization in context, so the scoped client would return the wrong
+   * organization's deeds, or none.
+   */
+  async deeds(organizationId: string, cursor: string | undefined, limit: number) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    });
+    if (!org) throw new NotFoundException("Organization not found.");
+
+    const rows = await this.prisma.$unscoped.deedTemplate.findMany({
+      where: { organizationId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        createdByName: true,
+        createdAt: true,
+      },
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, -1) : rows;
+    const lastRow = page[page.length - 1];
+    return {
+      data: page.map((d) => ({
+        id: d.id,
+        title: d.title,
+        type: d.type,
+        status: d.status,
+        createdByName: d.createdByName,
+        createdAt: d.createdAt.toISOString(),
+      })),
+      nextCursor: hasMore && lastRow ? lastRow.id : null,
+    };
+  }
+
+  /**
    * Districts that actually have partners in them, with how many, for the
    * filter control. Built from the data rather than from the full list of 52
    * Madhya Pradesh districts, so the dropdown never offers a choice that
