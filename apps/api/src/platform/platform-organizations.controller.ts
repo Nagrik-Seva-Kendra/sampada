@@ -14,12 +14,24 @@ export class PlatformOrganizationsController {
   constructor(private readonly service: PlatformOrganizationsService) {}
 
   @Get()
-  list(@Query("search") search?: string, @Query("cursor") cursor?: string, @Query("limit") limit?: string) {
+  list(
+    @Query("search") search?: string,
+    @Query("district") district?: string,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
     return this.service.list({
       search: search?.trim() || undefined,
+      district: district?.trim() || undefined,
       cursor: cursor || undefined,
       limit: Math.min(Math.max(Number(limit) || 20, 1), 100),
     });
+  }
+
+  /** Declared above ":id" so "districts" is never read as an organization id. */
+  @Get("districts")
+  districts() {
+    return this.service.districts();
   }
 
   @Get(":id")

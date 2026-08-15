@@ -6,6 +6,8 @@ import { LastOwnerViolationError } from "../organizations/organization-invariant
 
 export interface PlatformOrgFilters {
   search?: string;
+  /** Exact district name, as stored from onboarding. */
+  district?: string;
   cursor?: string;
   limit: number;
 }
@@ -24,14 +26,17 @@ export class PlatformOrganizationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(filters: PlatformOrgFilters) {
-    const where: Prisma.OrganizationWhereInput = filters.search
-      ? {
-          OR: [
-            { name: { contains: filters.search, mode: "insensitive" } },
-            { slug: { contains: filters.search, mode: "insensitive" } },
-          ],
-        }
-      : {};
+    const where: Prisma.OrganizationWhereInput = {
+      ...(filters.search
+        ? {
+            OR: [
+              { name: { contains: filters.search, mode: "insensitive" } },
+              { slug: { contains: filters.search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      ...(filters.district ? { district: filters.district } : {}),
+    };
     const rows = await this.prisma.organization.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -43,6 +48,7 @@ export class PlatformOrganizationsService {
         slug: true,
         status: true,
         isPersonal: true,
+        district: true,
         createdAt: true,
         _count: { select: { memberships: true } },
       },
@@ -57,11 +63,29 @@ export class PlatformOrganizationsService {
         slug: r.slug,
         status: r.status,
         isPersonal: r.isPersonal,
+        district: r.district,
         memberCount: r._count.memberships,
         createdAt: r.createdAt.toISOString(),
       })),
       nextCursor: hasMore && lastRow ? lastRow.id : null,
     };
+  }
+
+  /**
+   * Districts that actually have partners in them, with how many, for the
+   * filter control. Built from the data rather than from the full list of 52
+   * Madhya Pradesh districts, so the dropdown never offers a choice that
+   * returns nothing.
+   */
+  async districts(): Promise<{ district: string; count: number }[]> {
+    const rows = await this.prisma.organization.groupBy({
+      by: ["district"],
+      where: { district: { not: null } },
+      _count: { _all: true },
+    });
+    return rows
+      .map((r) => ({ district: r.district as string, count: r._count._all }))
+      .sort((a, b) => a.district.localeCompare(b.district));
   }
 
   async getDetail(id: string) {

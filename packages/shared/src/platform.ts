@@ -8,10 +8,19 @@ export const PlatformOrgSummary = z.object({
   slug: z.string(),
   status: OrgStatus,
   isPersonal: z.boolean(),
+  /** Where the partner works, from onboarding. Null for anyone who signed up before it was asked. */
+  district: z.string().nullable(),
   memberCount: z.number().int(),
   createdAt: z.string(),
 });
 export type PlatformOrgSummary = z.infer<typeof PlatformOrgSummary>;
+
+/** Districts that actually have partners, with how many — drives the filter control. */
+export const PlatformDistrictCount = z.object({
+  district: z.string(),
+  count: z.number().int(),
+});
+export type PlatformDistrictCount = z.infer<typeof PlatformDistrictCount>;
 
 export const PlatformOrgMember = z.object({
   membershipId: z.string(),
