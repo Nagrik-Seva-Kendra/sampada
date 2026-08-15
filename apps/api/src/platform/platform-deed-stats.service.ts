@@ -20,20 +20,10 @@ export interface MemberDeedStat {
   lastDeedAt: string | null;
 }
 
-export interface PartyDeedStat {
-  partyId: string;
-  partyName: string;
-  organizationId: string;
-  organizationName: string;
-  deedCount: number;
-  lastDeedAt: string | null;
-}
-
 export interface DeedStats {
-  totals: { organizations: number; deeds: number; parties: number };
+  totals: { organizations: number; deeds: number };
   organizations: OrgDeedStat[];
   members: MemberDeedStat[];
-  parties: PartyDeedStat[];
 }
 
 /**
@@ -107,75 +97,13 @@ export class PlatformDeedStatsService {
       }))
       .sort((a, b) => b.deedCount - a.deedCount);
 
-    const parties = await this.partyStats(orgName);
-
     return {
       totals: {
         organizations: organizations.length,
         deeds: organizations.reduce((sum, o) => sum + o.deedCount, 0),
-        parties: parties.length,
       },
       organizations,
       members,
-      parties,
     };
-  }
-
-  /**
-   * The people named in deeds — buyers, sellers, mortgagors — and how many
-   * deeds each appears in.
-   *
-   * Carries the name and counts only. Party rows also hold Aadhaar and PAN
-   * numbers, and there is no back-office question on this page that needs
-   * them; leaving them out of the response means they cannot leak from a
-   * screen, a screenshot or a browser cache.
-   *
-   * A party can be attached to one deed in more than one role, so the deed
-   * ids are counted distinctly rather than by counting link rows.
-   */
-  private async partyStats(orgName: Map<string, string>): Promise<PartyDeedStat[]> {
-    const db = this.prisma.$unscoped;
-    const links = await db.deedParty.findMany({
-      select: { deedId: true, partyId: true, organizationId: true },
-    });
-    if (links.length === 0) return [];
-
-    const [parties, deeds] = await Promise.all([
-      db.party.findMany({
-        where: { id: { in: [...new Set(links.map((l) => l.partyId))] } },
-        select: { id: true, name: true },
-      }),
-      db.deedTemplate.findMany({
-        where: { id: { in: [...new Set(links.map((l) => l.deedId))] } },
-        select: { id: true, createdAt: true },
-      }),
-    ]);
-    const partyName = new Map(parties.map((p) => [p.id, p.name]));
-    const deedCreatedAt = new Map(deeds.map((d) => [d.id, d.createdAt]));
-
-    const byParty = new Map<string, { organizationId: string; deedIds: Set<string>; last: Date | null }>();
-    for (const link of links) {
-      let row = byParty.get(link.partyId);
-      if (!row) {
-        row = { organizationId: link.organizationId, deedIds: new Set(), last: null };
-        byParty.set(link.partyId, row);
-      }
-      row.deedIds.add(link.deedId);
-      const at = deedCreatedAt.get(link.deedId);
-      if (at && (!row.last || at > row.last)) row.last = at;
-    }
-
-    return [...byParty.entries()]
-      .map(([partyId, row]) => ({
-        partyId,
-        // A link can outlive the party row it points at (the deed id is a
-        // plain column, with no foreign key), so never assume a name is there.
-        partyName: partyName.get(partyId) ?? "—",
-        organizationId: row.organizationId,
-        organizationName: orgName.get(row.organizationId) ?? "—",
-        deedCount: row.deedIds.size,
-        lastDeedAt: row.last ? row.last.toISOString() : null,
-      }))
-      .sort((a, b) => b.deedCount - a.deedCount);
   }
 }
