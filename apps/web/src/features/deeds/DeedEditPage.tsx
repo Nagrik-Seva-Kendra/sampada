@@ -333,11 +333,12 @@ export function DeedEditPage() {
                 style={{
                   fontSize: "1.05rem",
                   lineHeight: 1.8,
-                  // Sized to what is left of the window rather than to a row
-                  // count: the heading, name field and action row above and below
-                  // come to ~320px, so this keeps the whole editor and its buttons
-                  // on screen and leaves the scrolling to the deed itself.
-                  height: "max(280px, calc(100vh - 330px))",
+                  // As tall as the window allows, and no taller. Going past the
+                  // window is what forced two scrollbars: one to bring the box
+                  // into view, another to move through the deed inside it. The
+                  // allowance is the heading and name field above it.
+                  height: "max(420px, calc(100vh - 250px))",
+                  resize: "vertical",
                   textAlign: "justify",
                   position: "relative",
                   background: "transparent",
