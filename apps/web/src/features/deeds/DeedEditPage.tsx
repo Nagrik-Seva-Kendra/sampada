@@ -324,18 +324,20 @@ export function DeedEditPage() {
                   overflowWrap: "break-word",
                   color: "transparent",
                   pointerEvents: "none",
-                  minHeight: "65vh",
                 }}
               >
                 {renderBackdrop()}
               </div>
               <textarea
                 ref={textareaRef}
-                rows={34}
                 style={{
                   fontSize: "1.05rem",
                   lineHeight: 1.8,
-                  minHeight: "65vh",
+                  // Sized to what is left of the window rather than to a row
+                  // count: the heading, name field and action row above and below
+                  // come to ~320px, so this keeps the whole editor and its buttons
+                  // on screen and leaves the scrolling to the deed itself.
+                  height: "max(280px, calc(100vh - 330px))",
                   textAlign: "justify",
                   position: "relative",
                   background: "transparent",
