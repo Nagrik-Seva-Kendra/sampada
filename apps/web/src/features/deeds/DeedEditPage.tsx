@@ -331,6 +331,7 @@ export function DeedEditPage() {
               </div>
               <textarea
                 ref={textareaRef}
+                className="deed-content-input"
                 rows={34}
                 style={{
                   fontSize: "1.05rem",

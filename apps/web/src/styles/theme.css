@@ -4188,3 +4188,47 @@ h3 {
     min-width: 0;
   }
 }
+
+/* ---------- deed content: minimal translucent scrollbar ----------
+   Replaces the browser's default grey bar in the deed editor: thin, low
+   contrast, brighter on hover, so it reads as part of the panel instead of
+   competing with the deed.
+
+   The design specifies white at 18%/30% for the dark editor. Those values are
+   used verbatim below; the light theme gets the same two steps in black,
+   because white on a light panel is a scrollbar you cannot see. */
+.deed-content-input::-webkit-scrollbar {
+  width: 6px;
+}
+.deed-content-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+.deed-content-input::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.18);
+  border-radius: 999px;
+}
+.deed-content-input::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.3);
+}
+
+:root[data-theme="dark"] .deed-content-input::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.18);
+}
+:root[data-theme="dark"] .deed-content-input::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.3);
+}
+
+/* Firefox only. Chrome supports both these standard properties and the
+   ::-webkit-scrollbar pseudo-elements, but setting either of them makes it
+   ignore the pseudo-elements entirely — which quietly threw away the 6px
+   width above and left a 12px bar. Firefox has no ::-webkit-scrollbar, so
+   this block reaches it and nothing else. */
+@supports not selector(::-webkit-scrollbar) {
+  .deed-content-input {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 0.18) transparent;
+  }
+  :root[data-theme="dark"] .deed-content-input {
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  }
+}
