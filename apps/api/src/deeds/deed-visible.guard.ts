@@ -24,8 +24,12 @@ export class DeedVisibleGuard implements CanActivate {
     const deedId = req.params.deedId;
     if (typeof deedId !== "string" || !deedId) throw new NotFoundException("Deed not found.");
 
-    const deed = await this.deeds.getOne(deedId);
-    if (!deed) throw new NotFoundException("Deed not found.");
+    // findVisibleIds rather than getOne: this only needs to know the deed
+    // exists, and getOne pulls the whole body -- up to 40,000 characters --
+    // on every request, including the presence POSTs that arrive while
+    // someone is typing.
+    const [visible] = await this.deeds.findVisibleIds([deedId]);
+    if (!visible) throw new NotFoundException("Deed not found.");
     return true;
   }
 }

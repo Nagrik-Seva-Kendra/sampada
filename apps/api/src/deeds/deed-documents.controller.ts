@@ -18,6 +18,7 @@ import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express
 import type { Response } from "express";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { DeedDocumentsService, type PartyRole, type PartyType } from "./deed-documents.service.js";
+import { DeedVisibleGuard } from "./deed-visible.guard.js";
 
 interface UploadedDoc {
   buffer: Buffer;
@@ -137,11 +138,13 @@ export class DeedDocumentsController {
   // ---- Deed <-> people ----
 
   @Get("deeds/:deedId/parties")
+  @UseGuards(DeedVisibleGuard)
   listParties(@Param("deedId") deedId: string) {
     return this.service.listDeedParties(deedId);
   }
 
   @Post("deeds/:deedId/parties")
+  @UseGuards(DeedVisibleGuard)
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -191,6 +194,7 @@ export class DeedDocumentsController {
   }
 
   @Delete("deeds/:deedId/parties/:linkId")
+  @UseGuards(DeedVisibleGuard)
   async removeParty(@Param("deedId") deedId: string, @Param("linkId") linkId: string) {
     await this.service.removeDeedParty(deedId, linkId);
     return { removed: true };
@@ -199,11 +203,13 @@ export class DeedDocumentsController {
   // ---- Naxa (per-deed property map) ----
 
   @Get("deeds/:deedId/naxa")
+  @UseGuards(DeedVisibleGuard)
   listNaxa(@Param("deedId") deedId: string) {
     return this.service.listNaxa(deedId);
   }
 
   @Post("deeds/:deedId/naxa")
+  @UseGuards(DeedVisibleGuard)
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FILE } }))
   addNaxa(@Param("deedId") deedId: string, @UploadedFile() file?: UploadedDoc) {
     if (!file) throw new BadRequestException("A file is required.");
@@ -214,6 +220,7 @@ export class DeedDocumentsController {
   }
 
   @Get("deeds/:deedId/naxa/:id/file")
+  @UseGuards(DeedVisibleGuard)
   async naxaFile(
     @Param("id") id: string,
     @Res({ passthrough: true }) res: Response,
@@ -227,6 +234,7 @@ export class DeedDocumentsController {
   }
 
   @Delete("deeds/:deedId/naxa/:id")
+  @UseGuards(DeedVisibleGuard)
   async removeNaxa(@Param("deedId") deedId: string, @Param("id") id: string) {
     await this.service.removeNaxa(deedId, id);
     return { removed: true };

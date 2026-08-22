@@ -2,10 +2,13 @@ import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from "@nes
 import { DeedPropertyDetailCreateInput } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { DeedPropertyDetailService } from "./deed-property-detail.service.js";
+import { DeedVisibleGuard } from "./deed-visible.guard.js";
 
 /** Staff-only structured property data for a deed (plot no., khasra, measurements, chauhaddi). */
 @Controller("deeds/:deedId/property-detail")
-@UseGuards(JwtStaffGuard)
+// JwtStaffGuard first: it is what puts the tenant in context, which is what
+// DeedVisibleGuard reads through to decide the deed exists at all.
+@UseGuards(JwtStaffGuard, DeedVisibleGuard)
 export class DeedPropertyDetailController {
   constructor(private readonly service: DeedPropertyDetailService) {}
 
