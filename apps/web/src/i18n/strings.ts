@@ -268,6 +268,11 @@ export const strings = {
   pageNext: { en: "Next →", hi: "अगला →" },
   pageLabel: { en: "Page", hi: "पृष्ठ" },
   deedsContentLabel: { en: "Deed content", hi: "विलेख सामग्री" },
+  deedsSampleNote: {
+    en: "Started from your sample draft — replace everything in < > with the real details.",
+    hi: "आपके नमूना ड्राफ़्ट से शुरू किया गया है — < > में लिखी हर बात असली जानकारी से बदलें।",
+  },
+  deedsSampleClear: { en: "Start blank", hi: "खाली से शुरू करें" },
   deedsSave: { en: "Save", hi: "सहेजें" },
   deedsAiHelp: { en: "AI drafting help", hi: "AI से मसौदा सहायता" },
   deedsAiPlaceholder: {

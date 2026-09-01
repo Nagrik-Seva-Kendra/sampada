@@ -67,7 +67,13 @@ export function DeedEditPage() {
   // Opened with ?new=1 straight after creating a blank/duplicated draft — start
   // with an empty title (placeholder prompts the user to name it) but keep any
   // seeded content (empty for a fresh deed, the source body for a duplicate).
-  const isNew = new URLSearchParams(window.location.search).get("new") === "1";
+  const params = new URLSearchParams(window.location.search);
+  const isNew = params.get("new") === "1";
+  // Set by CreateDeedMenu when the server started this draft from the
+  // workspace's own starter, so the body is a skeleton rather than something
+  // the user wrote. Worth saying out loud on a legal document: the placeholders
+  // are theirs to replace, and it is not a deed until they do.
+  const fromSample = isNew && params.get("sample") === "1";
 
   const record = useSampleDeed(id);
   const saveDeed = useSaveSampleDeed(type);
@@ -78,6 +84,8 @@ export function DeedEditPage() {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  // Emptying the box is also the way to dismiss the note about it.
+  const [sampleCleared, setSampleCleared] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -305,6 +313,22 @@ export function DeedEditPage() {
           </label>
           <label className="modal-field">
             {t("deedsContentLabel")}
+            {fromSample && !sampleCleared && (
+              <div className="deed-sample-note">
+                <span>{t("deedsSampleNote")}</span>
+                <button
+                  type="button"
+                  className="deed-sample-clear"
+                  onClick={() => {
+                    setContent("");
+                    setSampleCleared(true);
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  {t("deedsSampleClear")}
+                </button>
+              </div>
+            )}
             <div style={{ position: "relative", width: "100%" }}>
               <div
                 ref={backdropRef}

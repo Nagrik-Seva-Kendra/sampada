@@ -93,6 +93,61 @@ function StartHereStep({
   );
 }
 
+/**
+ * The walkthrough video, above the three steps.
+ *
+ * Empty id = nothing renders, so this ships safely before the video is up.
+ * Set it to the YouTube id (the part after `v=`) to turn the block on.
+ */
+const WALKTHROUGH_YOUTUBE_ID = "";
+
+/**
+ * Thumbnail first, iframe only after a click.
+ *
+ * A plain YouTube embed pulls about a megabyte of their script on every page
+ * load, and this panel sits on the main deeds page for every partner still
+ * finding their feet -- almost none of whom will press play. The poster is one
+ * image; the real player arrives only when someone actually wants it.
+ *
+ * nocookie host, and no autoplay until the click, because this opens on a
+ * shop counter.
+ */
+function StartHereVideo({ hi }: { hi: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  if (!WALKTHROUGH_YOUTUBE_ID) return null;
+
+  return (
+    <div className="start-here-video">
+      {playing ? (
+        <iframe
+          className="start-here-video-frame"
+          src={`https://www.youtube-nocookie.com/embed/${WALKTHROUGH_YOUTUBE_ID}?autoplay=1&rel=0`}
+          title={hi ? "साइट कैसे चलाएँ" : "How to use the site"}
+          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <button
+          type="button"
+          className="start-here-video-poster"
+          onClick={() => setPlaying(true)}
+          aria-label={hi ? "वीडियो चलाएँ" : "Play the video"}
+        >
+          <img
+            src={`https://i.ytimg.com/vi/${WALKTHROUGH_YOUTUBE_ID}/hqdefault.jpg`}
+            alt=""
+            loading="lazy"
+          />
+          <span className="start-here-video-play" aria-hidden="true" />
+          <span className="start-here-video-label">
+            {hi ? "2 मिनट में समझें — साइट कैसे चलाएँ" : "How to use the site — 2 minutes"}
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StartHerePanel({
   lang,
   district,
@@ -119,6 +174,8 @@ function StartHerePanel({
           {hi ? "समझ गया" : "Got it"}
         </button>
       </div>
+
+      <StartHereVideo hi={hi} />
 
       <div className="start-here-steps">
         <StartHereStep

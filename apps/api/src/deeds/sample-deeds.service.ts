@@ -366,14 +366,61 @@ function truncateExample(content: string, maxLen = 6000): string {
         };
   }
 
-  /** Draft a new deed for a type, owned by the caller. */
+  /**
+   * The workspace's own starter for a deed type, if it has one.
+   *
+   * Matches both shapes a starter takes: the marked original (isStarter), which
+   * only the platform's own workspace holds, and the copy fanned out to every
+   * partner (starterSourceId). Tenant-scoped, so this can only ever find the
+   * caller's own copy.
+   *
+   * Newest wins when a type has more than one -- `agreement` does today --
+   * with id as a tiebreaker, because copies seeded at signup all share one
+   * timestamp and `createdAt` alone would hand the same person a different
+   * template each time they pressed the button.
+   *
+   * Which of the two `agreement` skeletons that picks is arbitrary. It is
+   * stable per workspace, and either beats the empty box this replaces, but
+   * the honest fix is letting people choose -- a bigger change than this one.
+   */
+  private async starterContentFor(type: string): Promise<string | null> {
+        const starter = await this.prisma.deedTemplate.findFirst({
+                where: {
+                        type,
+                        status: "active",
+                        OR: [{ isStarter: true }, { starterSourceId: { not: null } }],
+                },
+                orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+                select: { content: true },
+        });
+        const content = starter?.content?.trim();
+        return content ? starter!.content : null;
+  }
+
+  /**
+   * Draft a new deed for a type, owned by the caller.
+   *
+   * A new deed used to open as an empty box, and the numbers were blunt about
+   * it: of forty-seven partner workspaces, twenty-three never produced a single
+   * deed, and not one of the starters copied into them was ever opened. Asking
+   * someone to type a Hindi legal document from nothing is the wrong first
+   * screen. So an empty draft starts from the workspace's own starter for that
+   * type -- a skeleton of `<...>` placeholders, no invented names or numbers.
+   *
+   * Only when the caller sends no content of their own, and only when a starter
+   * exists: everything else still opens blank, exactly as before.
+   */
   async create(input: CreateSampleDeedInput, user: StaffUser): Promise<SampleDeedItem> {
+        const content = input.content.trim()
+                ? input.content
+                : ((await this.starterContentFor(input.type)) ?? input.content);
+
         const row = await this.prisma.deedTemplate.create({
                 data: tenantCreateData<Prisma.DeedTemplateUncheckedCreateInput>({
                           id: randomUUID(),
                           type: input.type,
                           title: input.title,
-                          content: input.content,
+                          content,
                           status: "active",
                           createdById: user.id,
                           createdByName: user.name,

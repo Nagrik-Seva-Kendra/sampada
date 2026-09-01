@@ -37,7 +37,12 @@ export function CreateDeedMenu({
       { type, title: t("deedsUntitledTitle"), content: "" },
       {
         onSuccess: (item) => {
-          const url = `/deeds/${type}/edit/${item.id}?new=1`;
+          // The server starts an empty draft from the workspace's own starter
+          // for this type, when it has one. Say so in the URL rather than
+          // re-deriving it in the editor: the editor cannot tell text that
+          // arrived this way from text someone typed.
+          const sample = item.content.trim() ? "&sample=1" : "";
+          const url = `/deeds/${type}/edit/${item.id}?new=1${sample}`;
           // The draft has to exist before there's an editor URL to open, and by
           // the time it does, mobile browsers have expired the tap's user
           // activation and block the new tab. A blocked window.open returns

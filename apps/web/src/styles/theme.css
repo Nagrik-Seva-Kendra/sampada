@@ -382,6 +382,79 @@ h3 {
   font-size: 13.5px;
   color: var(--muted);
 }
+/* The walkthrough video, above the three steps. 16:9 box so the poster and
+   the player that replaces it occupy exactly the same space -- swapping one
+   for the other must not shift the steps below. */
+.start-here-video {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-width: 520px;
+  margin: 0 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.start-here-video-frame,
+.start-here-video-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.start-here-video-poster {
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  display: block;
+}
+.start-here-video-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.start-here-video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.62);
+  /* The triangle, drawn rather than shipped as an asset. */
+  clip-path: circle(50%);
+}
+.start-here-video-play::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 54%;
+  transform: translate(-50%, -50%);
+  border-style: solid;
+  border-width: 10px 0 10px 17px;
+  border-color: transparent transparent transparent #fff;
+}
+.start-here-video-poster:hover .start-here-video-play {
+  background: rgb(0 0 0 / 0.78);
+}
+/* Sits on the poster, so it needs its own dark ground rather than a theme
+   token -- the thumbnail behind it is whatever the video's first frame is. */
+.start-here-video-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 12px 9px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.72), transparent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: left;
+}
+
 .start-here-steps {
   display: flex;
   flex-direction: column;
@@ -4247,4 +4320,40 @@ h3 {
   :root[data-theme="dark"] * {
     scrollbar-color: rgb(255 255 255 / 0.18) transparent;
   }
+}
+
+/* The "this came from your sample" note, between the Deed content label and
+   the box itself. Deliberately quiet -- it is a fact about the draft, not a
+   warning -- but it uses the accent border so it does not read as part of the
+   deed text below it. */
+.deed-sample-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.deed-sample-clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.deed-sample-clear:hover {
+  color: var(--fg);
 }
