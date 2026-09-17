@@ -136,8 +136,12 @@ export class DeedDocumentsService {
   /** Search existing people/companies by name, Aadhaar number, or PAN number, for the reuse picker. */
   async searchParties(query: string): Promise<PartyMeta[]> {
     const q = (query ?? "").trim();
-    const digits = normalizeAadhaar(q);
-    const pan = normalizePan(q);
+    // Match numbers only against what the query actually is. Taking the digits
+    // out of any query made a PAN like "AADCB4420D" also hit every Aadhaar
+    // containing "4420" -- unnoticeable with fifty people on file, ten wrong
+    // answers with seven thousand.
+    const digits = /^[\d\s-]+$/.test(q) ? normalizeAadhaar(q) : "";
+    const pan = /^[a-zA-Z0-9\s-]+$/.test(q) && /[a-zA-Z]/.test(q) ? normalizePan(q) : "";
     const rows = await this.prisma.party.findMany({
       where: q
         ? {
