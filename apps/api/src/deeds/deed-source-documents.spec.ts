@@ -7,11 +7,13 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  chosenSigners,
   leftoverIdentifiers,
   matchAadhaarStyle,
   parseDocumentRole,
   parseOrganisations,
   parsePickedPeople,
+  parseSingleFact,
   relationMismatch,
   resolveMimeType,
   wouldEmpty,
@@ -114,6 +116,46 @@ describe("parsePickedPeople", () => {
   it("caps how many can be sent", () => {
     const many = Array.from({ length: 50 }, (_, i) => `p${i}`);
     expect(parsePickedPeople({ seller: many }).seller).toHaveLength(10);
+  });
+
+  it("reads which partners sign for a picked firm, and ignores firms not picked", () => {
+    expect(
+      parsePickedPeople({ seller: ["green"], signers: { green: ["rohit", "ayush", 7], other: ["x"] } }),
+    ).toEqual({ seller: ["green"], buyer: [], signers: { green: ["rohit", "ayush"] } });
+    expect(parsePickedPeople({ seller: ["green"], signers: ["rohit"] })).toEqual({ seller: ["green"], buyer: [] });
+  });
+});
+
+describe("parseSingleFact", () => {
+  it("reads one fact to place on its own", () => {
+    expect(parseSingleFact({ role: "buyer", label: "नाम", value: " श्रीमती नेहा कुमारी " })).toEqual({
+      role: "buyer",
+      label: "नाम",
+      value: "श्रीमती नेहा कुमारी",
+    });
+  });
+
+  it("means 'fill everything' when anything is off", () => {
+    expect(parseSingleFact(undefined)).toBeUndefined();
+    expect(parseSingleFact({ role: "witness", label: "नाम", value: "x" })).toBeUndefined();
+    expect(parseSingleFact({ role: "buyer", label: "नाम", value: "  " })).toBeUndefined();
+    expect(parseSingleFact({ role: "buyer", label: "नाम", value: "x".repeat(401) })).toBeUndefined();
+  });
+});
+
+describe("chosenSigners", () => {
+  const members = [{ personId: "ayush" }, { personId: "mahesh" }, { personId: "rohit" }];
+
+  it("takes only the chosen partners, in the order chosen", () => {
+    expect(chosenSigners(members, ["rohit", "ayush"])).toEqual([{ personId: "rohit" }, { personId: "ayush" }]);
+  });
+
+  it("takes all of them when nothing was said", () => {
+    expect(chosenSigners(members, undefined)).toEqual(members);
+  });
+
+  it("drops an id that is no longer the firm's partner", () => {
+    expect(chosenSigners(members, ["gone", "mahesh"])).toEqual([{ personId: "mahesh" }]);
   });
 });
 

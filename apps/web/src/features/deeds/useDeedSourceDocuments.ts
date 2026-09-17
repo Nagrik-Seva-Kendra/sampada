@@ -103,6 +103,8 @@ export interface FillProposal {
 export interface PickedIds {
   seller: string[];
   buyer: string[];
+  /** For a picked firm: the partners who sign this deed, in order. */
+  signers?: Record<string, string[]>;
 }
 
 /** Ask where the facts read off the documents belong in this deed. */
@@ -111,13 +113,19 @@ export function useProposeFill(deedId: string) {
   return useMutation<
     FillProposal,
     Error,
-    { kind: string | null; people: PickedIds; partyTypes: { seller: string; buyer: string } }
+    {
+      kind: string | null;
+      people: PickedIds;
+      partyTypes: { seller: string; buyer: string };
+      /** Place just this one fact; the rest only say whose it is. */
+      only?: { role: DocumentRole; label: string; value: string };
+    }
   >({
-    mutationFn: ({ kind, people, partyTypes }) =>
+    mutationFn: ({ kind, people, partyTypes, only }) =>
       api
         .post(`deeds/${deedId}/source-documents/propose-fill`, {
           headers: authHeaders(token),
-          json: { kind, people, partyTypes },
+          json: { kind, people, partyTypes, only },
           // The model reads the whole deed and thinks before answering.
           timeout: 180_000,
         })

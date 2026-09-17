@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertTriangle, Check, Circle, FileUp, Loader2, RefreshCw, Trash2, UserRound, X } from "lucide-react";
 import {
   CHECKLIST,
@@ -95,15 +95,31 @@ function prettySize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FieldRow({ field, done, onFill, t }: { field: ExtractedField; done: boolean; onFill: () => void; t: T }) {
+/**
+ * One fact read off the papers. "Fill" asks where this fact belongs in the
+ * deed -- it reads the deed, not the cursor -- and shows the change first.
+ */
+function FieldRow({
+  field,
+  busy,
+  disabled,
+  onFill,
+  t,
+}: {
+  field: ExtractedField;
+  busy: boolean;
+  disabled: boolean;
+  onFill: () => void;
+  t: T;
+}) {
   return (
     <div className="srcdoc-field">
       <div className="srcdoc-field-text">
         <div className="srcdoc-field-label">{field.label}</div>
         <div className="srcdoc-field-value">{field.value}</div>
       </div>
-      <button type="button" className="srcdoc-fill" onClick={onFill}>
-        {done ? t("Done", "गया") : t("Fill", "भरें")}
+      <button type="button" className="srcdoc-fill" onClick={onFill} disabled={disabled}>
+        {busy ? <Loader2 className="size-3.5 srcdoc-spin" aria-label={t("Finding its place", "जगह देखी जा रही है")} /> : t("Fill", "भरें")}
       </button>
     </div>
   );
@@ -192,45 +208,92 @@ function SavedPersonPicker({
 }
 
 /**
- * Who acts for a picked firm, kept with the firm itself: add them once and
- * every later deed that picks the firm writes them in.
+ * Who acts for a picked firm. The firm keeps every partner it has signed
+ * with; a firm's deeds are signed by different pairs of them, so the drafter
+ * ticks who signs this one, in the order the deed should list them.
  */
-function FirmMembersBox({ firmId, t }: { firmId: string; t: T }) {
+function FirmMembersBox({
+  firmId,
+  chosen,
+  onChoose,
+  onCount,
+  t,
+}: {
+  firmId: string;
+  /** Partner ids ticked for this deed, in order; undefined until someone ticks. */
+  chosen: string[] | undefined;
+  onChoose: (ids: string[]) => void;
+  /** How many partners the firm has saved, so the panel knows a choice is due. */
+  onCount: (count: number) => void;
+  t: T;
+}) {
   const members = useFirmMembers(firmId);
   const { add, remove } = useChangeFirmMembers(firmId);
   const [adding, setAdding] = useState(false);
   const [designation, setDesignation] = useState<string>("पार्टनर");
   const list = members.data ?? [];
   const failed = add.error ?? remove.error;
+  const ticked = chosen ?? [];
+
+  useEffect(() => {
+    if (members.isLoading) return;
+    onCount(list.length);
+    // One partner: nothing to ask.
+    if (chosen === undefined && list.length === 1) onChoose([list[0]!.personId]);
+    // A partner taken off the firm cannot sign for it.
+    if (chosen && chosen.some((id) => !list.some((m) => m.personId === id))) {
+      onChoose(chosen.filter((id) => list.some((m) => m.personId === id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members.isLoading, list.map((m) => m.personId).join(",")]);
+
+  function toggle(personId: string) {
+    onChoose(ticked.includes(personId) ? ticked.filter((x) => x !== personId) : [...ticked, personId]);
+  }
 
   return (
     <div className="srcdoc-members">
-      <div className="srcdoc-members-title">{t("Signing for the firm", "फर्म की ओर से")}</div>
+      <div className="srcdoc-members-title">
+        {list.length > 1
+          ? t("Who signs this deed for the firm? Tick in order.", "इस विलेख में फर्म की ओर से कौन से पार्टनर? क्रम से टिक करें।")
+          : t("Signing for the firm", "फर्म की ओर से")}
+      </div>
       {!members.isLoading && list.length === 0 && (
         <p className="srcdoc-empty">
           {t(
-            "No partners saved for this firm yet. Add them once and every deed gets them.",
-            "इस फर्म के पार्टनर अभी सहेजे नहीं हैं। एक बार जोड़ दें, फिर हर विलेख में अपने-आप आएँगे।",
+            "No partners saved for this firm yet. Add them once and every deed can use them.",
+            "इस फर्म के पार्टनर अभी सहेजे नहीं हैं। एक बार जोड़ दें, फिर हर विलेख में चुन सकेंगे।",
           )}
         </p>
       )}
-      {list.map((m, i) => (
-        <div key={m.personId} className="srcdoc-member">
-          <span className="srcdoc-member-name">
-            {i + 1}. {m.name}
-          </span>
+      {list.map((m) => {
+        const order = ticked.indexOf(m.personId);
+        return (
+        <div key={m.personId} className={"srcdoc-member" + (order >= 0 ? " is-on" : "")}>
+          <label className="srcdoc-member-pick">
+            <input type="checkbox" checked={order >= 0} onChange={() => toggle(m.personId)} />
+            <span className="srcdoc-member-order" aria-hidden>
+              {order >= 0 ? order + 1 : ""}
+            </span>
+            <span className="srcdoc-member-name">{m.name}</span>
+          </label>
           <span className="srcdoc-member-role">{m.designation}</span>
           <button
             type="button"
             className="srcdoc-icon"
             onClick={() => remove.mutate(m.personId)}
             disabled={remove.isPending}
-            aria-label={t("Remove from firm", "फर्म से हटाएँ")}
+            aria-label={t("Remove from the firm's saved partners", "फर्म के सहेजे पार्टनरों से हटाएँ")}
+            title={t("Remove from the firm's saved partners", "फर्म के सहेजे पार्टनरों से हटाएँ")}
           >
             <X className="size-3.5" aria-hidden />
           </button>
         </div>
-      ))}
+        );
+      })}
+      {list.length > 1 && ticked.length === 0 && (
+        <p className="srcdoc-member-due">{t("Tick at least one partner.", "कम से कम एक पार्टनर टिक करें।")}</p>
+      )}
       {adding ? (
         <div className="srcdoc-member-add">
           <select className="srcdoc-kind-select" value={designation} onChange={(e) => setDesignation(e.target.value)}>
@@ -245,7 +308,8 @@ function FirmMembersBox({ firmId, t }: { firmId: string; t: T }) {
             onlyPeople
             placeholder={t("Find the partner: name, Aadhaar", "पार्टनर खोजें: नाम, आधार")}
             onPick={(person) => {
-              add.mutate({ personId: person.id, designation });
+              // Added while drafting this deed: they sign it.
+              add.mutate({ personId: person.id, designation }, { onSuccess: () => onChoose([...ticked, person.id]) });
               setAdding(false);
             }}
             t={t}
@@ -276,6 +340,9 @@ function UploadSlot({
   onUnpick,
   partyType,
   onPartyType,
+  signers,
+  onSigners,
+  onSignerCount,
   t,
 }: {
   deedId: string;
@@ -290,6 +357,10 @@ function UploadSlot({
   /** Seller and buyer only: whether this side is a person or an organisation. */
   partyType?: PartyType;
   onPartyType?: (type: PartyType) => void;
+  /** For each picked firm: its partners ticked for this deed. */
+  signers?: Record<string, string[]>;
+  onSigners?: (firmId: string, ids: string[]) => void;
+  onSignerCount?: (firmId: string, count: number) => void;
   t: T;
 }) {
   const add = useAddSourceDocument(deedId);
@@ -437,7 +508,15 @@ function UploadSlot({
                   <X className="size-3.5" aria-hidden />
                 </button>
               </div>
-              {person.partyType === "company" && <FirmMembersBox firmId={person.id} t={t} />}
+              {person.partyType === "company" && (
+                <FirmMembersBox
+                  firmId={person.id}
+                  chosen={signers?.[person.id]}
+                  onChoose={(ids) => onSigners?.(person.id, ids)}
+                  onCount={(count) => onSignerCount?.(person.id, count)}
+                  t={t}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -462,15 +541,12 @@ export function DeedSourceDocumentsPanel({
   deedId,
   title,
   content,
-  onInsert,
   onApplyFills,
 }: {
   deedId: string;
   /** The deed as it stands, to tell what kind of property it sells. */
   title: string;
   content: string;
-  /** Drop a value into the deed at the cursor. Returns false if it could not. */
-  onInsert: (value: string) => boolean;
   /**
    * Apply the agreed changes to the deed as it stands now. Returns how many
    * landed; the rest no longer matched because the text changed meanwhile.
@@ -557,7 +633,17 @@ export function DeedSourceDocumentsPanel({
    * only: they are a choice for the next "fill", not part of the deed.
    */
   const [picked, setPicked] = useState<Record<"seller" | "buyer", PartyMeta[]>>({ seller: [], buyer: [] });
-  const pickedIds = { seller: picked.seller.map((x) => x.id), buyer: picked.buyer.map((x) => x.id) };
+  /** For each picked firm: who signs this deed, and how many partners it has saved. */
+  const [signers, setSigners] = useState<Record<string, string[]>>({});
+  const [signerCount, setSignerCount] = useState<Record<string, number>>({});
+  const pickedFirms = [...picked.seller, ...picked.buyer].filter((x) => x.partyType === "company");
+  const pickedIds = {
+    seller: picked.seller.map((x) => x.id),
+    buyer: picked.buyer.map((x) => x.id),
+    signers: Object.fromEntries(pickedFirms.filter((f) => signers[f.id]).map((f) => [f.id, signers[f.id]!])),
+  };
+  /** A firm with partners saved but nobody ticked: the fill would not know who signs. */
+  const firmsAwaitingSigners = pickedFirms.filter((f) => (signerCount[f.id] ?? 0) > 0 && !(signers[f.id]?.length));
   function pick(role: "seller" | "buyer", person: PartyMeta) {
     if (person.partyType === "company" && partyTypes[role] !== "organisation") choosePartyType(role, "organisation");
     setPicked((prev) => {
@@ -580,8 +666,9 @@ export function DeedSourceDocumentsPanel({
   const nameCheck = useNameCheck(deedId, farmland, content, pickedIds.seller);
   const nameWarnings = farmland ? (nameCheck.data?.warnings ?? []) : [];
 
-  const [justInserted, setJustInserted] = useState<string | null>(null);
-  const [needsCursor, setNeedsCursor] = useState(false);
+  /** The one fact being placed on its own, while its place is worked out. */
+  const [placing, setPlacing] = useState<string | null>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
   const propose = useProposeFill(deedId);
   const [proposal, setProposal] = useState<FillProposal | null>(null);
   /** Indexes into proposal.fills the person has un-ticked. */
@@ -605,17 +692,25 @@ export function DeedSourceDocumentsPanel({
     setProposal(null);
   }
 
-  function insert(field: ExtractedField) {
-    const ok = onInsert(field.value);
-    setNeedsCursor(!ok);
-    if (ok) {
-      setJustInserted(field.label + field.value);
-      window.setTimeout(() => setJustInserted(null), 1200);
-    }
+  /** Place one fact: the deed is read to find where it goes, and the change is shown first. */
+  function placeOne(role: DocumentRole, field: ExtractedField, key: string) {
+    setApplyResult(null);
+    setPlacing(key);
+    propose.mutate(
+      { kind, people: pickedIds, partyTypes, only: { role, label: field.label, value: field.value } },
+      {
+        onSuccess: (p) => {
+          setProposal(p);
+          setRejected(new Set());
+          window.requestAnimationFrame(() => reviewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+        },
+        onSettled: () => setPlacing(null),
+      },
+    );
   }
 
   const untouched = ROLES.filter((r) => !hasFor(r));
-  const canFill = anyFields || picked.seller.length > 0 || picked.buyer.length > 0;
+  const canFill = (anyFields || picked.seller.length > 0 || picked.buyer.length > 0) && firmsAwaitingSigners.length === 0;
 
   return (
     <aside className="srcdoc">
@@ -671,6 +766,11 @@ export function DeedSourceDocumentsPanel({
           onUnpick={role === "property" ? undefined : (id) => unpick(role, id)}
           partyType={role === "property" ? undefined : partyTypes[role]}
           onPartyType={role === "property" ? undefined : (type) => choosePartyType(role, type)}
+          signers={signers}
+          onSigners={(firmId, ids) => setSigners((prev) => ({ ...prev, [firmId]: ids }))}
+          onSignerCount={(firmId, count) =>
+            setSignerCount((prev) => (prev[firmId] === count ? prev : { ...prev, [firmId]: count }))
+          }
           note={
             farmland && role === "seller"
               ? t(
@@ -697,10 +797,18 @@ export function DeedSourceDocumentsPanel({
         </div>
       )}
 
+      {firmsAwaitingSigners.length > 0 && !proposal && (
+        <p className="srcdoc-member-due srcdoc-member-due--fill">
+          {t(
+            `Tick who signs for ${firmsAwaitingSigners.map((f) => f.name).join(", ")} to fill the deed.`,
+            `विलेख भरने के लिए ${firmsAwaitingSigners.map((f) => f.name).join(", ")} के पार्टनर टिक करें।`,
+          )}
+        </p>
+      )}
       {canFill && !proposal && (
         <>
           <button type="button" className="srcdoc-auto" onClick={askWhereItGoes} disabled={propose.isPending}>
-            {propose.isPending ? (
+            {propose.isPending && !placing ? (
               <>
                 <Loader2 className="size-4 srcdoc-spin" aria-hidden />
                 {t("Working out where each goes…", "देखा जा रहा है कि क्या कहाँ भरना है…")}
@@ -730,7 +838,7 @@ export function DeedSourceDocumentsPanel({
       )}
 
       {proposal && (
-        <div className="srcdoc-review">
+        <div className="srcdoc-review" ref={reviewRef}>
           <h5 className="srcdoc-fields-title">{t("Check before filling", "भरने से पहले देख लें")}</h5>
           {proposal.warnings.map((w, i) => (
             <p key={"w" + i} className="srcdoc-warning srcdoc-warning--error srcdoc-review-warning" role="alert">
@@ -785,18 +893,23 @@ export function DeedSourceDocumentsPanel({
       {anyFields && (
         <div className="srcdoc-fields">
           <h5 className="srcdoc-fields-title">{t("What was found", "निकाली गई जानकारी")}</h5>
-          {needsCursor && (
-            <p className="srcdoc-error">
-              {t("Click in the deed where it should go, then press भरें.", "पहले विलेख में वहाँ क्लिक करें जहाँ भरना है, फिर भरें दबाएँ।")}
-            </p>
-          )}
           {ROLES.map((role) =>
             fieldsByRole[role].length === 0 ? null : (
               <div key={role} className="srcdoc-group">
                 <div className="srcdoc-group-name">{t(...ROLE_TEXT[role].title)}</div>
-                {fieldsByRole[role].map((f, i) => (
-                  <FieldRow key={role + i + f.label} field={f} done={justInserted === f.label + f.value} onFill={() => insert(f)} t={t} />
-                ))}
+                {fieldsByRole[role].map((f, i) => {
+                  const key = role + i + f.label;
+                  return (
+                    <FieldRow
+                      key={key}
+                      field={f}
+                      busy={placing === key}
+                      disabled={propose.isPending || !!proposal}
+                      onFill={() => placeOne(role, f, key)}
+                      t={t}
+                    />
+                  );
+                })}
               </div>
             ),
           )}

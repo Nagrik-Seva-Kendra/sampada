@@ -87,16 +87,6 @@ export function DeedEditPage() {
   const [content, setContent] = useState("");
   // Emptying the box is also the way to dismiss the note about it.
   const [sampleCleared, setSampleCleared] = useState(false);
-  /**
-   * Whether the deed box has ever held the caret.
-   *
-   * selectionStart reads 0 both for "cursor at the very start" and for "never
-   * touched", and those want opposite behaviour: the first is a real place to
-   * paste, the second would drop a name above the heading. A textarea keeps its
-   * selection when focus moves to the panel button, so the position itself can
-   * simply be read back at the moment of the insert.
-   */
-  const caretSeenRef = useRef(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -266,29 +256,6 @@ export function DeedEditPage() {
   }
 
   /**
-   * Drop one value from the documents panel into the deed, replacing whatever
-   * is selected. Select a blank -- "<विक्रेता का नाम>", "........" -- and press
-   * Fill, and the blank becomes the value. Returns false when there is nowhere
-   * to put it yet, so the panel can say so instead of guessing.
-   */
-  function insertAtCaret(value: string): boolean {
-    const el = textareaRef.current;
-    if (!el || !caretSeenRef.current) return false;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const next = content.slice(0, start) + value + content.slice(end);
-    setContent(next);
-    // After React repaints, put the caret just past what was inserted so a
-    // second Fill continues from there rather than overwriting it.
-    const after = start + value.length;
-    window.requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(after, after);
-    });
-    return true;
-  }
-
-  /**
    * Apply the changes someone ticked in the documents panel.
    *
    * Runs against the deed as it is now, not as it was when the suggestions
@@ -430,8 +397,6 @@ export function DeedEditPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onScroll={onTextareaScroll}
-                onSelect={() => { caretSeenRef.current = true; }}
-                onFocus={() => { caretSeenRef.current = true; }}
                 required
                 maxLength={40000}
               />
@@ -503,7 +468,6 @@ export function DeedEditPage() {
             deedId={id}
             title={title}
             content={content}
-            onInsert={insertAtCaret}
             onApplyFills={applyFills}
           />
         </div>

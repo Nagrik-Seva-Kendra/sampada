@@ -52,6 +52,11 @@ export interface ProposedFill {
 export interface PickedPeople {
   seller: string[];
   buyer: string[];
+  /**
+   * For a picked firm: which of its saved partners sign this deed, in the
+   * order the deed lists them. A firm left out brings all its partners.
+   */
+  signers?: Record<string, string[]>;
 }
 
 export const NO_PEOPLE: PickedPeople = { seller: [], buyer: [] };
@@ -59,15 +64,32 @@ export const NO_PEOPLE: PickedPeople = { seller: [], buyer: [] };
 /** At most this many people per slot -- a deed, not a mailing list. */
 const MAX_PICKED = 10;
 
-/** Reads `{seller: [...ids], buyer: [...ids]}` from a request body, dropping anything else. */
+/** Reads `{seller: [...ids], buyer: [...ids], signers: {firmId: [...ids]}}` from a request body, dropping anything else. */
 export function parsePickedPeople(raw: unknown): PickedPeople {
   if (!raw || typeof raw !== "object") return NO_PEOPLE;
-  const ids = (v: unknown) =>
-    Array.isArray(v)
-      ? v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 64).slice(0, MAX_PICKED)
-      : [];
+  const isId = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= 64;
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter(isId))].slice(0, MAX_PICKED) : []);
   const r = raw as Record<string, unknown>;
-  return { seller: ids(r.seller), buyer: ids(r.buyer) };
+  const out: PickedPeople = { seller: ids(r.seller), buyer: ids(r.buyer) };
+  if (r.signers && typeof r.signers === "object" && !Array.isArray(r.signers)) {
+    const firms = [...out.seller, ...out.buyer];
+    const signers: Record<string, string[]> = {};
+    for (const [firmId, list] of Object.entries(r.signers as Record<string, unknown>)) {
+      if (firms.includes(firmId) && Array.isArray(list)) signers[firmId] = ids(list);
+    }
+    if (Object.keys(signers).length > 0) out.signers = signers;
+  }
+  return out;
+}
+
+/** The firm's saved partners who sign this deed: the chosen ones in the chosen order, or all of them. */
+export function chosenSigners<T extends { personId: string }>(members: T[], chosen: string[] | undefined): T[] {
+  if (!chosen) return members;
+  const byId = new Map(members.map((m) => [m.personId, m]));
+  return chosen.flatMap((id) => {
+    const m = byId.get(id);
+    return m ? [m] : [];
+  });
 }
 
 /** Which sides of the deed are an organisation rather than a person. */
@@ -356,7 +378,11 @@ export class DeedSourceDocumentsService {
       if (r.aadhaarNumber) facts.push({ label: "आधार नं.", value: groupAadhaar(r.aadhaarNumber), group: "party" });
       if (r.panNumber) facts.push({ label: "पैन नं.", value: r.panNumber, group: "party" });
       if (r.dob) facts.push({ label: "जन्म तिथि", value: r.dob, group: "party" });
-      if (isOrg) facts.push(...memberFacts(signatories.get(r.id) ?? []));
+      if (isOrg) {
+        // memberFacts sorts by position; renumber so the chosen order holds.
+        const signing = chosenSigners(signatories.get(r.id) ?? [], people.signers?.[r.id]);
+        facts.push(...memberFacts(signing.map((m, position) => ({ ...m, position }))));
+      }
       return [{ name: r.name, facts }];
     };
     return { seller: people.seller.flatMap(toFacts), buyer: people.buyer.flatMap(toFacts) };
@@ -367,6 +393,7 @@ export class DeedSourceDocumentsService {
     farmland: boolean,
     people: PickedPeople = NO_PEOPLE,
     orgs: PartySides = NO_ORGANISATIONS,
+    only?: SingleFact,
   ): Promise<FillProposal> {
     const deed = await this.prisma.deedTemplate.findUnique({
       where: { id: deedId },
@@ -387,11 +414,13 @@ export class DeedSourceDocumentsService {
       throw new BadRequestException("Nothing has been read from the documents yet.");
     }
 
-    const raw = await proposePlacements(deed.content, byRole, farmland, orgs);
+    const raw = await proposePlacements(deed.content, byRole, farmland, orgs, only);
 
     const fills: ProposedFill[] = [];
     const skipped: { why: string; reason: string }[] = [];
     for (const item of raw) {
+      // Asked for one fact: nothing else in the deed moves.
+      if (only && item.role !== only.role) continue;
       // A part of the deed nobody uploaded papers for keeps what it has. The
       // prompt says so; this makes it true even if the model does not listen.
       if (!given.has(item.role)) {
@@ -774,11 +803,38 @@ const FARMLAND_NOTE =
   "PROPERTY के कागज़ों में \"भूमिस्वामी का नाम\" में है, ID पर छपे नाम से नहीं। विक्रेता की ID से केवल " +
   "आधार/पैन नंबर, पता और जन्म तिथि लें।";
 
+/** One fact the drafter asked to place on its own, from the "what was found" list. */
+export interface SingleFact {
+  role: DocumentRole;
+  label: string;
+  value: string;
+}
+
+/** Reads `{role, label, value}`; anything malformed means "fill everything". */
+export function parseSingleFact(raw: unknown): SingleFact | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const { role, label, value } = raw as Record<string, unknown>;
+  if (role !== "seller" && role !== "buyer" && role !== "property") return undefined;
+  if (typeof label !== "string" || typeof value !== "string") return undefined;
+  if (!label.trim() || !value.trim() || label.length > 80 || value.length > 400) return undefined;
+  return { role, label: label.trim(), value: value.trim() };
+}
+
+function singleFactNote(only: SingleFact): string {
+  return [
+    "केवल यह एक तथ्य विलेख में सही जगह भरें:",
+    `${ROLE_HEADING[only.role]} — ${only.label}: ${only.value}`,
+    "ऊपर के बाकी तथ्य केवल यह समझने के लिए हैं कि यह किस व्यक्ति या हिस्से का है; उनके लिए कोई बदलाव न लौटाएँ।",
+    "जो बदलाव लौटाएँ उसकी role यही हो। यदि विलेख में यह पहले से सही लिखा है तो [] लौटाएँ।",
+  ].join("\n");
+}
+
 async function proposePlacements(
   deedText: string,
   byRole: Record<DocumentRole, ExtractedField[]>,
   farmland: boolean,
   orgs: PartySides,
+  only?: SingleFact,
 ): Promise<ProposedFill[]> {
   const heading = (r: DocumentRole) =>
     ROLE_HEADING[r] + (sideIsOrganisation(r, orgs) ? " — यह पक्ष एक संस्था है" : "");
@@ -790,6 +846,7 @@ async function proposePlacements(
   const notes: string[] = [];
   if (orgs.seller || orgs.buyer) notes.push(ORGANISATION_NOTE);
   if (farmland && ownerNamesOf(byRole.property).length > 0) notes.push(FARMLAND_NOTE);
+  if (only) notes.push(singleFactNote(only));
   const note = notes.length ? "\n\n" + notes.join("\n\n") : "";
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new BadRequestException("Filling is not set up on the server yet (ANTHROPIC_API_KEY is missing).");

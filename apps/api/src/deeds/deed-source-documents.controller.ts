@@ -23,6 +23,7 @@ import {
   parseDocumentRole,
   parseOrganisations,
   parsePickedPeople,
+  parseSingleFact,
   type UploadedDoc,
 } from "./deed-source-documents.service.js";
 
@@ -74,13 +75,14 @@ export class DeedSourceDocumentsController {
   @Post("propose-fill")
   proposeFill(
     @Param("deedId") deedId: string,
-    @Body() body: { kind?: unknown; people?: unknown; partyTypes?: unknown },
+    @Body() body: { kind?: unknown; people?: unknown; partyTypes?: unknown; only?: unknown },
   ) {
     return this.service.proposeFill(
       deedId,
       body?.kind === "agriculture",
       parsePickedPeople(body?.people),
       parseOrganisations(body?.partyTypes),
+      parseSingleFact(body?.only),
     );
   }
 
