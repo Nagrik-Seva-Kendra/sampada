@@ -247,6 +247,7 @@ model Organization {
   parties             Party[]
   deedParties         DeedParty[]
   deedNaxas           DeedNaxa[]
+  deedSourceDocuments DeedSourceDocument[]
   deedPropertyDetails DeedPropertyDetail[]
   guidelineDocuments  GuidelineDocument[]
   usersLastActiveHere User[]                  @relation("UserLastActiveOrganization")
@@ -342,6 +343,39 @@ model DeedNaxa {
   mimeType       String
   size           Int
   data           Bytes
+  createdAt      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([deedId])
+  @@index([organizationId, deedId])
+}
+
+/// Whatever paperwork a deed was drafted from: Aadhaar, PAN, khasra/B1,
+/// bhu-adhikar pustika, an older registry — anything about that property, in
+/// one place, rather than a separate store per document kind.
+///
+/// `extracted` is the model's reading of the file: a JSON array of
+/// {label, value, group} it found, cached so re-opening the deed does not
+/// re-bill the same page. Null means not read yet; an empty array means it was
+/// read and nothing useful came out. `extractError` records why a read
+/// failed, so the panel can say so rather than silently showing nothing.
+///
+/// Bytes in Postgres, for the same persistence reason as Party/DeedNaxa.
+model DeedSourceDocument {
+  id             String       @id @default(cuid())
+  deedId         String
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  /// Whose paper this is: "seller", "buyer", or "property". Uploaded into
+  /// separate slots so placement never has to guess from a name on a card.
+  role           String       @default("property")
+  extracted      Json?
+  extractError   String?
+  uploadedById   String?
+  uploadedByName String?
   createdAt      DateTime     @default(now())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

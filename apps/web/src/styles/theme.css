@@ -4357,3 +4357,609 @@ h3 {
 .deed-sample-clear:hover {
   color: var(--fg);
 }
+
+/* ---------- deed editor: the paperwork panel beside the deed ----------
+   The deed column keeps the width it always had (max 1000px); the panel uses
+   the empty space to its right rather than taking any of the typing area. */
+.deed-edit-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+.deed-edit-layout > form {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 1000px;
+}
+.srcdoc {
+  flex: 0 0 320px;
+  align-self: stretch;
+  position: sticky;
+  top: 16px;
+  margin-top: 20px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+/* Below this the two columns no longer both fit; the panel goes under the deed
+   rather than squeezing the text people are trying to read. */
+@media (max-width: 1180px) {
+  .deed-edit-layout {
+    flex-direction: column;
+  }
+  .srcdoc {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+    max-height: none;
+    margin-top: 0;
+  }
+}
+
+.srcdoc-head {
+  margin-bottom: 12px;
+}
+.srcdoc-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 3px;
+  color: var(--accent);
+}
+
+.srcdoc-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: center;
+}
+.srcdoc-drop.is-dragging {
+  border-color: var(--accent);
+  border-style: solid;
+}
+.srcdoc-pick {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.srcdoc-drop-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.srcdoc-busy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.srcdoc-spin {
+  animation: srcdoc-spin 0.9s linear infinite;
+}
+@keyframes srcdoc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Reading a document is the one slow step here; a reader who has asked for no
+   motion still needs to see that something is happening, so the icon stays. */
+@media (prefers-reduced-motion: reduce) {
+  .srcdoc-spin {
+    animation: none;
+  }
+}
+.srcdoc-error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a32424;
+}
+:root[data-theme="dark"] .srcdoc-error {
+  color: #ff9b9b;
+}
+.srcdoc-empty {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.srcdoc-files {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.srcdoc-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+}
+.srcdoc-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.srcdoc-file-size {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.srcdoc-icon {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+}
+.srcdoc-icon:hover {
+  color: var(--fg);
+}
+
+.srcdoc-fields {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.srcdoc-fields-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.srcdoc-group + .srcdoc-group {
+  margin-top: 14px;
+}
+.srcdoc-group-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.srcdoc-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+}
+.srcdoc-field + .srcdoc-field {
+  border-top: 1px solid var(--border);
+}
+.srcdoc-field-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.srcdoc-field-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.srcdoc-field-value {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.srcdoc-fill {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--accent);
+  cursor: pointer;
+}
+.srcdoc-fill:hover {
+  border-color: var(--accent);
+}
+
+/* Search box inside the seller and buyer slots. */
+.srcdoc-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.srcdoc-search::placeholder {
+  color: var(--muted);
+}
+
+
+/* "Fill the deed from these", and the list of changes to check before they
+   land. Old text struck through, new text beneath it, each one untickable. */
+.srcdoc-auto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.srcdoc-auto:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+.srcdoc-done {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2e7d32;
+}
+:root[data-theme="dark"] .srcdoc-done {
+  color: #8fd19e;
+}
+.srcdoc-review {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.srcdoc-change {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.srcdoc-change + .srcdoc-change {
+  border-top: 1px solid var(--border);
+}
+.srcdoc-change input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.srcdoc-change.is-off .srcdoc-change-body {
+  opacity: 0.45;
+}
+.srcdoc-change-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.srcdoc-change-why {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.srcdoc-change-old,
+.srcdoc-change-new {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.srcdoc-change-old {
+  text-decoration: line-through;
+  color: var(--muted);
+  background: rgb(163 36 36 / 0.08);
+}
+.srcdoc-change-new {
+  font-weight: 600;
+  background: rgb(46 125 50 / 0.1);
+}
+.srcdoc-review-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.srcdoc-apply {
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.srcdoc-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.srcdoc-cancel {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+/* What the deed sells, and the paperwork that kind usually needs. */
+.srcdoc-kind {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.srcdoc-kind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.srcdoc-kind-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.srcdoc-kind-select {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.srcdoc-checklist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.srcdoc-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.srcdoc-check.is-have {
+  color: var(--fg);
+  font-weight: 600;
+}
+.srcdoc-check.is-have svg {
+  color: #2e7d32;
+}
+:root[data-theme="dark"] .srcdoc-check.is-have svg {
+  color: #8fd19e;
+}
+
+/* Three upload slots -- seller's ID, buyer's ID, property papers -- each with
+   its own drop zone, so whose paper it is never has to be guessed. */
+.srcdoc-slot {
+  margin-top: 12px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+}
+.srcdoc-slot--seller {
+  border-left-color: #b5651d;
+}
+.srcdoc-slot--buyer {
+  border-left-color: #2f6fa8;
+}
+.srcdoc-slot--property {
+  border-left-color: #3d8b5a;
+}
+.srcdoc-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.srcdoc-slot-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+.srcdoc-slot-ok {
+  color: #2e7d32;
+}
+:root[data-theme="dark"] .srcdoc-slot-ok {
+  color: #8fd19e;
+}
+.srcdoc-slot-hint {
+  margin: 3px 0 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.srcdoc-drop--small {
+  flex-direction: row;
+  justify-content: center;
+  padding: 9px 10px;
+}
+.srcdoc-keep {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+/* Whose section a proposed change edits, in the same colour as its slot. */
+.srcdoc-role {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #fff;
+}
+.srcdoc-role--seller {
+  background: #b5651d;
+}
+.srcdoc-role--buyer {
+  background: #2f6fa8;
+}
+.srcdoc-role--property {
+  background: #3d8b5a;
+}
+
+/* Farmland: the naming rule under the seller slot, and the ID-vs-khasra check. */
+.srcdoc-slot-note {
+  margin: -4px 0 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: rgb(181 101 29 / 0.1);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.srcdoc-warnings {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(163 36 36 / 0.35);
+  border-radius: var(--radius-sm);
+  background: rgb(163 36 36 / 0.06);
+}
+.srcdoc-warnings-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #a32424;
+}
+:root[data-theme="dark"] .srcdoc-warnings-title {
+  color: #ff9b9b;
+}
+.srcdoc-warning {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.srcdoc-warning--error {
+  font-weight: 700;
+}
+.srcdoc-warning--notice {
+  color: var(--muted);
+}
+
+/* Picking someone already on file, inside a seller or buyer slot. */
+.srcdoc-picker {
+  margin-top: 8px;
+}
+.srcdoc-pick-person {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.srcdoc-pick-person:hover {
+  border-color: var(--accent);
+}
+.srcdoc-pick-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.srcdoc-pick-meta {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.srcdoc-file--person {
+  gap: 6px;
+}
+
+/* Person / organisation switch in the seller and buyer slots. */
+.srcdoc-type {
+  display: inline-flex;
+  margin: 6px 0 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.srcdoc-type-btn {
+  padding: 3px 11px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+.srcdoc-type-btn.is-on {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.srcdoc-org-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.srcdoc-review-warning {
+  margin: 0 0 10px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: rgb(163 36 36 / 0.08);
+  color: #a32424;
+}
+:root[data-theme="dark"] .srcdoc-review-warning {
+  color: #ff9b9b;
+}

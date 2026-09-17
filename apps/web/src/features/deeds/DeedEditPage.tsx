@@ -13,6 +13,7 @@ import { downloadDeedPdf } from "./deedPdf";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
 import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
+import { DeedSourceDocumentsPanel } from "./DeedSourceDocumentsPanel";
 import { AmountAudit, confirmAmountsBeforePrint } from "../../components/AmountAudit";
 
 /**
@@ -86,6 +87,16 @@ export function DeedEditPage() {
   const [content, setContent] = useState("");
   // Emptying the box is also the way to dismiss the note about it.
   const [sampleCleared, setSampleCleared] = useState(false);
+  /**
+   * Whether the deed box has ever held the caret.
+   *
+   * selectionStart reads 0 both for "cursor at the very start" and for "never
+   * touched", and those want opposite behaviour: the first is a real place to
+   * paste, the second would drop a name above the heading. A textarea keeps its
+   * selection when focus moves to the panel button, so the position itself can
+   * simply be read back at the moment of the insert.
+   */
+  const caretSeenRef = useRef(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFailed, setPdfFailed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -254,9 +265,57 @@ export function DeedEditPage() {
     );
   }
 
+  /**
+   * Drop one value from the documents panel into the deed, replacing whatever
+   * is selected. Select a blank -- "<विक्रेता का नाम>", "........" -- and press
+   * Fill, and the blank becomes the value. Returns false when there is nowhere
+   * to put it yet, so the panel can say so instead of guessing.
+   */
+  function insertAtCaret(value: string): boolean {
+    const el = textareaRef.current;
+    if (!el || !caretSeenRef.current) return false;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? start;
+    const next = content.slice(0, start) + value + content.slice(end);
+    setContent(next);
+    // After React repaints, put the caret just past what was inserted so a
+    // second Fill continues from there rather than overwriting it.
+    const after = start + value.length;
+    window.requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(after, after);
+    });
+    return true;
+  }
+
+  /**
+   * Apply the changes someone ticked in the documents panel.
+   *
+   * Runs against the deed as it is now, not as it was when the suggestions
+   * were made -- the drafter may have typed in between. So each change is
+   * re-checked here: its text must still be present exactly once, or it is
+   * left alone and counted as missed rather than landing on the wrong line.
+   */
+  function applyFills(fills: { find: string; replace: string }[]): { applied: number; missed: number } {
+    let next = content;
+    let applied = 0;
+    let missed = 0;
+    for (const f of fills) {
+      const first = next.indexOf(f.find);
+      if (first === -1 || next.indexOf(f.find, first + f.find.length) !== -1) {
+        missed++;
+        continue;
+      }
+      next = next.slice(0, first) + f.replace + next.slice(first + f.find.length);
+      applied++;
+    }
+    if (applied > 0) setContent(next);
+    return { applied, missed };
+  }
+
   return (
     <section className="page">
-      <div className="wrap" style={{ maxWidth: 1000 }}>
+      <div className="wrap" style={{ maxWidth: 1400 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 className="page-title" style={{ margin: 0 }}>
             {isNew ? t("deedsNewDeedTitle") : t("deedsEditDeed")}
@@ -299,6 +358,7 @@ export function DeedEditPage() {
           </div>
         )}
 
+        <div className="deed-edit-layout">
         <form className="modal-form" onSubmit={onSubmit} style={{ marginTop: 20 }}>
           <label className="modal-field">
             {t("deedsColName")}
@@ -370,6 +430,8 @@ export function DeedEditPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onScroll={onTextareaScroll}
+                onSelect={() => { caretSeenRef.current = true; }}
+                onFocus={() => { caretSeenRef.current = true; }}
                 required
                 maxLength={40000}
               />
@@ -437,6 +499,14 @@ export function DeedEditPage() {
             </button>
           </div>
         </form>
+          <DeedSourceDocumentsPanel
+            deedId={id}
+            title={title}
+            content={content}
+            onInsert={insertAtCaret}
+            onApplyFills={applyFills}
+          />
+        </div>
 
         {type === "sale-deed" && (
           <div id="naksha-section">

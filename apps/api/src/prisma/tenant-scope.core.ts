@@ -9,6 +9,7 @@ export const TENANT_MODELS = [
   "Party",
   "DeedParty",
   "DeedNaxa",
+  "DeedSourceDocument",
   "DeedCorrectionRequest",
   "DeedPropertyDetail",
 ] as const;

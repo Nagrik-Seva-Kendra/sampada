@@ -13,6 +13,7 @@ import { PATH_METADATA } from "@nestjs/common/constants.js";
 import { DeedDocumentsController } from "./deed-documents.controller.js";
 import { DeedPropertyDetailController } from "./deed-property-detail.controller.js";
 import { DeedPresenceController } from "./deed-presence.controller.js";
+import { DeedSourceDocumentsController } from "./deed-source-documents.controller.js";
 import { DeedVisibleGuard } from "./deed-visible.guard.js";
 
 const GUARDS = "__guards__";
@@ -46,6 +47,7 @@ const CONTROLLERS: [string, Ctor][] = [
   ["DeedDocumentsController", DeedDocumentsController as unknown as Ctor],
   ["DeedPropertyDetailController", DeedPropertyDetailController as unknown as Ctor],
   ["DeedPresenceController", DeedPresenceController as unknown as Ctor],
+  ["DeedSourceDocumentsController", DeedSourceDocumentsController as unknown as Ctor],
 ];
 
 describe("per-deed staff routes", () => {
