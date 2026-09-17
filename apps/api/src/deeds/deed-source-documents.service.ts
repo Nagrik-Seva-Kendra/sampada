@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { checkSellerNames, type NameWarning } from "./seller-name-check.js";
+import { PartyMembersService, memberFacts } from "./party-members.service.js";
 
 /** Prisma's type for a Bytes column; Buffer is the same bytes, typed wider. */
 type DocBytes = Prisma.DeedSourceDocumentCreateInput["data"];
@@ -209,7 +210,10 @@ Rules:
  */
 @Injectable()
 export class DeedSourceDocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly partyMembers: PartyMembersService,
+  ) {}
 
   async list(deedId: string): Promise<SourceDocumentItem[]> {
     const rows = await this.prisma.deedSourceDocument.findMany({
@@ -340,6 +344,9 @@ export class DeedSourceDocumentsService {
       select: { id: true, name: true, partyType: true, address: true, aadhaarNumber: true, panNumber: true, dob: true },
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
+    // An organisation comes with the people who act for it, so picking the
+    // firm replaces the previous firm's partners too.
+    const signatories = await this.partyMembers.membersOf(rows.filter((r) => r.partyType === "company").map((r) => r.id));
     const toFacts = (id: string) => {
       const r = byId.get(id);
       if (!r) return [];
@@ -349,6 +356,7 @@ export class DeedSourceDocumentsService {
       if (r.aadhaarNumber) facts.push({ label: "आधार नं.", value: groupAadhaar(r.aadhaarNumber), group: "party" });
       if (r.panNumber) facts.push({ label: "पैन नं.", value: r.panNumber, group: "party" });
       if (r.dob) facts.push({ label: "जन्म तिथि", value: r.dob, group: "party" });
+      if (isOrg) facts.push(...memberFacts(signatories.get(r.id) ?? []));
       return [{ name: r.name, facts }];
     };
     return { seller: people.seller.flatMap(toFacts), buyer: people.buyer.flatMap(toFacts) };

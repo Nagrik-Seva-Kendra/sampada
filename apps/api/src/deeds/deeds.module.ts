@@ -13,6 +13,8 @@ import { DeedPresenceService } from "./deed-presence.service.js";
 import { DeedVisibleGuard } from "./deed-visible.guard.js";
 import { DeedSourceDocumentsController } from "./deed-source-documents.controller.js";
 import { DeedSourceDocumentsService } from "./deed-source-documents.service.js";
+import { PartyMembersController } from "./party-members.controller.js";
+import { PartyMembersService } from "./party-members.service.js";
 import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interceptor.js";
 
 @Module({
@@ -22,6 +24,7 @@ import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interc
     DeedPropertyDetailController,
     DeedPresenceController,
     DeedSourceDocumentsController,
+    PartyMembersController,
     PublicDeedsController,
     PublicDeedDocumentsController,
   ],
@@ -32,6 +35,7 @@ import { PublicDeedTenantInterceptor } from "../tenant/public-deed-tenant.interc
     DeedLiveService,
     DeedPresenceService,
     DeedSourceDocumentsService,
+    PartyMembersService,
     DeedVisibleGuard,
     PublicDeedTenantInterceptor,
   ],

@@ -9,7 +9,13 @@ import {
 } from "./propertyKind";
 import { useUiStore } from "../../stores/uiStore";
 import { detectPartyTypes, type PartyType, type Side } from "./partySides";
-import { useSearchParties, type PartyMeta } from "./useDeedDocuments";
+import {
+  DESIGNATIONS,
+  useChangeFirmMembers,
+  useFirmMembers,
+  useSearchParties,
+  type PartyMeta,
+} from "./useDeedDocuments";
 import {
   useNameCheck,
   useProposeFill,
@@ -114,16 +120,23 @@ function FieldRow({ field, done, onFill, t }: { field: ExtractedField; done: boo
 function SavedPersonPicker({
   picked,
   onPick,
+  onlyPeople,
+  placeholder,
   t,
 }: {
   picked: PartyMeta[];
   onPick: (person: PartyMeta) => void;
+  /** Hide organisations -- a firm's partner is a person. */
+  onlyPeople?: boolean;
+  placeholder?: string;
   t: T;
 }) {
   const [query, setQuery] = useState("");
   const results = useSearchParties(query);
   const pickedIds = new Set(picked.map((x) => x.id));
-  const list = (results.data ?? []).filter((x) => !pickedIds.has(x.id));
+  const list = (results.data ?? []).filter(
+    (x) => !pickedIds.has(x.id) && (!onlyPeople || x.partyType !== "company"),
+  );
   const searching = query.trim().length >= 2;
 
   return (
@@ -133,7 +146,7 @@ function SavedPersonPicker({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={t("Or pick someone saved: name, Aadhaar, PAN", "या सहेजे गए व्यक्ति को चुनें: नाम, आधार, पैन")}
+        placeholder={placeholder ?? t("Or pick someone saved: name, Aadhaar, PAN", "या सहेजे गए व्यक्ति को चुनें: नाम, आधार, पैन")}
       />
       {searching && !results.isLoading && list.length === 0 && (
         <p className="srcdoc-empty">{t("Nobody by that name yet.", "इस नाम से कोई नहीं मिला।")}</p>
@@ -155,6 +168,11 @@ function SavedPersonPicker({
                 {person.name}
                 {person.partyType === "company" && <span className="srcdoc-org-tag">{t("Organisation", "संस्था")}</span>}
               </span>
+              {person.members && person.members.length > 0 && (
+                <span className="srcdoc-pick-partners">
+                  {person.members.map((m) => `${m.designation}: ${m.name}`).join(" · ")}
+                </span>
+              )}
               <span className="srcdoc-pick-meta">
                 {person.partyType === "company"
                   ? person.panNumber
@@ -169,6 +187,76 @@ function SavedPersonPicker({
             </button>
           );
         })}
+    </div>
+  );
+}
+
+/**
+ * Who acts for a picked firm, kept with the firm itself: add them once and
+ * every later deed that picks the firm writes them in.
+ */
+function FirmMembersBox({ firmId, t }: { firmId: string; t: T }) {
+  const members = useFirmMembers(firmId);
+  const { add, remove } = useChangeFirmMembers(firmId);
+  const [adding, setAdding] = useState(false);
+  const [designation, setDesignation] = useState<string>("पार्टनर");
+  const list = members.data ?? [];
+  const failed = add.error ?? remove.error;
+
+  return (
+    <div className="srcdoc-members">
+      <div className="srcdoc-members-title">{t("Signing for the firm", "फर्म की ओर से")}</div>
+      {!members.isLoading && list.length === 0 && (
+        <p className="srcdoc-empty">
+          {t(
+            "No partners saved for this firm yet. Add them once and every deed gets them.",
+            "इस फर्म के पार्टनर अभी सहेजे नहीं हैं। एक बार जोड़ दें, फिर हर विलेख में अपने-आप आएँगे।",
+          )}
+        </p>
+      )}
+      {list.map((m, i) => (
+        <div key={m.personId} className="srcdoc-member">
+          <span className="srcdoc-member-name">
+            {i + 1}. {m.name}
+          </span>
+          <span className="srcdoc-member-role">{m.designation}</span>
+          <button
+            type="button"
+            className="srcdoc-icon"
+            onClick={() => remove.mutate(m.personId)}
+            disabled={remove.isPending}
+            aria-label={t("Remove from firm", "फर्म से हटाएँ")}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </div>
+      ))}
+      {adding ? (
+        <div className="srcdoc-member-add">
+          <select className="srcdoc-kind-select" value={designation} onChange={(e) => setDesignation(e.target.value)}>
+            {DESIGNATIONS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <SavedPersonPicker
+            picked={list.map((m) => ({ id: m.personId }) as PartyMeta)}
+            onlyPeople
+            placeholder={t("Find the partner: name, Aadhaar", "पार्टनर खोजें: नाम, आधार")}
+            onPick={(person) => {
+              add.mutate({ personId: person.id, designation });
+              setAdding(false);
+            }}
+            t={t}
+          />
+        </div>
+      ) : (
+        <button type="button" className="srcdoc-pick srcdoc-member-add-btn" onClick={() => setAdding(true)}>
+          {t("+ Add partner", "+ पार्टनर जोड़ें")}
+        </button>
+      )}
+      {failed && <p className="srcdoc-error">{failed.message}</p>}
     </div>
   );
 }
@@ -334,19 +422,22 @@ function UploadSlot({
       {picked && picked.length > 0 && (
         <ul className="srcdoc-files">
           {picked.map((person) => (
-            <li key={person.id} className="srcdoc-file srcdoc-file--person">
-              <UserRound className="size-3.5 opacity-70" aria-hidden />
-              <span className="srcdoc-file-name" title={person.name}>
-                {person.name}
-              </span>
-              <button
-                type="button"
-                className="srcdoc-icon"
-                onClick={() => onUnpick?.(person.id)}
-                aria-label={t("Remove", "हटाएँ")}
-              >
-                <X className="size-3.5" aria-hidden />
-              </button>
+            <li key={person.id} className="srcdoc-picked">
+              <div className="srcdoc-file srcdoc-file--person">
+                <UserRound className="size-3.5 opacity-70" aria-hidden />
+                <span className="srcdoc-file-name" title={person.name}>
+                  {person.name}
+                </span>
+                <button
+                  type="button"
+                  className="srcdoc-icon"
+                  onClick={() => onUnpick?.(person.id)}
+                  aria-label={t("Remove", "हटाएँ")}
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </div>
+              {person.partyType === "company" && <FirmMembersBox firmId={person.id} t={t} />}
             </li>
           ))}
         </ul>

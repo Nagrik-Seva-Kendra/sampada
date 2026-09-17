@@ -23,6 +23,57 @@ export interface PartyMeta {
   panMimeType: string | null;
   panSize: number | null;
   createdAt: string;
+  /** For an organisation: who acts for it, in the deed's order. */
+  members?: { personId: string; name: string; designation: string }[];
+}
+
+/** Someone who acts for a saved organisation. */
+export interface FirmMember {
+  personId: string;
+  name: string;
+  designation: string;
+  position: number;
+  aadhaarNumber: string | null;
+  panNumber: string | null;
+  address: string | null;
+}
+
+export const DESIGNATIONS = ["पार्टनर", "डायरेक्टर", "प्रोप्राइटर", "प्रबंधक", "अधिकृत"] as const;
+
+const firmKey = (firmId: string) => ["firm-members", firmId] as const;
+
+export function useFirmMembers(firmId: string | null) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: firmKey(firmId ?? ""),
+    enabled: !!token && !!firmId,
+    queryFn: () =>
+      api.get(`parties/${firmId}/members`, { headers: authHeaders(token) }).json<FirmMember[]>(),
+  });
+}
+
+/**
+ * Add or remove a firm's partner. Saved for the firm, not just this deed, so
+ * the next deed that picks the firm brings the same people.
+ */
+export function useChangeFirmMembers(firmId: string) {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  const done = (list: FirmMember[]) => {
+    qc.setQueryData(firmKey(firmId), list);
+    qc.invalidateQueries({ queryKey: ["party-search"] });
+  };
+  const add = useMutation<FirmMember[], Error, { personId: string; designation: string }>({
+    mutationFn: (input) =>
+      api.post(`parties/${firmId}/members`, { headers: authHeaders(token), json: input }).json<FirmMember[]>(),
+    onSuccess: done,
+  });
+  const remove = useMutation<FirmMember[], Error, string>({
+    mutationFn: (personId) =>
+      api.delete(`parties/${firmId}/members/${personId}`, { headers: authHeaders(token) }).json<FirmMember[]>(),
+    onSuccess: done,
+  });
+  return { add, remove };
 }
 
 export interface DeedPartyItem {

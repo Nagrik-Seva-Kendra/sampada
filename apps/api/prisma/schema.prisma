@@ -248,6 +248,7 @@ model Organization {
   deedParties         DeedParty[]
   deedNaxas           DeedNaxa[]
   deedSourceDocuments DeedSourceDocument[]
+  partyMembers        PartyMember[]
   deedPropertyDetails DeedPropertyDetail[]
   guidelineDocuments  GuidelineDocument[]
   usersLastActiveHere User[]                  @relation("UserLastActiveOrganization")
@@ -308,10 +309,37 @@ model Party {
   organizationId      String
   organization        Organization @relation(fields: [organizationId], references: [id])
   deedLinks           DeedParty[]
+  /// For an organisation: the people who act for it.
+  members             PartyMember[] @relation("FirmMembers")
+  /// For a person: the organisations they act for.
+  firmLinks           PartyMember[] @relation("MemberOf")
 
   @@unique([organizationId, aadhaarNumber])
   @@unique([organizationId, panNumber])
   @@index([organizationId])
+}
+
+/// Who acts for a saved organisation: a firm's partners, a company's
+/// directors. Saved once, so picking the firm for a deed brings its signatories
+/// with it instead of leaving the previous firm's partners in the text.
+/// A person can act for several firms; the pair is unique.
+model PartyMember {
+  id             String       @id @default(cuid())
+  firmId         String
+  personId       String
+  /// As the deed writes it: पार्टनर, डायरेक्टर, प्रोप्राइटर, प्रबंधक, अधिकृत.
+  designation    String       @default("पार्टनर")
+  /// Order the deed lists them in.
+  position       Int          @default(0)
+  createdAt      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  firm           Party        @relation("FirmMembers", fields: [firmId], references: [id], onDelete: Cascade)
+  person         Party        @relation("MemberOf", fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, personId])
+  @@index([organizationId, firmId])
+  @@index([personId])
 }
 
 /// Links a Party to a deed (DeedTemplate) with their role on that deed. `role`

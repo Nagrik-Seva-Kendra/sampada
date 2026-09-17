@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { PartyMembersService } from "./party-members.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 
 export type PartyRole = "buyer" | "seller";
@@ -24,6 +25,8 @@ export interface PartyMeta {
   panMimeType: string | null;
   panSize: number | null;
   createdAt: string;
+  /** For an organisation: who acts for it, in the deed's order. */
+  members?: { personId: string; name: string; designation: string }[];
 }
 
 export interface DeedPartyItem {
@@ -129,7 +132,10 @@ type NaxaBytes = Prisma.DeedNaxaCreateInput["data"];
  */
 @Injectable()
 export class DeedDocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly members: PartyMembersService,
+  ) {}
 
   // ---- Parties (reusable people/companies, deduped by Aadhaar or PAN) ----
 
@@ -156,7 +162,12 @@ export class DeedDocumentsService {
       take: 20,
       select: PARTY_META,
     });
-    return rows.map(toPartyMeta);
+    const firms = await this.members.membersOf(rows.filter((r) => r.partyType === "company").map((r) => r.id));
+    return rows.map((r) => {
+      const meta = toPartyMeta(r);
+      const list = firms.get(r.id);
+      return list ? { ...meta, members: list.map((m) => ({ personId: m.personId, name: m.name, designation: m.designation })) } : meta;
+    });
   }
 
   /** Aadhaar card (front) bytes for one person. */
