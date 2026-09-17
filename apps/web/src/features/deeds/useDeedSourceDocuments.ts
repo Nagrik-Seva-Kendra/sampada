@@ -119,13 +119,15 @@ export function useProposeFill(deedId: string) {
       partyTypes: { seller: string; buyer: string };
       /** Place just this one fact; the rest only say whose it is. */
       only?: { role: DocumentRole; label: string; value: string };
+      /** What the drafter typed: more facts, or changes to make. */
+      message?: string;
     }
   >({
-    mutationFn: ({ kind, people, partyTypes, only }) =>
+    mutationFn: ({ kind, people, partyTypes, only, message }) =>
       api
         .post(`deeds/${deedId}/source-documents/propose-fill`, {
           headers: authHeaders(token),
-          json: { kind, people, partyTypes, only },
+          json: { kind, people, partyTypes, only, message },
           // The model reads the whole deed and thinks before answering.
           timeout: 180_000,
         })

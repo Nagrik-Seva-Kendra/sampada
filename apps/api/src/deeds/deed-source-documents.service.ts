@@ -204,7 +204,8 @@ Rules:
   sorting is given -- do not re-decide whose a fact is.
 - Only edit sections you were given facts for. If no SELLER facts are given,
   leave the विक्रेता section exactly as it is, whatever it says. Same for BUYER
-  and PROPERTY.
+  and PROPERTY. A message from the drafter, when there is one, counts as facts
+  for whatever sections it speaks of.
 - "find" MUST be copied character for character from the deed, and must appear
   there EXACTLY ONCE. Include enough surrounding words to make it unique --
   a bare "........" almost never is. Never invent or normalise the text.
@@ -394,6 +395,7 @@ export class DeedSourceDocumentsService {
     people: PickedPeople = NO_PEOPLE,
     orgs: PartySides = NO_ORGANISATIONS,
     only?: SingleFact,
+    message?: string,
   ): Promise<FillProposal> {
     const deed = await this.prisma.deedTemplate.findUnique({
       where: { id: deedId },
@@ -409,12 +411,13 @@ export class DeedSourceDocumentsService {
     for (const role of ["seller", "buyer"] as const) {
       for (const person of picked[role]) byRole[role].push(...person.facts);
     }
-    const given = new Set(DOCUMENT_ROLES.filter((r) => byRole[r].length > 0));
+    // A typed message may speak of any section; papers only open their own.
+    const given = new Set(DOCUMENT_ROLES.filter((r) => message || byRole[r].length > 0));
     if (given.size === 0) {
       throw new BadRequestException("Nothing has been read from the documents yet.");
     }
 
-    const raw = await proposePlacements(deed.content, byRole, farmland, orgs, only);
+    const raw = await proposePlacements(deed.content, byRole, farmland, orgs, only, message);
 
     const fills: ProposedFill[] = [];
     const skipped: { why: string; reason: string }[] = [];
@@ -820,6 +823,31 @@ export function parseSingleFact(raw: unknown): SingleFact | undefined {
   return { role, label: label.trim(), value: value.trim() };
 }
 
+/** A typed message is short: a few changes, not a second deed. */
+export const MAX_MESSAGE_CHARS = 1500;
+
+/** The drafter's typed message, trimmed; empty or not text means none. */
+export function parseMessage(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const text = raw.trim();
+  return text ? text.slice(0, MAX_MESSAGE_CHARS) : undefined;
+}
+
+/**
+ * The drafter's own words go in as one more source. Any section the message
+ * speaks of may change; the rest of the placement rules still hold.
+ */
+function messageNote(message: string): string {
+  return [
+    "ड्राफ्टर का संदेश (यह भी तथ्य/निर्देश है -- इसमें जो बदलने को कहा है उसे विलेख में सही जगह बदलें;",
+    "जिस हिस्से के बारे में संदेश कुछ नहीं कहता और कागज़ भी नहीं है, उसे न छुएँ।",
+    "संदेश और कागज़ में टकराव हो तो संदेश मानें। role वही हो जिस हिस्से को बदल रहे हैं):",
+    "<message>",
+    message,
+    "</message>",
+  ].join("\n");
+}
+
 function singleFactNote(only: SingleFact): string {
   return [
     "केवल यह एक तथ्य विलेख में सही जगह भरें:",
@@ -835,6 +863,7 @@ async function proposePlacements(
   farmland: boolean,
   orgs: PartySides,
   only?: SingleFact,
+  message?: string,
 ): Promise<ProposedFill[]> {
   const heading = (r: DocumentRole) =>
     ROLE_HEADING[r] + (sideIsOrganisation(r, orgs) ? " — यह पक्ष एक संस्था है" : "");
@@ -846,6 +875,7 @@ async function proposePlacements(
   const notes: string[] = [];
   if (orgs.seller || orgs.buyer) notes.push(ORGANISATION_NOTE);
   if (farmland && ownerNamesOf(byRole.property).length > 0) notes.push(FARMLAND_NOTE);
+  if (message) notes.push(messageNote(message));
   if (only) notes.push(singleFactNote(only));
   const note = notes.length ? "\n\n" + notes.join("\n\n") : "";
   const key = process.env.ANTHROPIC_API_KEY;

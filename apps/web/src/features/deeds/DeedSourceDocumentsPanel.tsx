@@ -670,16 +670,21 @@ export function DeedSourceDocumentsPanel({
   const [placing, setPlacing] = useState<string | null>(null);
   const reviewRef = useRef<HTMLDivElement>(null);
   const propose = useProposeFill(deedId);
-  const [proposal, setProposal] = useState<FillProposal | null>(null);
+  /** `fromMessage`: the typed message went into it. */
+  const [proposal, setProposal] = useState<(FillProposal & { fromMessage?: boolean }) | null>(null);
   /** Indexes into proposal.fills the person has un-ticked. */
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [applyResult, setApplyResult] = useState<{ applied: number; missed: number } | null>(null);
 
+  /** The drafter's own words: changes to make, or facts no paper carries. */
+  const [message, setMessage] = useState("");
+  const typed = message.trim();
+
   function askWhereItGoes() {
     setApplyResult(null);
-    propose.mutate({ kind, people: pickedIds, partyTypes }, {
+    propose.mutate({ kind, people: pickedIds, partyTypes, message: typed || undefined }, {
       onSuccess: (p) => {
-        setProposal(p);
+        setProposal({ ...p, fromMessage: !!typed });
         setRejected(new Set());
       },
     });
@@ -689,6 +694,8 @@ export function DeedSourceDocumentsPanel({
     if (!proposal) return;
     const chosen = proposal.fills.filter((_, i) => !rejected.has(i));
     setApplyResult(onApplyFills(chosen));
+    // The message was a request for these changes; once they are in, it is done.
+    if (proposal.fromMessage) setMessage("");
     setProposal(null);
   }
 
@@ -710,7 +717,9 @@ export function DeedSourceDocumentsPanel({
   }
 
   const untouched = ROLES.filter((r) => !hasFor(r));
-  const canFill = (anyFields || picked.seller.length > 0 || picked.buyer.length > 0) && firmsAwaitingSigners.length === 0;
+  const canFill =
+    (anyFields || picked.seller.length > 0 || picked.buyer.length > 0 || typed.length > 0) &&
+    firmsAwaitingSigners.length === 0;
 
   return (
     <aside className="srcdoc">
@@ -797,6 +806,34 @@ export function DeedSourceDocumentsPanel({
         </div>
       )}
 
+      {!proposal && (
+        <label className="srcdoc-message">
+          <span className="srcdoc-message-title">{t("Or type what to change", "या लिखें क्या बदलना है")}</span>
+          <textarea
+            className="srcdoc-message-box"
+            rows={3}
+            maxLength={1500}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && canFill && !propose.isPending) {
+                e.preventDefault();
+                askWhereItGoes();
+              }
+            }}
+            placeholder={t(
+              "e.g. Buyer is Smt. Neha Kumari w/o Shri Gaurav Kumar, plot C-27, price 12 lakh by cheque",
+              "जैसे: क्रेता श्रीमती नेहा कुमारी पत्नी श्री गौरव कुमार, प्लॉट C-27, कीमत 12 लाख चेक से",
+            )}
+          />
+          <span className="srcdoc-message-hint">
+            {t(
+              "Read together with the papers above; you see every change before it goes in. Ctrl+Enter to fill.",
+              "ऊपर के कागज़ों के साथ पढ़ा जाएगा; हर बदलाव लगाने से पहले दिखेगा। Ctrl+Enter से भरें।",
+            )}
+          </span>
+        </label>
+      )}
       {firmsAwaitingSigners.length > 0 && !proposal && (
         <p className="srcdoc-member-due srcdoc-member-due--fill">
           {t(

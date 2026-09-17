@@ -12,6 +12,8 @@ import {
   matchAadhaarStyle,
   parseDocumentRole,
   parseOrganisations,
+  MAX_MESSAGE_CHARS,
+  parseMessage,
   parsePickedPeople,
   parseSingleFact,
   relationMismatch,
@@ -140,6 +142,19 @@ describe("parseSingleFact", () => {
     expect(parseSingleFact({ role: "witness", label: "नाम", value: "x" })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "  " })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "x".repeat(401) })).toBeUndefined();
+  });
+});
+
+describe("parseMessage", () => {
+  it("keeps a typed message, trimmed and capped", () => {
+    expect(parseMessage("  प्लॉट नं. C-27 करो ")).toBe("प्लॉट नं. C-27 करो");
+    expect(parseMessage("क".repeat(5000))).toHaveLength(MAX_MESSAGE_CHARS);
+  });
+
+  it("means no message for blanks and non-text", () => {
+    expect(parseMessage("   ")).toBeUndefined();
+    expect(parseMessage(42)).toBeUndefined();
+    expect(parseMessage(undefined)).toBeUndefined();
   });
 });
 
