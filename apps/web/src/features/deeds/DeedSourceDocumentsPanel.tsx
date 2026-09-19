@@ -812,7 +812,7 @@ export function DeedSourceDocumentsPanel({
           <textarea
             className="srcdoc-message-box"
             rows={3}
-            maxLength={1500}
+            maxLength={8000}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {

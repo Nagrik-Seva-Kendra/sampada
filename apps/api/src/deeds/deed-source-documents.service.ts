@@ -887,8 +887,12 @@ export function parseSingleFact(raw: unknown): SingleFact | undefined {
   return { role, label: label.trim(), value: value.trim() };
 }
 
-/** A typed message is short: a few changes, not a second deed. */
-export const MAX_MESSAGE_CHARS = 1500;
+/** A typed message: a few changes, or a paragraph or two of the drafter's own wording. */
+export const MAX_MESSAGE_CHARS = 8000;
+/** The text an edit replaces must be quoted exactly; a whole clause at most. */
+const MAX_FIND_CHARS = 3000;
+/** What an edit writes: up to the drafter's own paragraphs from the message. */
+const MAX_REPLACE_CHARS = 8000;
 
 /** The drafter's typed message, trimmed; empty or not text means none. */
 export function parseMessage(raw: unknown): string | undefined {
@@ -909,6 +913,10 @@ function messageNote(message: string): string {
     "<message>",
     message,
     "</message>",
+    "यदि संदेश में ड्राफ्टर ने विलेख के लिए पूरा अनुच्छेद (\"यह कि, ...\") खुद लिखकर दिया है, तो वह शब्दशः विलेख में जाएगा -- यहाँ कानूनी भाषा न छूने का नियम लागू नहीं:",
+    "- विलेख का जो अनुच्छेद उसी बात का है (जैसे सम्पत्ति के स्वत्व / पिछली रजिस्ट्री / अनुमति वाला), उसके पूरे पाठ को find में लें और संदेश वाले अनुच्छेद से बदल दें। अनुच्छेद की क्रम संख्या जैसे \"(1).\" बनी रहे।",
+    "- संदेश का कोई अनुच्छेद विलेख में किसी से मेल न खाए, तो उसे पिछले मेल खाते अनुच्छेद के ठीक बाद जोड़ें: find वही पिछला अनुच्छेद का अंतिम वाक्य, replace उसी वाक्य के बाद खाली पंक्ति और नया अनुच्छेद।",
+    "- संदेश के शब्द न बदलें, न छोटा करें। role property।",
   ].join("\n");
 }
 
@@ -998,7 +1006,8 @@ async function proposePlacements(
     const { role, find, replace, why } = item as Record<string, unknown>;
     if (role !== "seller" && role !== "buyer" && role !== "property") continue;
     if (typeof find !== "string" || typeof replace !== "string") continue;
-    if (!find.trim() || find.length > 600 || replace.length > 600) continue;
+    // A drafter's own paragraph can be long; a find that long is a paraphrase risk.
+    if (!find.trim() || find.length > MAX_FIND_CHARS || replace.length > MAX_REPLACE_CHARS) continue;
     out.push({ role, find, replace, why: typeof why === "string" ? why.slice(0, 80) : "" });
     if (out.length >= 40) break;
   }
