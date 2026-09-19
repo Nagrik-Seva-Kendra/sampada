@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   chosenSigners,
   leftoverIdentifiers,
+  locateLoosely,
   matchAadhaarStyle,
   parseDocumentRole,
   parseOrganisations,
@@ -143,6 +144,28 @@ describe("parseSingleFact", () => {
     expect(parseSingleFact({ role: "witness", label: "नाम", value: "x" })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "  " })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "x".repeat(401) })).toBeUndefined();
+  });
+});
+
+describe("locateLoosely", () => {
+  const deed = "BOUNDARIES:-\n\nEAST –  COLONY ROAD\nNORTH – PLOT NO. B-63\nSOUTH – PLOT NO. B-25\n";
+
+  it("finds the deed's own text when only spaces and dashes differ", () => {
+    expect(locateLoosely(deed, "SOUTH - PLOT NO. B-25")).toBe("SOUTH – PLOT NO. B-25");
+    expect(locateLoosely(deed, "EAST - COLONY ROAD")).toBe("EAST –  COLONY ROAD");
+  });
+
+  it("gives nothing when the words differ", () => {
+    expect(locateLoosely(deed, "SOUTH - PLOT NO. B-26")).toBeNull();
+  });
+
+  it("gives nothing when the text is there twice", () => {
+    expect(locateLoosely(deed + deed, "SOUTH - PLOT NO. B-25")).toBeNull();
+  });
+
+  it("ignores invisible joiners inside Hindi words", () => {
+    const hindi = "सम्‍पत्ति का विवरण";
+    expect(locateLoosely(hindi, "सम्पत्ति का विवरण")).toBe(hindi);
   });
 });
 

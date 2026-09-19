@@ -258,6 +258,13 @@ Rules:
 - Replace blanks ("........", "<...>", "______") or the previous party's or
   property's details in a deed that was copied from another one. Leave the
   legal wording alone -- you are filling in a form, not rewriting a contract.
+- The paper is the record. Where the deed already states something the paper
+  also states -- a boundary, a plot or flat number, an amount, a date, an
+  area, a registration or case number, a name or relation -- and the two
+  differ, correct the deed to the paper, even though the spot is not blank:
+  a typing slip ("B-25" where the paper says "B-65") must not survive. Make
+  "why" name both, e.g. "कागज़ में B-65 है, विलेख में B-25 था". Differences
+  only of case, spacing, punctuation or script are not differences.
 - A person's entry may be incomplete: only a name, or a name without its
   relation, Aadhaar, PAN or निवासी line. When the facts carry those, complete
   the entry in the same shape as the deed's other entries -- e.g. find
@@ -500,6 +507,12 @@ export class DeedSourceDocumentsService {
       if (relationMismatch(item.replace, byRole[item.role].length > 0 ? byRole[item.role] : paper.unsorted)) {
         skipped.push({ why: item.why, reason: "रिश्ता (पुत्र/पुत्री/पत्नी) कागज़ से मेल नहीं खाता, इसलिए छोड़ा गया।" });
         continue;
+      }
+      // The model quotes the deed but tidies spaces and dashes as it goes;
+      // find the deed's own text for it when that is unambiguous.
+      if (countOccurrences(deed.content, item.find) === 0) {
+        const actual = locateLoosely(deed.content, item.find);
+        if (actual) item.find = actual;
       }
       const count = countOccurrences(deed.content, item.find);
       if (count === 0) {
@@ -812,6 +825,27 @@ export function relationMismatch(replace: string, facts: ExtractedField[]): bool
     if (f.label === "पिता का नाम" && new RegExp(`पत्नी\\s*(श्री)?\\s*${n}`).test(text)) return true;
   }
   return false;
+}
+
+/**
+ * The deed's own text for a quote that differs from it only in spacing,
+ * dashes, quote marks or invisible joiners -- or null when there is no such
+ * text, or more than one.
+ */
+export function locateLoosely(hay: string, quote: string): string | null {
+  const text = stripJoiners(quote).trim();
+  if (!text) return null;
+  const JOINERS = "[\\u200b-\\u200d\\ufeff]*";
+  let pattern = "";
+  for (const run of text.match(/\s+|[-‐‑‒–—]|["“”'‘’]|[^\s\-‐‑‒–—"“”'‘’]/g) ?? []) {
+    if (/^\s+$/.test(run)) pattern += "\\s*";
+    // A dash may carry spaces on either side in one text and not the other.
+    else if (/^[-‐‑‒–—]$/.test(run)) pattern += "\\s*[-‐‑‒–—]\\s*";
+    else if (/^["“”'‘’]$/.test(run)) pattern += "[\"“”'‘’]{1,2}";
+    else pattern += escapeRegExp(run) + JOINERS;
+  }
+  const found = hay.match(new RegExp(pattern, "g")) ?? [];
+  return found.length === 1 ? found[0]! : null;
 }
 
 /** How many times `needle` occurs in `hay` -- plain scan, no regex escaping. */
