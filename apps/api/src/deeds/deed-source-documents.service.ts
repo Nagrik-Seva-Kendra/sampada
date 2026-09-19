@@ -23,6 +23,40 @@ export interface UploadedDoc {
 export type DocumentRole = "seller" | "buyer" | "property";
 export const DOCUMENT_ROLES: DocumentRole[] = ["seller", "buyer", "property"];
 
+type Side = "seller" | "buyer";
+
+/** People found on property papers, and which sides of the deed they may fill. */
+export interface PaperParties {
+  byRole: Record<DocumentRole, ExtractedField[]>;
+  /** Party facts the paper did not say the side of: matched against the deed. */
+  unsorted: ExtractedField[];
+  /** Sides with no ID or picked person of their own. */
+  openSides: Side[];
+}
+
+/**
+ * An agreement or an older deed sits in the property slot but names the
+ * seller and the buyer too. Its people fill a side only when that side has no
+ * ID of its own -- an uploaded card or a picked saved person wins. The rest of
+ * the paper stays property.
+ */
+export function splitPaperParties(byRole: Record<DocumentRole, ExtractedField[]>): PaperParties {
+  const openSides = (["seller", "buyer"] as const).filter((s) => byRole[s].length === 0);
+  const out: Record<DocumentRole, ExtractedField[]> = {
+    seller: [...byRole.seller],
+    buyer: [...byRole.buyer],
+    property: [],
+  };
+  const unsorted: ExtractedField[] = [];
+  for (const f of byRole.property) {
+    if (f.group !== "party") out.property.push(f);
+    else if (f.side) {
+      if (openSides.includes(f.side)) out[f.side].push(f);
+    } else if (openSides.length > 0) unsorted.push(f);
+  }
+  return { byRole: out, unsorted, openSides };
+}
+
 export function parseDocumentRole(raw: unknown): DocumentRole {
   if (raw === "seller" || raw === "buyer" || raw === "property") return raw;
   throw new BadRequestException("role must be seller, buyer or property.");
@@ -35,6 +69,12 @@ export interface ExtractedField {
   value: string;
   /** Which side of the deed this belongs to, so the panel can group it. */
   group: "party" | "property" | "other";
+  /**
+   * For a person named on a paper that has both sides -- an agreement, an
+   * older deed -- which side the paper itself puts them on. Absent on an ID
+   * card, where the slot says whose it is.
+   */
+  side?: "seller" | "buyer";
 }
 
 /** One edit the model proposes to the deed, before anyone agrees to it. */
@@ -161,9 +201,15 @@ bhu-adhikar rin pustika, an older registered deed, a map, a tax receipt, or
 anything else about one property. Work with whatever it is.
 
 Return ONLY a JSON array, no prose, no markdown fence. Each item:
-  {"label": "<Hindi label>", "value": "<exact value>", "group": "party"|"property"|"other"}
+  {"label": "<Hindi label>", "value": "<exact value>", "group": "party"|"property"|"other", "side": "seller"|"buyer"}
 
 Rules:
+- "side" only for a party fact on a paper that names both sides -- a sale
+  agreement (अनुबंध / इकरारनामा), an older deed, a receipt between two people.
+  Take it from the paper's own words: विक्रेता / प्रथम पक्ष / vendor / seller
+  is "seller"; क्रेता / द्वितीय पक्ष / purchaser / buyer is "buyer". Give it on
+  every fact of that person (नाम, पिता का नाम, पता, आधार नं., ...). Leave
+  "side" out on an ID card, and whenever the paper does not say.
 - Labels must be the Hindi wording a deed uses, e.g. "नाम", "पता", "आधार नं.",
   "पैन नं.", "जन्म तिथि", "लिंग", "खसरा नं.", "रकबा", "ग्राम", "प.ह.नं.",
   "तहसील", "जिला", "CLR No.", "भूमि का प्रकार".
@@ -212,6 +258,13 @@ Rules:
 - Replace blanks ("........", "<...>", "______") or the previous party's or
   property's details in a deed that was copied from another one. Leave the
   legal wording alone -- you are filling in a form, not rewriting a contract.
+- A person's entry may be incomplete: only a name, or a name without its
+  relation, Aadhaar, PAN or निवासी line. When the facts carry those, complete
+  the entry in the same shape as the deed's other entries -- e.g. find
+  "2. श्री मनीष अग्रवाल" and replace it with "2. श्री मनीष अग्रवाल पुत्र श्री
+  जवाहर लाल अग्रवाल (आ.नं. XXXX XXXX 2848) (PAN No. ABYPA6480F)" plus its own
+  निवासी line, laid out as the deed lays out the first person. Prefer one edit
+  that covers a person's whole entry over several small ones on the same lines.
 - Write the relation from the facts, never by habit: "पति का नाम" gives
   "पत्नी श्री <name>"; "पिता का नाम" gives "पुत्र श्री <name>" for a man and
   "पुत्री श्री <name>" for a woman (see "लिंग"). If the facts give only
@@ -411,19 +464,28 @@ export class DeedSourceDocumentsService {
     for (const role of ["seller", "buyer"] as const) {
       for (const person of picked[role]) byRole[role].push(...person.facts);
     }
+    // People named on a property paper (an agreement, an older deed) can fill
+    // a side nobody gave an ID for.
+    const paper = splitPaperParties(byRole);
+    Object.assign(byRole, paper.byRole);
     // A typed message may speak of any section; papers only open their own.
-    const given = new Set(DOCUMENT_ROLES.filter((r) => message || byRole[r].length > 0));
+    const given = new Set(
+      DOCUMENT_ROLES.filter(
+        (r) => message || byRole[r].length > 0 || (paper.unsorted.length > 0 && paper.openSides.includes(r as Side)),
+      ),
+    );
     if (given.size === 0) {
       throw new BadRequestException("Nothing has been read from the documents yet.");
     }
 
-    const raw = await proposePlacements(deed.content, byRole, farmland, orgs, only, message);
+    const raw = await proposePlacements(deed.content, byRole, farmland, orgs, only, message, paper);
 
     const fills: ProposedFill[] = [];
     const skipped: { why: string; reason: string }[] = [];
     for (const item of raw) {
-      // Asked for one fact: nothing else in the deed moves.
-      if (only && item.role !== only.role) continue;
+      // Asked for one fact: nothing else in the deed moves. A person on a
+      // property paper belongs in the seller or buyer section, though.
+      if (only && item.role !== only.role && !(only.role === "property" && item.role !== "property")) continue;
       // A part of the deed nobody uploaded papers for keeps what it has. The
       // prompt says so; this makes it true even if the model does not listen.
       if (!given.has(item.role)) {
@@ -435,7 +497,7 @@ export class DeedSourceDocumentsService {
         skipped.push({ why: item.why, reason: "इसमें भरने के लिए कोई मान नहीं था।" });
         continue;
       }
-      if (relationMismatch(item.replace, byRole[item.role])) {
+      if (relationMismatch(item.replace, byRole[item.role].length > 0 ? byRole[item.role] : paper.unsorted)) {
         skipped.push({ why: item.why, reason: "रिश्ता (पुत्र/पुत्री/पत्नी) कागज़ से मेल नहीं खाता, इसलिए छोड़ा गया।" });
         continue;
       }
@@ -620,15 +682,17 @@ function normalizeFields(raw: unknown): ExtractedField[] | null {
   const out: ExtractedField[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const { label, value, group } = item as Record<string, unknown>;
+    const { label, value, group, side } = item as Record<string, unknown>;
     if (typeof label !== "string" || typeof value !== "string") continue;
     const l = label.trim();
     const v = value.trim();
     if (!l || !v || l.length > MAX_LABEL_LEN || v.length > MAX_VALUE_LEN) continue;
+    const g = group === "party" || group === "property" ? group : "other";
     out.push({
       label: l,
       value: v,
-      group: group === "party" || group === "property" ? group : "other",
+      group: g,
+      ...(g === "party" && (side === "seller" || side === "buyer") ? { side } : {}),
     });
     if (out.length >= MAX_FIELDS) break;
   }
@@ -848,12 +912,28 @@ function messageNote(message: string): string {
   ].join("\n");
 }
 
+/**
+ * People an agreement names without the paper having been read for sides:
+ * the deed already names its seller and buyer, so they are matched to those.
+ */
+function unsortedPartiesNote(paper: PaperParties): string {
+  const sides = paper.openSides.map((s) => (s === "seller" ? "विक्रेता (seller)" : "क्रेता (buyer)")).join(" और ");
+  return [
+    "सम्पत्ति के कागज़ (जैसे अनुबंध / इकरारनामा / पुरानी रजिस्ट्री) में ये लोग लिखे हैं, पर कौन विक्रेता है और कौन क्रेता यह अलग से नहीं बताया गया:",
+    ...paper.unsorted.map((f) => "- " + f.label + ": " + f.value),
+    `विलेख में अभी जो विक्रेता और क्रेता के नाम लिखे हैं, उनसे मिलाकर तय करें कि इनमें कौन किस पक्ष का है, और उसी क्रम में आए पिता/पति का नाम, पता, आधार आदि उसी व्यक्ति के हैं।`,
+    `इनसे केवल ${sides} वाला हिस्सा भरें (role उसी पक्ष की)। जिसका मिलान पक्का न हो, उसे छोड़ दें।`,
+  ].join("\n");
+}
+
 function singleFactNote(only: SingleFact): string {
   return [
     "केवल यह एक तथ्य विलेख में सही जगह भरें:",
     `${ROLE_HEADING[only.role]} — ${only.label}: ${only.value}`,
     "ऊपर के बाकी तथ्य केवल यह समझने के लिए हैं कि यह किस व्यक्ति या हिस्से का है; उनके लिए कोई बदलाव न लौटाएँ।",
-    "जो बदलाव लौटाएँ उसकी role यही हो। यदि विलेख में यह पहले से सही लिखा है तो [] लौटाएँ।",
+    only.role === "property"
+      ? "यदि यह किसी व्यक्ति (विक्रेता या क्रेता) का तथ्य है तो role उसी पक्ष की हो, वरना property। यदि विलेख में यह पहले से सही लिखा है तो [] लौटाएँ।"
+      : "जो बदलाव लौटाएँ उसकी role यही हो। यदि विलेख में यह पहले से सही लिखा है तो [] लौटाएँ।",
   ].join("\n");
 }
 
@@ -864,6 +944,7 @@ async function proposePlacements(
   orgs: PartySides,
   only?: SingleFact,
   message?: string,
+  paper?: PaperParties,
 ): Promise<ProposedFill[]> {
   const heading = (r: DocumentRole) =>
     ROLE_HEADING[r] + (sideIsOrganisation(r, orgs) ? " — यह पक्ष एक संस्था है" : "");
@@ -875,6 +956,7 @@ async function proposePlacements(
   const notes: string[] = [];
   if (orgs.seller || orgs.buyer) notes.push(ORGANISATION_NOTE);
   if (farmland && ownerNamesOf(byRole.property).length > 0) notes.push(FARMLAND_NOTE);
+  if (paper && paper.unsorted.length > 0) notes.push(unsortedPartiesNote(paper));
   if (message) notes.push(messageNote(message));
   if (only) notes.push(singleFactNote(only));
   const note = notes.length ? "\n\n" + notes.join("\n\n") : "";

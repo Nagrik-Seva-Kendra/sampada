@@ -18,6 +18,7 @@ import {
   parseSingleFact,
   relationMismatch,
   resolveMimeType,
+  splitPaperParties,
   wouldEmpty,
 } from "./deed-source-documents.service.js";
 
@@ -142,6 +143,44 @@ describe("parseSingleFact", () => {
     expect(parseSingleFact({ role: "witness", label: "नाम", value: "x" })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "  " })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "x".repeat(401) })).toBeUndefined();
+  });
+});
+
+describe("splitPaperParties", () => {
+  const agreement = [
+    { label: "नाम", value: "श्री जयदेव शर्मा", group: "party" as const, side: "seller" as const },
+    { label: "नाम", value: "श्री आशीष अग्रवाल", group: "party" as const, side: "buyer" as const },
+    { label: "पिता का नाम", value: "श्री जवाहर लाल", group: "party" as const, side: "buyer" as const },
+    { label: "फ्लैट नं.", value: "204", group: "property" as const },
+  ];
+
+  it("lets an agreement fill the sides that have no ID", () => {
+    const r = splitPaperParties({ seller: [], buyer: [], property: agreement });
+    expect(r.byRole.seller.map((f) => f.value)).toEqual(["श्री जयदेव शर्मा"]);
+    expect(r.byRole.buyer.map((f) => f.value)).toEqual(["श्री आशीष अग्रवाल", "श्री जवाहर लाल"]);
+    expect(r.byRole.property.map((f) => f.value)).toEqual(["204"]);
+  });
+
+  it("keeps an uploaded ID in charge of its own side", () => {
+    const card = [{ label: "नाम", value: "श्रीमती नेहा कुमारी", group: "party" as const }];
+    const r = splitPaperParties({ seller: [], buyer: card, property: agreement });
+    expect(r.byRole.buyer).toEqual(card);
+    expect(r.openSides).toEqual(["seller"]);
+  });
+
+  it("holds people whose side the paper did not give, to be matched against the deed", () => {
+    const old = agreement.map(({ side: _side, ...f }) => f);
+    const r = splitPaperParties({ seller: [], buyer: [], property: old });
+    expect(r.unsorted).toHaveLength(3);
+    expect(r.byRole.seller).toEqual([]);
+    expect(r.openSides).toEqual(["seller", "buyer"]);
+  });
+
+  it("holds nothing back when both sides have their own IDs", () => {
+    const id = [{ label: "नाम", value: "x", group: "party" as const }];
+    const r = splitPaperParties({ seller: id, buyer: id, property: agreement });
+    expect(r.unsorted).toEqual([]);
+    expect(r.byRole.seller).toEqual(id);
   });
 });
 
