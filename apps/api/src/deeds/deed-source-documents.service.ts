@@ -229,6 +229,11 @@ Rules:
   (e.g. "ओतारसिंह पुत्र बालाराम"). Do not label an owner plain "नाम".
 - group "party" for facts about a person or company; "property" for facts about
   the land or building; "other" for anything else worth keeping.
+- Leave out nothing a deed may carry. Every printed number, amount, date,
+  reference or range is a fact: receipt number and its amount, stamp and
+  registration fees, "Pages from 1 to 17", EM / loan account numbers, ward,
+  block, volume, book, case numbers, branch. Label each as the paper does
+  (e.g. "Receipt No.", "रसीद राशि", "Pages", "EM No.", "वॉल्यूम").
 - Copy values exactly as printed. Do not translate names or places. Keep the
   document's own script for names.
 - Never guess. If a field is unreadable or absent, leave it out entirely. An
@@ -964,7 +969,9 @@ function unsortedPartiesNote(paper: PaperParties): string {
     "सम्पत्ति के कागज़ (जैसे अनुबंध / इकरारनामा / पुरानी रजिस्ट्री) में ये लोग लिखे हैं, पर कौन विक्रेता है और कौन क्रेता यह अलग से नहीं बताया गया:",
     ...paper.unsorted.map((f) => "- " + f.label + ": " + f.value),
     `विलेख में अभी जो विक्रेता और क्रेता के नाम लिखे हैं, उनसे मिलाकर तय करें कि इनमें कौन किस पक्ष का है, और उसी क्रम में आए पिता/पति का नाम, पता, आधार आदि उसी व्यक्ति के हैं।`,
-    `इनसे केवल ${sides} वाला हिस्सा भरें (role उसी पक्ष की)। जिसका मिलान पक्का न हो, उसे छोड़ दें।`,
+    `इनसे केवल ${sides} वाला हिस्सा भरें (role उसी पक्ष की)। जिस व्यक्ति का पक्ष तय न हो, उसे छोड़ दें।`,
+    "यदि विलेख में विक्रेता/क्रेता जैसे दो पक्ष हैं ही नहीं -- जैसे बंधक की घोषणा (DECLARATION), शपथ पत्र, हलफनामा, नोटिस -- तो कागज़ में लिखा व्यक्ति वही है जिसकी यह घोषणा है: विलेख में जहाँ घोषणाकर्ता का नाम, पिता/पति का नाम और पता लिखा है, उसे कागज़ के अनुसार भरें, role property रखें।",
+    "व्यक्ति का मिलान न होने से बाकी तथ्य न रुकें -- सम्पत्ति, सीमा, रकम, दिनांक आदि के सुधार हमेशा लौटाएँ।",
   ].join("\n");
 }
 
