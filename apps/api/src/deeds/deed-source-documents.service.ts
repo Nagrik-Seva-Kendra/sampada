@@ -181,7 +181,7 @@ export interface SourceDocumentItem {
   extractError: string | null;
 }
 
-/** 15MB, the same ceiling the other upload routes use. */
+/** 25MB: a phone photo of a page, before the browser scales it down. */
 export const MAX_SOURCE_DOC = 25 * 1024 * 1024;
 
 /**
@@ -643,7 +643,8 @@ async function extractFields(data: Buffer, mimeType: string): Promise<ExtractedF
     headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
       model: "claude-sonnet-5",
-      max_tokens: 12000,
+      // A registry copy runs to dozens of pages; its facts are worth the room.
+      max_tokens: 32000,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -655,15 +656,24 @@ async function extractFields(data: Buffer, mimeType: string): Promise<ExtractedF
   });
 
   const raw = await res.text();
-  if (!res.ok) throw new Error(`Reading failed (HTTP ${res.status}).`);
+  if (!res.ok) {
+    const why = (JSON.parse(raw) as { error?: { message?: string } })?.error?.message;
+    throw new Error(`Reading failed (HTTP ${res.status})${why ? ": " + why.slice(0, 200) : "."}`);
+  }
 
   const body = JSON.parse(raw) as { content?: Array<{ type?: string; text?: string }>; stop_reason?: string };
-  if (body.stop_reason === "max_tokens") throw new Error("The document was too long to finish reading in one go.");
   const text = body.content?.find((b) => b.type === "text")?.text?.trim();
   if (!text) throw new Error("Nothing came back for this document.");
 
-  const parsed = parseFields(text);
+  // A long registry can still run out of room mid-list. What came through
+  // whole is worth keeping -- the drafter sees every fact before it is used.
+  const parsed = parseFields(text) ?? (body.stop_reason === "max_tokens" ? parseFields(closeTruncatedArray(text)) : null);
   if (!parsed) throw new Error("Could not make sense of this document.");
+  // Nothing whole came through before the room ran out; an empty list from a
+  // finished reply is simply a document with nothing a deed needs.
+  if (parsed.length === 0 && body.stop_reason === "max_tokens") {
+    throw new Error("The document was too long to finish reading in one go.");
+  }
   return parsed;
 }
 
@@ -685,6 +695,18 @@ function parseJsonArray(text: string): unknown[] | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A JSON array that was cut off mid-item, ended after its last whole item, so
+ * the items that did arrive can still be read.
+ */
+export function closeTruncatedArray(text: string): string {
+  const start = text.indexOf("[");
+  if (start === -1) return text;
+  const end = text.lastIndexOf("}");
+  if (end <= start) return text;
+  return text.slice(start, end + 1) + "]";
 }
 
 function parseFields(text: string): ExtractedField[] | null {

@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chosenSigners,
+  closeTruncatedArray,
   leftoverIdentifiers,
   locateLoosely,
   matchAadhaarStyle,
@@ -144,6 +145,22 @@ describe("parseSingleFact", () => {
     expect(parseSingleFact({ role: "witness", label: "नाम", value: "x" })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "  " })).toBeUndefined();
     expect(parseSingleFact({ role: "buyer", label: "नाम", value: "x".repeat(401) })).toBeUndefined();
+  });
+});
+
+describe("closeTruncatedArray", () => {
+  it("ends the list after the last whole item", () => {
+    const cut = '[{"label":"नाम","value":"राम","group":"party"},{"label":"पता","value":"ग्वा';
+    expect(JSON.parse(closeTruncatedArray(cut))).toHaveLength(1);
+  });
+
+  it("leaves a whole list alone", () => {
+    const whole = '[{"label":"नाम","value":"राम","group":"party"}]';
+    expect(JSON.parse(closeTruncatedArray(whole))).toHaveLength(1);
+  });
+
+  it("gives back text with no list as it is", () => {
+    expect(closeTruncatedArray("sorry, nothing here")).toBe("sorry, nothing here");
   });
 });
 
