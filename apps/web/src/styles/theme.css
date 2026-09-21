@@ -5052,6 +5052,21 @@ h3 {
   color: #ffc46b;
 }
 
+.srcdoc-file-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.srcdoc-icon--warn {
+  color: #a32424;
+}
+:root[data-theme="dark"] .srcdoc-icon--warn {
+  color: #ff9b9b;
+}
+
 /* A message typed by the drafter, read together with the papers. */
 .srcdoc-message {
   display: flex;

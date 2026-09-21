@@ -18,6 +18,7 @@ import {
 } from "./useDeedDocuments";
 import {
   FILE_TOO_LARGE,
+  isReading,
   useNameCheck,
   useProposeFill,
   useAddSourceDocument,
@@ -453,7 +454,7 @@ function UploadSlot({
       {add.isPending && (
         <p className="srcdoc-busy">
           <Loader2 className="size-4 srcdoc-spin" aria-hidden />
-          {t("Reading…", "पढ़ा जा रहा है…")}
+          {t("Uploading…", "भेजा जा रहा है…")}
         </p>
       )}
       {add.isError && (
@@ -481,18 +482,22 @@ function UploadSlot({
                 {d.fileName}
               </span>
               <span className="srcdoc-file-size">{prettySize(d.size)}</span>
-              {d.extractError && (
-                <button
-                  type="button"
-                  className="srcdoc-icon"
-                  title={d.extractError}
-                  onClick={() => reread.mutate(d.id)}
-                  disabled={reread.isPending}
-                  aria-label={t("Read again", "फिर से पढ़ें")}
-                >
-                  <RefreshCw className="size-3.5" aria-hidden />
-                </button>
+              {isReading(d) && (
+                <span className="srcdoc-file-reading">
+                  <Loader2 className="size-3.5 srcdoc-spin" aria-hidden />
+                  {t("Reading…", "पढ़ा जा रहा है…")}
+                </span>
               )}
+              <button
+                type="button"
+                className="srcdoc-icon"
+                title={d.extractError ?? t("Read again", "फिर से पढ़ें")}
+                onClick={() => reread.mutate(d.id)}
+                disabled={reread.isPending || isReading(d)}
+                aria-label={t("Read again", "फिर से पढ़ें")}
+              >
+                <RefreshCw className={"size-3.5" + (d.extractError ? " srcdoc-icon--warn" : "")} aria-hidden />
+              </button>
               <button type="button" className="srcdoc-icon" onClick={() => remove.mutate(d.id)} aria-label={t("Remove", "हटाएँ")}>
                 <Trash2 className="size-3.5" aria-hidden />
               </button>

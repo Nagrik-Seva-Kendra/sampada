@@ -63,7 +63,7 @@ export class DeedSourceDocumentsController {
   /** Read a stored document again -- for the one that failed the first time. */
   @Post(":id/read")
   read(@Param("id") id: string) {
-    return this.service.read(id);
+    return this.service.reread(id);
   }
 
   /**

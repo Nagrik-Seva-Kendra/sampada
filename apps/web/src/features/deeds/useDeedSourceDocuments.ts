@@ -29,6 +29,12 @@ export interface SourceDocumentItem {
 
 const keyFor = (deedId: string) => ["deed-source-documents", deedId] as const;
 
+/**
+ * Still being read. A long registry takes minutes, so the upload answers at
+ * once and the reading lands later; neither mark is set in between.
+ */
+export const isReading = (d: SourceDocumentItem) => d.extracted === null && !d.extractError;
+
 export function useSourceDocuments(deedId: string) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
@@ -36,6 +42,8 @@ export function useSourceDocuments(deedId: string) {
     enabled: !!token && !!deedId,
     queryFn: () =>
       api.get(`deeds/${deedId}/source-documents`, { headers: authHeaders(token) }).json<SourceDocumentItem[]>(),
+    // Ask again while something is being read, and stop once nothing is.
+    refetchInterval: (query) => (query.state.data?.some(isReading) ? 4000 : false),
   });
 }
 

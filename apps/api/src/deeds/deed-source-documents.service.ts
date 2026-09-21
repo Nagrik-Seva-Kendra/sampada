@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
@@ -363,10 +363,58 @@ export class DeedSourceDocumentsService {
         uploadedById: user.id,
         uploadedByName: user.name,
       }),
-      select: { id: true },
+      select: { id: true, role: true, fileName: true, mimeType: true, size: true, createdAt: true, uploadedByName: true },
     });
 
-    return this.read(row.id);
+    // A registry copy of many pages takes minutes to read. The upload answers
+    // as soon as the file is safe in the database, and the reading goes on
+    // behind it -- the panel polls and fills itself in when it lands.
+    this.startRead(row.id);
+    return {
+      id: row.id,
+      role: asRole(row.role),
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      size: row.size,
+      createdAt: row.createdAt.toISOString(),
+      uploadedByName: row.uploadedByName,
+      extracted: null,
+      extractError: null,
+    };
+  }
+
+  /**
+   * Read a stored document without making the caller wait. Both marks are
+   * cleared first, which is what "still being read" looks like to the panel.
+   */
+  /** "Read it again", answered at once; the reading itself runs behind it. */
+  async reread(id: string): Promise<SourceDocumentItem> {
+    const row = await this.prisma.deedSourceDocument.findUnique({
+      where: { id },
+      select: { id: true, role: true, fileName: true, mimeType: true, size: true, createdAt: true, uploadedByName: true },
+    });
+    if (!row) throw new NotFoundException("Document not found.");
+    this.startRead(id);
+    return {
+      id: row.id,
+      role: asRole(row.role),
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      size: row.size,
+      createdAt: row.createdAt.toISOString(),
+      uploadedByName: row.uploadedByName,
+      extracted: null,
+      extractError: null,
+    };
+  }
+
+  startRead(id: string): void {
+    void this.prisma.deedSourceDocument
+      .update({ where: { id }, data: { extracted: Prisma.DbNull, extractError: null } })
+      .then(() => this.read(id))
+      .catch(() => {
+        /* read() already stores its own failure; nothing more to do here */
+      });
   }
 
   /**
