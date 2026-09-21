@@ -17,6 +17,7 @@ import {
   type PartyMeta,
 } from "./useDeedDocuments";
 import {
+  FILE_TOO_LARGE,
   useNameCheck,
   useProposeFill,
   useAddSourceDocument,
@@ -455,7 +456,16 @@ function UploadSlot({
           {t("Reading…", "पढ़ा जा रहा है…")}
         </p>
       )}
-      {add.isError && <p className="srcdoc-error">{add.error.message}</p>}
+      {add.isError && (
+        <p className="srcdoc-error">
+          {add.error.message === FILE_TOO_LARGE
+            ? t(
+                "This file is too large (up to 25 MB). Send a smaller scan or photo.",
+                "यह फ़ाइल बहुत बड़ी है (25 MB तक)। छोटा स्कैन या फ़ोटो डालें।",
+              )
+            : add.error.message}
+        </p>
+      )}
       {refused.length > 0 && (
         <p className="srcdoc-error">
           {t("Not added — only photos (JPG, PNG) and PDFs: ", "नहीं जोड़ी गई — सिर्फ़ फ़ोटो (JPG, PNG) और PDF चलते हैं: ")}

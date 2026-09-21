@@ -182,7 +182,7 @@ export interface SourceDocumentItem {
 }
 
 /** 15MB, the same ceiling the other upload routes use. */
-export const MAX_SOURCE_DOC = 15 * 1024 * 1024;
+export const MAX_SOURCE_DOC = 25 * 1024 * 1024;
 
 /**
  * What the model is allowed to send back. Anything outside this is dropped

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
+import { HTTPError } from "ky";
+import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
 /** One fact the model read out of an uploaded document. */
@@ -38,23 +39,61 @@ export function useSourceDocuments(deedId: string) {
   });
 }
 
+/** Sent to the panel for a file the server would refuse for its size. */
+export const FILE_TOO_LARGE = "file-too-large";
+
+/** Over this, a phone photo is scaled down before it is sent. */
+const SHRINK_OVER = 4 * 1024 * 1024;
+const MAX_SIDE = 2600;
+
+/**
+ * A phone camera writes 10-25 MB photos of a page that reads perfectly at a
+ * quarter of that. Scaling one down here keeps the upload inside the server's
+ * limit and off a slow connection; anything that is not an image, or that
+ * cannot be decoded, is sent exactly as it is.
+ */
+async function shrinkPhoto(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= SHRINK_OVER) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 export function useAddSourceDocument(deedId: string) {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
   return useMutation<SourceDocumentItem, Error, { file: File; role: DocumentRole }>({
-    mutationFn: ({ file, role }) => {
+    mutationFn: async ({ file, role }) => {
       const body = new FormData();
       body.append("role", role);
-      body.append("file", file);
-      return api
-        .post(`deeds/${deedId}/source-documents`, {
-          headers: authHeaders(token),
-          body,
-          // Reading a document goes out to the model, which is slower than the
-          // client's default patience for a plain upload.
-          timeout: 120_000,
-        })
-        .json<SourceDocumentItem>();
+      body.append("file", await shrinkPhoto(file));
+      try {
+        return await api
+          .post(`deeds/${deedId}/source-documents`, {
+            headers: authHeaders(token),
+            body,
+            // Reading a document goes out to the model, which is slower than the
+            // client's default patience for a plain upload.
+            timeout: 120_000,
+          })
+          .json<SourceDocumentItem>();
+      } catch (e) {
+        if (e instanceof HTTPError && e.response.status === 413) throw new Error(FILE_TOO_LARGE);
+        throw new Error(await apiErrorMessage(e, "Could not upload this file."));
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: keyFor(deedId) }),
   });
