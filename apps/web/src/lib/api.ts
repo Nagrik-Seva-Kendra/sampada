@@ -34,8 +34,8 @@ async function refreshAccessToken(): Promise<string | null> {
 
 /**
  * Typed HTTP client. Proxied to the API via Vite in dev (see vite.config.ts).
- * In production (web and api deployed as separate Vercel projects), set
- * VITE_API_URL to the api project's URL; the API's CORS_ORIGIN must allow it.
+ * In production (web and api deployed as separate Coolify apps), set
+ * VITE_API_URL to the api app's URL; the API's CORS_ORIGIN must allow it.
  */
 export const api = ky.create({
   prefixUrl: apiBase,
