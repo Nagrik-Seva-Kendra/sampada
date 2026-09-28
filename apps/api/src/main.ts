@@ -8,7 +8,11 @@ import { AppModule } from "./app.module.js";
 import { ZodExceptionFilter } from "./common/zod-exception.filter.js";
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // Keeps the raw request bytes (req.rawBody) so the WhatsApp webhook can verify
+    // Meta's X-Hub-Signature-256 HMAC. Also honoured by useBodyParser below.
+    rawBody: true,
+  });
 
   // CSP off: the built SPA loads its own bundled JS/CSS from this same origin.
   app.use(helmet({ contentSecurityPolicy: false }));

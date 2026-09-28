@@ -611,3 +611,34 @@ model PropertyImage {
 
   @@index([propertyId, sortOrder])
 }
+
+// ─── WhatsApp automation ─────────────────────────────────────────────────
+// Not in TENANT_MODELS: written by the public Meta webhook (no JWT/tenant
+// context). organizationId comes from WA_DEFAULT_ORG_ID (single shared number).
+
+/// One conversation collecting the details for a new deed draft.
+model DraftIntake {
+  id             String   @id @default(cuid())
+  organizationId String
+  phone          String
+  customerName   String?
+  /// ACTIVE | SUBMITTED | CANCELLED
+  status         String   @default("ACTIVE")
+  step           String
+  /// Collected answers. Aadhaar/PAN are AES-256-GCM encrypted ("enc:" prefix).
+  data           Json     @default("{}")
+  /// Details Claude extracted from the customer's old registry.
+  deed           Json?
+  documentKey    String?
+  needsStaff     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, phone, status])
+}
+
+/// Processed WhatsApp message ids — Meta re-delivers webhooks; this makes them idempotent.
+model WaInboundMessage {
+  waMessageId String   @id
+  createdAt   DateTime @default(now())
+}

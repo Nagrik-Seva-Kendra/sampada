@@ -14,6 +14,7 @@ import { OwnershipTransfersModule } from "./ownership-transfers/ownership-transf
 import { PropertiesModule } from "./properties/properties.module.js";
 import { PlatformModule } from "./platform/platform.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
+import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PrismaModule } from "./prisma/prisma.module.js";
     OwnershipTransfersModule,
     PropertiesModule,
     PlatformModule,
+    WhatsappModule,
   ],
   controllers: [HealthController, StatsController],
 })
