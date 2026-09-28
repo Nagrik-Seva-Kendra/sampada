@@ -6,6 +6,7 @@ import { NotificationBell } from "./features/dashboard/NotificationBell";
 import { DeedEditPage } from "./features/deeds/DeedEditPage";
 import { AllDeedsPage } from "./features/deeds/AllDeedsPage";
 import { PublicDeedViewPage } from "./features/deeds/PublicDeedViewPage";
+import { DataDeletionPage, PrivacyPolicyPage } from "./features/legal/LegalPages";
 import { TeamPage } from "./features/employees/TeamPage";
 import { GuidelinePage } from "./features/guideline/GuidelinePage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
@@ -61,6 +62,18 @@ const publicDeedViewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/d/$id",
   component: PublicDeedViewPage,
+});
+
+// Public legal pages (no auth) -- linked from the Meta WhatsApp app listing.
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: PrivacyPolicyPage,
+});
+const dataDeletionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/data-deletion",
+  component: DataDeletionPage,
 });
 
 const onboardingRoute = createRoute({
@@ -241,6 +254,8 @@ const dashboardRoute = dashboardLayoutRoute.addChildren([
 const routes = [
   deedEditRoute,
   publicDeedViewRoute,
+  privacyRoute,
+  dataDeletionRoute,
   onboardingRoute,
   loginRoute,
   signupRedirectRoute,
