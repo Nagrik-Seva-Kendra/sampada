@@ -38,15 +38,16 @@ pnpm prisma:migrate dev   # applies the committed migrations
 1. **Create a Neon project** at https://console.neon.tech.
 2. Neon gives you two connection strings — a pooled one (PgBouncer) and a
    direct one. Grab both.
-3. **In Render** (`sampada-api` service → Environment):
+3. **In Coolify** (Hostinger VPS → API application → Environment Variables):
    ```
    DATABASE_URL=<neon pooled connection string>
    DIRECT_URL=<neon direct connection string>
    ```
-4. Render's build command already runs `prisma migrate deploy` before
-   bundling (see `render.yaml`), so pushing to `main` keeps Neon's schema in
-   sync automatically. No manual `db push`/`migrate deploy` step needed
-   unless you're testing ahead of a deploy.
+4. Apply committed migrations on every deploy that adds one: run
+   `pnpm --filter @sampada/api exec prisma migrate deploy` (either in the
+   Coolify build/pre-deploy command or once by hand against production).
+   Migrations are never applied automatically by pushing to `main` unless
+   Coolify is configured to run that command.
 
 ---
 

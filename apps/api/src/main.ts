@@ -41,7 +41,7 @@ async function bootstrap() {
   // the app's relative "/api/v1" calls work with no CORS and a single URL.
   // WEB_DIST defaults to a "public" folder next to the running server. Always
   // resolved to an absolute path -- res.sendFile() rejects relative ones, and
-  // WEB_DIST is set as a repo-root-relative value on hosts like Render.
+  // WEB_DIST may be set as a repo-root-relative value in the deploy environment.
   const webDist = resolve(process.env.WEB_DIST ?? "public");
   const hasSpa = existsSync(join(webDist, "index.html"));
   if (hasSpa) {
