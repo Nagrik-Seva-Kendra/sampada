@@ -25,9 +25,14 @@ export const INTAKE_STATUS_LABEL: Record<WaIntakeStatus, string> = {
 
 export const WORK_STATUSES: WaWorkStatus[] = ["NEW", "IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"];
 
-export function formatAmount(amount: number | null, mode: "CUSTOM" | "GUIDELINE" | null): string {
-  if (amount == null) return mode === "GUIDELINE" ? "गाइडलाइन (स्टाफ बताएगा)" : "—";
-  return `₹${amount.toLocaleString("en-IN")}${mode === "GUIDELINE" ? " (गाइडलाइन)" : ""}`;
+/**
+ * Amount cell text; never blank. GUIDELINE with no value yet → staff will tell;
+ * a number → "₹15,00,000" (+ "(गाइडलाइन)" when it came from the guideline).
+ */
+export function formatAmount(amount: number | null | undefined, mode: "CUSTOM" | "GUIDELINE" | null): string {
+  const n = typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+  if (n == null) return mode === "GUIDELINE" ? "गाइडलाइन (स्टाफ बताएगा)" : "—";
+  return `₹${Math.round(n).toLocaleString("en-IN")}${mode === "GUIDELINE" ? " (गाइडलाइन)" : ""}`;
 }
 
 export function formatDate(iso: string): string {

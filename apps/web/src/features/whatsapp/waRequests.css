@@ -1,0 +1,78 @@
+/*
+ * "WhatsApp अनुरोध" list table. Deliberately its own classes instead of the
+ * shared .dr-table: that one forces `white-space: nowrap` on every cell (long
+ * property text then spills over the neighbouring columns) and turns into
+ * labelled cards under 720px, which this page doesn't use. Here: fixed column
+ * widths, text clipped/wrapped inside its own cell, horizontal scroll on phones.
+ */
+.wa-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.wa-table {
+  width: 100%;
+  min-width: 1040px; /* fixed columns + ≥ 200px property → below this it scrolls, never squeezes */
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.wa-table th,
+.wa-table td {
+  padding: 11px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden; /* a cell's text can never paint over the next cell */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.wa-table th {
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wa-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Column widths (colgroup). Property has no width: it takes what is left. */
+.wa-col-ref { width: 96px; }
+.wa-col-customer { width: 136px; }
+.wa-col-buyer { width: 128px; }
+.wa-col-amount { width: 128px; }
+.wa-col-status { width: 180px; } /* fits the two widest badges side by side */
+.wa-col-assignee { width: 104px; }
+.wa-col-date { width: 104px; }
+
+/* Long text: at most two lines, full text in the title tooltip. */
+.wa-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.45;
+}
+
+/* Status badges side by side on one line. */
+.wa-badges {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wa-badges .status-pill {
+  flex: 0 0 auto;
+}
+
+.wa-nowrap {
+  white-space: nowrap;
+}
