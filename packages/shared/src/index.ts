@@ -13,3 +13,4 @@ export * from "./deed-property.js";
 export * from "./platform.js";
 export * from "./hindi-numerals.js";
 export * from "./verify-amounts.js";
+export * from "./whatsapp-request.js";

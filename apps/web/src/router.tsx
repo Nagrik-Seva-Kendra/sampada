@@ -20,6 +20,8 @@ import { WelcomePage } from "./features/dashboard/WelcomePage";
 import { PlatformOrganizationsPage } from "./features/platform/PlatformOrganizationsPage";
 import { PlatformOrganizationDetailPage } from "./features/platform/PlatformOrganizationDetailPage";
 import { PropertiesListPage } from "./features/properties/PropertiesListPage";
+import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
+import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "./stores/authStore";
 
@@ -234,6 +236,24 @@ const propertyEditRoute = createRoute({
   component: GuardedPropertyEditPage,
 });
 
+// WhatsApp draft requests from the bot -- any staff member of the active org.
+function GuardedWhatsappRequestsPage() {
+  return useIsStaff() ? <WhatsappRequestsPage /> : <Navigate to="/deeds" />;
+}
+function GuardedWhatsappRequestDetailPage() {
+  return useIsStaff() ? <WhatsappRequestDetailPage /> : <Navigate to="/deeds" />;
+}
+const whatsappRequestsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/whatsapp-requests",
+  component: GuardedWhatsappRequestsPage,
+});
+const whatsappRequestDetailRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/whatsapp-requests/$id",
+  component: GuardedWhatsappRequestDetailPage,
+});
+
 const dashboardRoute = dashboardLayoutRoute.addChildren([
   dashboardIndexRoute,
   allDeedsRoute,
@@ -249,6 +269,8 @@ const dashboardRoute = dashboardLayoutRoute.addChildren([
   propertiesListRoute,
   propertyCreateRoute,
   propertyEditRoute,
+  whatsappRequestsRoute,
+  whatsappRequestDetailRoute,
 ]);
 
 const routes = [

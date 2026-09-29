@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, ChevronLeft, ChevronRight, FileStack, Settings, Users, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, FileStack, MessageCircle, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
@@ -9,6 +9,7 @@ import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { LangToggle } from "../../components/LangToggle";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { useWaNewCount } from "../whatsapp/useWhatsappRequests";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
 
@@ -17,11 +18,13 @@ function SidebarLink({
   icon,
   label,
   collapsed,
+  badge,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   collapsed: boolean;
+  badge?: number;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const on = pathname === to || pathname.startsWith(to + "/");
@@ -29,6 +32,11 @@ function SidebarLink({
     <Link to={to} className={"sidebar-link" + (on ? " on" : "")} title={collapsed ? label : undefined}>
       {icon}
       {!collapsed && label}
+      {!!badge && (
+        <span className="sidebar-count" aria-label={`${badge} नए`}>
+          {badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -58,6 +66,9 @@ export function Sidebar({
   // The drawer is the only nav on mobile, so it always shows labels — a
   // collapsed preference set on desktop would otherwise leave bare icons.
   const collapsed = mobileOpen ? false : collapsedPref;
+
+  const showWhatsapp = isStaff && !!activeOrganization;
+  const waNewCount = useWaNewCount(showWhatsapp).data?.newCount ?? 0;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 
@@ -111,6 +122,15 @@ export function Sidebar({
             icon={<BookOpen size={17} strokeWidth={2.2} />}
             label={t("sidebarGuideline")}
             collapsed={collapsed}
+          />
+        )}
+        {showWhatsapp && (
+          <SidebarLink
+            to="/whatsapp-requests"
+            icon={<MessageCircle size={17} strokeWidth={2.2} />}
+            label="WhatsApp अनुरोध"
+            collapsed={collapsed}
+            badge={waNewCount}
           />
         )}
         {canManageTeam && (

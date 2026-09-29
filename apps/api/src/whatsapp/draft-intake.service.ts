@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service.js";
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
+import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
   inr,
   normDigits,
@@ -33,26 +33,9 @@ const NO = /^(नहीं|नही|no|n|2|nahi|nahin)$/i;
 const SKIP = /^(नहीं|नही|no|na|nahi|nahin|-|none)$/i;
 const CANCEL = /^(रद्द|cancel|stop|बंद)$/i;
 
-// ---------- Aadhaar/PAN at-rest encryption (DATA_ENC_KEY = 64 hex chars) ----------
-const encKey = () => Buffer.from(process.env.DATA_ENC_KEY ?? "", "hex");
-function encrypt(plain: string): string {
-  const iv = randomBytes(12);
-  const c = createCipheriv("aes-256-gcm", encKey(), iv);
-  const ct = Buffer.concat([c.update(plain, "utf8"), c.final()]);
-  return "enc:" + Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64");
-}
-function decrypt(v: string): string {
-  if (!v?.startsWith("enc:")) return v;
-  const b = Buffer.from(v.slice(4), "base64");
-  const d = createDecipheriv("aes-256-gcm", encKey(), b.subarray(0, 12));
-  d.setAuthTag(b.subarray(12, 28));
-  return Buffer.concat([d.update(b.subarray(28)), d.final()]).toString("utf8");
-}
-const mask = (v: string) => (v ? "XXXX" + v.slice(-4) : "—");
-
 // ---------- questions asked before the amount (order = conversation order) ----------
 const BUYER_STEPS: Step[] = [
-  { key: "buyerName", label: "खरीदार", ask: "खरीदार (क्रेता) का पूरा नाम लिखें।", validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+  { key: "buyerName", label: "खरीदार", ask: "खरीदार (क्रेता) का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता का नाम अगले सवाल में पूछा जाएगा।", validate: validText(), err: "कृपया पूरा नाम लिखें।" },
   { key: "buyerFatherName", label: "पिता/पति का नाम", ask: "खरीदार के पिता या पति का नाम लिखें।", validate: validText() },
   { key: "buyerMotherName", label: "माता का नाम", ask: "खरीदार की माता का नाम लिखें।", validate: validText() },
   { key: "buyerAadhaar", label: "आधार", ask: "खरीदार का 12 अंकों का आधार नंबर लिखें।", validate: validAadhaar, secret: true, err: "आधार नंबर सही नहीं लग रहा। कृपया जाँचकर दोबारा लिखें।" },
@@ -242,9 +225,9 @@ export class DraftIntakeService {
   }
 
   private async submit(cur: any): Promise<string[]> {
-    await this.save(cur.id, { status: "SUBMITTED" });
-    // TODO: create a Case / work order for staff (documents: documentKey + extraDocs)
-    // and notify the assigned staff member.
+    await this.save(cur.id, { status: "SUBMITTED", workStatus: "NEW" });
+    // workStatus NEW puts it on the office's "WhatsApp अनुरोध" page.
+    // TODO: notify staff (e.g. push/email) when a new request arrives.
     const ref = String(cur.id).slice(-6).toUpperCase();
     return [`✅ आपका ड्राफ्ट अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nस्टाफ ड्राफ्ट तैयार करके आपसे संपर्क करेगा।`];
   }
