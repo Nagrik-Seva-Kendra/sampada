@@ -10,6 +10,11 @@ export interface DeedProperty {
   propertyType: "agricultural" | "residential_plot" | "house" | "flat" | "commercial" | null;
   areaValue: number | null;
   areaUnit: string | null;
+  /** Only when the deed says सिंचित / असिंचित. */
+  irrigation?: "irrigated" | "unirrigated" | null;
+  /** true only when the deed says the land is diverted (डायवर्टेड/व्यपवर्तित). */
+  diverted?: boolean | null;
+  divertedUse?: "res" | "com" | "ind" | null;
 }
 export interface DeedExtract {
   isSaleDeed: boolean;
@@ -25,14 +30,18 @@ export interface DeedExtract {
 const SYSTEM = `You read Madhya Pradesh (India) property registration documents written in Hindi or English.
 Return ONLY one JSON object (no prose, no markdown) with keys:
 isSaleDeed, documentType, registrationNo, registrationDate, sellers[{name,relation}], buyers[{name,relation}],
-property{district,tehsil,village,locality,khasraOrPlotNo,propertyType,areaValue,areaUnit}, consideration.
+property{district,tehsil,village,locality,khasraOrPlotNo,propertyType,areaValue,areaUnit,irrigation,diverted,divertedUse}, consideration.
 Rules:
 - Copy names and place names exactly as written (keep Devanagari as-is).
 - Use null for anything not clearly readable. Never guess or fill from general knowledge.
 - Do NOT extract Aadhaar, PAN, phone numbers or photos.
 - "buyers" are the क्रेता/purchasers of THIS deed (current owners).
 - propertyType is one of "agricultural","residential_plot","house","flat","commercial" or null.
-- areaValue is a number; areaUnit exactly as in the document (e.g. "वर्ग मीटर", "हेक्टेयर", "वर्ग फुट").`;
+- areaValue is a number; areaUnit exactly as in the document (e.g. "वर्ग मीटर", "हेक्टेयर", "वर्ग फुट").
+- locality: the guideline location / mohalla exactly as printed, including any ward (e.g. "वार्ड 66, सालूपुरा (रोड से अन्दर)").
+- irrigation: "irrigated" only if the document says सिंचित, "unirrigated" only if it says असिंचित, otherwise null.
+- diverted: true only if the document says the land is diverted (डायवर्टेड / व्यपवर्तित), false only if it clearly says undiverted agricultural land, otherwise null.
+- divertedUse: "res" / "com" / "ind" for the diverted purpose (आवासीय / व्यावसायिक / औद्योगिक), otherwise null.`;
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
