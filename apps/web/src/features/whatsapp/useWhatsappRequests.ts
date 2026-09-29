@@ -3,6 +3,7 @@ import type {
   WaAssignee,
   WaRequestDetail,
   WaRequestList,
+  WaRequestSummary,
   WaRequestUpdateInput,
   WaRevealResult,
   WaWorkStatus,
@@ -30,14 +31,17 @@ export function useWaRequests(filters: WaRequestFilters) {
   });
 }
 
-/** NEW-request count for the sidebar badge; refreshed every minute. */
-export function useWaNewCount(enabled: boolean) {
+/**
+ * Sidebar: badge count (managers: NEW; employees: their own NEW + IN_PROGRESS)
+ * and whether to show the item at all. Refreshed every minute.
+ */
+export function useWaSummary(enabled: boolean) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: ["wa-requests", "summary"],
     enabled: enabled && !!token,
     refetchInterval: 60_000,
-    queryFn: () => api.get("whatsapp/requests/summary", { headers: authHeaders(token) }).json<{ newCount: number }>(),
+    queryFn: () => api.get("whatsapp/requests/summary", { headers: authHeaders(token) }).json<WaRequestSummary>(),
   });
 }
 
@@ -46,15 +50,21 @@ export function useWaRequest(id: string) {
   return useQuery({
     queryKey: ["wa-requests", "detail", id],
     enabled: !!token && !!id,
+    // 404/403 are final answers (not yours / not found) -- show that at once, don't retry.
+    retry: (count, err) => {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      return status !== 404 && status !== 403 && count < 2;
+    },
     queryFn: () => api.get(`whatsapp/requests/${id}`, { headers: authHeaders(token) }).json<WaRequestDetail>(),
   });
 }
 
-export function useWaAssignees() {
+/** OWNER/ADMIN only (the API 403s for everyone else) -- pass enabled accordingly. */
+export function useWaAssignees(enabled: boolean) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: ["wa-requests", "assignees"],
-    enabled: !!token,
+    enabled: enabled && !!token,
     staleTime: 5 * 60_000,
     queryFn: () => api.get("whatsapp/requests/assignees", { headers: authHeaders(token) }).json<WaAssignee[]>(),
   });

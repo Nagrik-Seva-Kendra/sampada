@@ -57,7 +57,7 @@ const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
 export function WhatsappRequestDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const query = useWaRequest(id);
-  const assignees = useWaAssignees();
+  const assignees = useWaAssignees(!!query.data?.canAssign);
   const update = useUpdateWaRequest(id);
   const reveal = useRevealWaRequest(id);
   const openDocument = useWaDocumentOpener();
@@ -115,7 +115,8 @@ export function WhatsappRequestDetailPage() {
     try {
       await update.mutateAsync({
         workStatus: workStatus || undefined,
-        assigneeId: assigneeId || null,
+        // Only OWNER/ADMIN may reassign; the API rejects assigneeId from anyone else.
+        ...(r!.canAssign ? { assigneeId: assigneeId || null } : {}),
         staffNote: staffNote.trim() || null,
       });
       setMessage("बदलाव सहेज दिए गए।");
@@ -319,14 +320,18 @@ export function WhatsappRequestDetailPage() {
             </label>
             <label>
               ज़िम्मेदार स्टाफ
-              <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                <option value="">— कोई नहीं —</option>
-                {(assignees.data ?? []).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              {r.canAssign ? (
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                  <option value="">— कोई नहीं —</option>
+                  {(assignees.data ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ padding: "8px 0", fontWeight: 600 }}>{r.assigneeName || "—"}</div>
+              )}
             </label>
             <label className="dr-notes">
               स्टाफ नोट
