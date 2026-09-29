@@ -12,6 +12,7 @@ import {
   type RawBodyRequest,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { formatPayloadSummary, summarizePayload } from "./webhook-diagnostics.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 /**
@@ -33,14 +34,26 @@ export class WhatsappController {
     @Res() res: Response,
   ) {
     const expected = process.env.WA_VERIFY_TOKEN;
-    if (expected && mode === "subscribe" && token === expected) return res.status(200).send(challenge);
+    if (expected && mode === "subscribe" && token === expected) {
+      this.log.log("webhook verification (GET) ok");
+      return res.status(200).send(challenge);
+    }
+    this.log.warn(`webhook verification (GET) rejected mode=${mode ?? "-"} verifyTokenConfigured=${!!expected}`);
     return res.sendStatus(403);
   }
 
   @Post()
   @HttpCode(200)
   receive(@Req() req: RawBodyRequest<Request>, @Headers("x-hub-signature-256") signature: string) {
-    if (!this.wa.isValidSignature(req.rawBody, signature)) throw new ForbiddenException("Invalid signature");
+    // One line per delivery (counts only -- no message text, numbers or tokens),
+    // so "Meta says it sent it but we saw nothing" is always answerable from logs.
+    const summary = formatPayloadSummary(summarizePayload(req.body));
+    const sig = this.wa.verifySignature(req.rawBody, signature);
+    if (!sig.ok) {
+      this.log.warn(`webhook POST signature=invalid reason=${sig.reason} ${summary}`);
+      throw new ForbiddenException("Invalid signature");
+    }
+    this.log.log(`webhook POST signature=valid ${summary}`);
     // Reply 200 immediately (Meta retries slow webhooks); process in background.
     setImmediate(() => {
       this.wa.handlePayload(req.body).catch((e) => this.log.error(`webhook failed: ${e?.message}`));
