@@ -41,6 +41,22 @@ export interface WaRequestListItem {
   /** e.g. "वार्ड 12, ग्वालियर · खसरा 45/2" (null when nothing was read from the registry). */
   propertySummary: string | null;
   assigneeName: string | null;
+  /** Which document the customer asked for (older requests: "sale"). */
+  deedType: WaDeedType;
+}
+
+export type WaDeedType = "sale" | "mortgage" | "other";
+
+/** One person on a mortgage deed (the mortgagor or a witness). Aadhaar masked. */
+export interface WaPerson {
+  role: string; // "बंधककर्ता" | "पहला गवाह" | "दूसरा गवाह"
+  name: string | null;
+  fatherName: string | null;
+  motherName: string | null;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+  aadhaarMasked: string | null;
 }
 
 export interface WaRequestList {
@@ -99,6 +115,10 @@ export interface WaRequestDetail extends WaRequestListItem {
    * or the conversation predates the questions). Each: true/false, null = "पता नहीं".
    */
   plot: { hasBuilding: boolean | null; corner: boolean | null; boundaryWall: boolean | null } | null;
+  /** बंधक पत्र: the mortgagor and the two witnesses, in that order (null for other documents). */
+  mortgage: { people: WaPerson[] } | null;
+  /** "कोई और दस्तावेज़": what the customer wrote they want (e.g. "दान पत्र"). */
+  requestedDeed: string | null;
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: { index: number; label: string }[];
   /** Whether the caller may use POST /reveal. */
@@ -111,6 +131,8 @@ export interface WaRevealResult {
   aadhaar: string | null;
   pan: string | null;
   sellerPan: string | null;
+  /** Mortgage deeds: each person's Aadhaar, same order as detail.mortgage.people. */
+  people: { role: string; aadhaar: string | null }[];
 }
 
 export interface WaAssignee {

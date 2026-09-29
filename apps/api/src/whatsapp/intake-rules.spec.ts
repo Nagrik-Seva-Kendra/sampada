@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  detectDeedIntent,
   parseAmount,
+  parseDeedChoice,
   taxFlags,
   taxNotice,
   validAadhaar,
@@ -70,5 +72,26 @@ describe("tax notices", () => {
   });
   it("always carries the disclaimer", () => {
     expect(taxNotice(taxFlags(1_000_000, false))).toContain("स्वयं की ज़िम्मेदारी");
+  });
+});
+
+describe("deed intent", () => {
+  it("recognises a mortgage from the customer's own words", () => {
+    expect(detectDeedIntent("यह बैंक का सैंक्शन लेटर है बंधक बनाना है")).toBe("mortgage");
+    expect(detectDeedIntent("bandhak banana hai")).toBe("mortgage");
+    expect(detectDeedIntent("home loan ke liye mortgage")).toBe("mortgage");
+  });
+  it("recognises sale and other deeds, or nothing", () => {
+    expect(detectDeedIntent("प्लॉट बेचना है")).toBe("sale");
+    expect(detectDeedIntent("दान पत्र बनवाना है")).toBe("other");
+    expect(detectDeedIntent("वसीयत")).toBe("other");
+    expect(detectDeedIntent("नमस्ते")).toBeNull();
+  });
+  it("menu choice by number or words (Hindi digits too)", () => {
+    expect(parseDeedChoice("1")).toBe("sale");
+    expect(parseDeedChoice("२")).toBe("mortgage");
+    expect(parseDeedChoice("3")).toBe("other");
+    expect(parseDeedChoice("बंधक")).toBe("mortgage");
+    expect(parseDeedChoice("पता नहीं")).toBeNull();
   });
 });

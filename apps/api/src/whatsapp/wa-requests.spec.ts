@@ -5,6 +5,7 @@ import { ForbiddenException, Logger, NotFoundException } from "@nestjs/common";
 import { WaRequestUpdateInput } from "@sampada/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DraftIntakeService } from "./draft-intake.service.js";
+import { validAadhaar } from "./intake-rules.js";
 import { encrypt } from "./pii-crypto.js";
 import {
   documentKeyAt,
@@ -13,6 +14,7 @@ import {
   maskSecret,
   mimeForKey,
   propertySummary,
+  revealSecrets,
   toDetail,
   toListItem,
 } from "./wa-requests.mapper.js";
@@ -218,7 +220,7 @@ describe("WaRequestsService", () => {
     );
     for (const role of ["OWNER", "ADMIN"]) {
       const out = await new WaRequestsService(prisma as any, tenant(role) as any).reveal("cmg1abcdefxyz123");
-      expect(out).toEqual({ aadhaar: AADHAAR, pan: PAN, sellerPan: null });
+      expect(out).toEqual({ aadhaar: AADHAAR, pan: PAN, sellerPan: null, people: [] });
     }
     expect(logged).toContain("log: request XYZ123 (cmg1abcdefxyz123): Aadhaar/PAN revealed by user user-7 role=OWNER");
     const all = logged.join("\n");
@@ -420,6 +422,136 @@ describe("DraftIntakeService plot questions", () => {
     expect(text).toContain("प्लॉट पर मकान/निर्माण: नहीं");
     expect(text).toContain("कॉर्नर प्लॉट: हाँ");
     expect(text).toContain("बाउंड्री वॉल: पता नहीं");
+  });
+});
+
+describe("DraftIntakeService document choice and बंधक पत्र (mortgage) flow", () => {
+  /** A Verhoeff-valid test Aadhaar (not a real person's): brute-force the check digit. */
+  const aadhaar = (base11: string) => {
+    for (let d = 0; d <= 9; d++) if (validAadhaar(base11 + d)) return base11 + d;
+    throw new Error("no check digit");
+  };
+  const sanctionLetter = { isSaleDeed: false, documentType: "बैंक सैंक्शन लेटर", buyers: [], sellers: [], property: null };
+
+  function conversation(step: string, deed: unknown, data: Record<string, unknown> = {}) {
+    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data, deed, needsStaff: false };
+    const prisma = {
+      draftIntake: {
+        findFirst: vi.fn(async () => (cur.status === "ACTIVE" ? cur : null)),
+        update: vi.fn(async ({ data }: any) => Object.assign(cur, data)),
+        create: vi.fn(async ({ data }: any) => Object.assign(cur, data, { status: "ACTIVE" })),
+      },
+    };
+    const extractor = { extract: vi.fn(async () => sanctionLetter) };
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any);
+    const say = (text: string) => svc.handleText({ phone: "919876543210", name: "अनुज" }, text);
+    return { cur, say, svc, prisma };
+  }
+
+  it("the screenshot case: at 'हाँ/नहीं', \"…बंधक बनाना है\" starts the mortgage questions", async () => {
+    const c = conversation("CONFIRM_PROPERTY", sanctionLetter);
+    const reply = (await c.say("यह बैंक का सैंक्शन लेटर है बंधक बनाना है"))!.join("\n");
+    expect(reply).toContain("बंधक पत्र का विवरण");
+    expect(reply).toContain("रजिस्ट्री की PDF या फ़ोटो भी भेज दें"); // no property deed yet
+    expect(reply).toContain("बंधककर्ता (जो संपत्ति बंधक रख रहे हैं) का पूरा नाम");
+    expect(c.cur.data.deedType).toBe("mortgage");
+    expect(c.cur.step).toBe("mortgagorName");
+  });
+
+  it("a non-sale document asks which deed to make; 'नहीं' on a sale deed asks too (no cancel)", async () => {
+    const c = conversation("NONE", null);
+    c.cur.status = "NONE";
+    const out = await c.svc.handleDocument({ phone: "919876543210", name: "अनुज" }, { key: "k", buf: Buffer.from(""), mime: "application/pdf" });
+    expect(out[0]).toContain("कौन सा दस्तावेज़ बनवाना है");
+    expect(c.cur.step).toBe("CHOOSE_DEED");
+
+    const s = conversation("CONFIRM_PROPERTY", { isSaleDeed: true, property: { propertyType: "flat" }, buyers: [], sellers: [] });
+    expect((await s.say("नहीं"))!.join()).toContain("कौन सा दस्तावेज़ बनवाना है");
+    expect(s.cur.status).toBe("ACTIVE");
+  });
+
+  it("asks mortgagor + two witnesses (name, father, mother, Aadhaar, mobile, email, address), then summary", async () => {
+    const c = conversation("CHOOSE_DEED", sanctionLetter);
+    await c.say("2");
+    const people = [
+      ["राम प्रसाद", "श्याम प्रसाद", "सीता देवी", aadhaar("23456789012"), "9876543210", "ram@example.com", "वार्ड 12, लश्कर, ग्वालियर"],
+      ["गवाह एक", "पिता एक", "माता एक", aadhaar("34567890123"), "9812345678", "नहीं", "मुरार, ग्वालियर 474006"],
+      ["गवाह दो", "पिता दो", "माता दो", aadhaar("45678901234"), "9898989898", "w2@example.com", "थाटीपुर, ग्वालियर"],
+    ];
+    let last: string[] | null = null;
+    for (const person of people) for (const answer of person) last = await c.say(answer);
+    expect(c.cur.step).toBe("FINAL");
+    const summary = last!.join("\n");
+    expect(summary).toContain("दस्तावेज़: बंधक पत्र");
+    expect(summary).toContain("*बंधककर्ता*");
+    expect(summary).toContain("*पहला गवाह*");
+    expect(summary).toContain("*दूसरा गवाह*");
+    expect(summary).toContain("माता का नाम: सीता देवी");
+    expect(summary).not.toContain(people[0]![3]); // Aadhaar masked in the chat
+    expect(c.cur.data.mortgagorAadhaar).toMatch(/^enc:/); // and encrypted at rest
+    expect(c.cur.data.witness1Email).toBe("");
+
+    expect((await c.say("हाँ"))!.join()).toContain("अनुरोध नंबर: XYZ123");
+    expect(c.cur).toMatchObject({ status: "SUBMITTED", workStatus: "NEW" });
+  });
+
+  it("re-asks a wrong witness Aadhaar", async () => {
+    const c = conversation("witness2Aadhaar", sanctionLetter, { deedType: "mortgage" });
+    expect((await c.say("123456789012"))!.join()).toContain("आधार नंबर सही नहीं");
+    expect(c.cur.step).toBe("witness2Aadhaar");
+  });
+
+  it("बदलें on a mortgage restarts at the mortgagor and keeps the deed type", async () => {
+    const c = conversation("FINAL", sanctionLetter, { deedType: "mortgage", mortgagorName: "राम" });
+    await c.say("बदलें");
+    expect(c.cur.step).toBe("mortgagorName");
+    expect(c.cur.data).toEqual({ deedType: "mortgage" });
+  });
+
+  it("another document: '3' asks which, then records it for staff", async () => {
+    const c = conversation("CHOOSE_DEED", sanctionLetter);
+    expect((await c.say("3"))!.join()).toContain("कौन सा दस्तावेज़ बनवाना है? संक्षेप में");
+    expect((await c.say("दान पत्र बेटे के नाम"))!.join()).toContain("स्टाफ आपसे जल्द संपर्क करेगा");
+    expect(c.cur).toMatchObject({ status: "SUBMITTED", workStatus: "NEW", needsStaff: true });
+    expect(c.cur.data).toMatchObject({ deedType: "other", requestedDeed: "दान पत्र बेटे के नाम" });
+  });
+
+  it("with no conversation, 'बंधक बनाना है' asks for the sanction letter and registry", async () => {
+    const c = conversation("NONE", null);
+    c.cur.status = "NONE";
+    expect((await c.say("मुझे बंधक बनाना है"))!.join()).toContain("सैंक्शन लेटर");
+  });
+});
+
+describe("mapper: mortgage requests", () => {
+  const m = () =>
+    row({
+      data: {
+        deedType: "mortgage",
+        mortgagorName: "राम प्रसाद",
+        mortgagorAadhaar: encrypt("234567890124"),
+        witness1Name: "गवाह एक",
+        witness1Aadhaar: encrypt("345678901235"),
+      },
+    });
+  it("shows the mortgagor in the list and all three people (Aadhaar masked) in detail", () => {
+    expect(toListItem(m(), null)).toMatchObject({ deedType: "mortgage", buyerName: "राम प्रसाद" });
+    const d = toDetail(m(), null, true);
+    expect(d.mortgage!.people.map((p) => [p.role, p.name, p.aadhaarMasked])).toEqual([
+      ["बंधककर्ता", "राम प्रसाद", "XXXX0124"],
+      ["पहला गवाह", "गवाह एक", "XXXX1235"],
+      ["दूसरा गवाह", null, null],
+    ]);
+    expect(JSON.stringify(d)).not.toContain("234567890124");
+  });
+  it("reveal returns each person's Aadhaar; old requests default to sale", () => {
+    expect(revealSecrets(m()).people).toEqual([
+      { role: "बंधककर्ता", aadhaar: "234567890124" },
+      { role: "पहला गवाह", aadhaar: "345678901235" },
+      { role: "दूसरा गवाह", aadhaar: null },
+    ]);
+    expect(toListItem(row(), null).deedType).toBe("sale");
+    expect(toDetail(row(), null, false).mortgage).toBeNull();
   });
 });
 

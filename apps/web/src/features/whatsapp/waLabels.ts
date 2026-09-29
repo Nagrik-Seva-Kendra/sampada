@@ -1,4 +1,4 @@
-import type { WaIntakeStatus, WaWorkStatus } from "@sampada/shared";
+import type { WaDeedType, WaIntakeStatus, WaWorkStatus } from "@sampada/shared";
 
 /** Hindi labels for the "WhatsApp अनुरोध" pages (Hindi-only UI by request). */
 export const WORK_STATUS_LABEL: Record<WaWorkStatus, string> = {
@@ -21,6 +21,12 @@ export const INTAKE_STATUS_LABEL: Record<WaIntakeStatus, string> = {
   ACTIVE: "बातचीत जारी",
   SUBMITTED: "जमा किया",
   CANCELLED: "रद्द",
+};
+
+export const DEED_TYPE_LABEL: Record<WaDeedType, string> = {
+  sale: "विक्रय पत्र",
+  mortgage: "बंधक पत्र",
+  other: "अन्य दस्तावेज़",
 };
 
 export const WORK_STATUSES: WaWorkStatus[] = ["NEW", "IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"];

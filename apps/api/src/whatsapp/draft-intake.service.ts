@@ -4,9 +4,12 @@ import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
+  detectDeedIntent,
   inr,
+  MORTGAGE_PEOPLE,
   normDigits,
   parseAmount,
+  parseDeedChoice,
   taxFlags,
   taxNotice,
   validAadhaar,
@@ -88,6 +91,32 @@ const BUYER_STEPS: Step[] = [
 const PAN_STEP: Step = { key: "buyerPan", label: "खरीदार PAN", ask: "खरीदार का PAN नंबर लिखें।", validate: validPan, secret: true, err: "PAN सही नहीं है (जैसे ABCDE1234F)।" };
 const SELLER_PAN_STEP: Step = { key: "sellerPan", label: "विक्रेता PAN", ask: "TDS के लिए विक्रेता का PAN नंबर लिखें।", validate: validPan, secret: true, err: "PAN सही नहीं है (जैसे ABCDE1234F)।" };
 const ALL_STEPS = [...BUYER_STEPS, PAN_STEP, SELLER_PAN_STEP];
+
+// ---------- बंधक पत्र (mortgage deed): the mortgagor + two witnesses ----------
+/** Same details for every person on a mortgage deed; `who` is used in the questions. */
+function personSteps(prefix: string, who: string, heading: string): Step[] {
+  return [
+    { key: `${prefix}Name`, label: `${heading} — नाम`, ask: `${who} का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता का नाम अगले सवाल में पूछा जाएगा।`, validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+    { key: `${prefix}FatherName`, label: `${heading} — पिता/पति का नाम`, ask: `${who} के पिता या पति का नाम लिखें।`, validate: validText() },
+    { key: `${prefix}MotherName`, label: `${heading} — माता का नाम`, ask: `${who} की माता का नाम लिखें।`, validate: validText() },
+    { key: `${prefix}Aadhaar`, label: `${heading} — आधार`, ask: `${who} का 12 अंकों का आधार नंबर लिखें।`, validate: validAadhaar, secret: true, err: "आधार नंबर सही नहीं लग रहा। कृपया जाँचकर दोबारा लिखें।" },
+    { key: `${prefix}Mobile`, label: `${heading} — मोबाइल`, ask: `${who} का 10 अंकों का मोबाइल नंबर लिखें।`, validate: validMobile, err: "मोबाइल नंबर सही नहीं है। 10 अंकों का नंबर लिखें।" },
+    { key: `${prefix}Email`, label: `${heading} — ईमेल`, ask: `${who} की ईमेल ID लिखें। न हो तो "नहीं" लिखें।`, validate: validEmail, optional: true, err: 'ईमेल सही नहीं है। न हो तो "नहीं" लिखें।' },
+    { key: `${prefix}Address`, label: `${heading} — पता`, ask: `${who} का पूरा पता लिखें।`, validate: validText(8), err: "कृपया पूरा पता लिखें।" },
+  ];
+}
+const MORTGAGE_STEPS: Step[] = MORTGAGE_PEOPLE.flatMap((m) => personSteps(m.prefix, m.who, m.heading));
+/** Every free-text question, whichever deed it belongs to. */
+const ANY_STEPS = [...ALL_STEPS, ...MORTGAGE_STEPS];
+
+const CHOOSE_DEED_ASK =
+  "आपको कौन सा दस्तावेज़ बनवाना है? नंबर या नाम लिखें:\n" +
+  "1. विक्रय पत्र (रजिस्ट्री — संपत्ति बेचना/खरीदना)\n" +
+  "2. बंधक पत्र (बैंक लोन के लिए संपत्ति बंधक रखना)\n" +
+  "3. कोई और दस्तावेज़ (दान पत्र, वसीयत, मुख्तारनामा आदि)\n" +
+  '(बंद करने के लिए "रद्द" लिखें।)';
+const OTHER_ASK = "कौन सा दस्तावेज़ बनवाना है? संक्षेप में लिखें (जैसे दान पत्र, वसीयत, मुख्तारनामा)।";
+const DEED_LABEL: Record<string, string> = { sale: "विक्रय पत्र", mortgage: "बंधक पत्र", other: "अन्य दस्तावेज़" };
 const AMOUNT_ASK = "रजिस्ट्री कितनी राशि पर बनानी है? राशि लिखें (जैसे 1500000 या 15 लाख), या \"गाइडलाइन\" लिखें।";
 
 @Injectable()
@@ -116,19 +145,22 @@ export class DraftIntakeService {
       return null;
     });
 
+    // A sale deed → "draft for this property?"; anything else (a bank sanction
+    // letter, an unreadable scan, ...) → ask which document they want made.
+    const isSale = !!deed?.isSaleDeed && !!deed.property;
     await this.prisma.draftIntake.create({
       data: {
         organizationId: this.orgId,
         phone: ctx.phone,
         customerName: ctx.name,
-        step: "CONFIRM_PROPERTY",
+        step: isSale ? "CONFIRM_PROPERTY" : "CHOOSE_DEED",
         data: {},
         deed: (deed ?? undefined) as any,
         documentKey: file.key,
-        needsStaff: !deed?.isSaleDeed,
+        needsStaff: !deed,
       },
     });
-    return [this.deedSummary(deed)];
+    return [isSale ? this.deedSummary(deed) : "दस्तावेज़ मिल गया ✅\n\n" + CHOOSE_DEED_ASK];
   }
 
   // ================= text received =================
@@ -138,7 +170,10 @@ export class DraftIntakeService {
     const cur = await this.active(ctx.phone);
 
     if (!cur) {
-      if (/ड्राफ्ट|draft|रजिस्ट्री|registry/i.test(v)) {
+      if (detectDeedIntent(v) === "mortgage") {
+        return ["बंधक पत्र के लिए कृपया बैंक का सैंक्शन लेटर और जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री की PDF या साफ़ फ़ोटो भेजें।"];
+      }
+      if (/ड्राफ्ट|draft|रजिस्ट्री|registry/i.test(v) || detectDeedIntent(v)) {
         return ["ड्राफ्ट के लिए कृपया पुरानी रजिस्ट्री की PDF या सभी पन्नों की साफ़ फ़ोटो भेजें।"];
       }
       return null;
@@ -150,15 +185,24 @@ export class DraftIntakeService {
 
     const data: any = { ...(cur.data as any) };
     switch (cur.step) {
-      case "CONFIRM_PROPERTY":
-        if (YES.test(v)) {
-          return this.goto(cur.id, data, isPlotDeed(cur.deed as DeedExtract | null) ? PLOT_STEPS[0].key : BUYER_STEPS[0]!.key);
-        }
-        if (NO.test(v)) {
-          await this.save(cur.id, { status: "CANCELLED", needsStaff: true });
-          return ["ठीक है। हमारा स्टाफ आपसे जल्द संपर्क करेगा।"];
-        }
-        return ["कृपया \"हाँ\" या \"नहीं\" लिखें।"];
+      case "CONFIRM_PROPERTY": {
+        // Answer what the customer actually said: "बंधक बनाना है" is not a yes/no.
+        const intent = YES.test(v) ? "sale" : NO.test(v) ? null : detectDeedIntent(v);
+        if (intent) return this.startDeed(cur, data, intent);
+        if (NO.test(v)) return this.goto(cur.id, data, "CHOOSE_DEED", "ठीक है।");
+        return ['कृपया "हाँ" या "नहीं" लिखें, या बताएँ कौन सा दस्तावेज़ बनवाना है (जैसे बंधक पत्र)।'];
+      }
+
+      case "CHOOSE_DEED": {
+        const intent = parseDeedChoice(v);
+        if (!intent) return ["कृपया 1, 2 या 3 लिखें।\n\n" + CHOOSE_DEED_ASK];
+        // "3" alone doesn't say which document -- ask; words like "दान पत्र" already do.
+        if (intent === "other" && /^3\b/.test(v)) return this.goto(cur.id, data, "OTHER_DESC");
+        return this.startDeed(cur, data, intent, raw);
+      }
+
+      case "OTHER_DESC":
+        return this.startDeed(cur, data, "other", raw);
 
       case "PLOT_BUILDING":
       case "PLOT_CORNER":
@@ -186,14 +230,15 @@ export class DraftIntakeService {
       case "FINAL":
         if (YES.test(v)) return this.submit(cur);
         if (/बदल|change|edit/i.test(v)) {
-          // Re-collect the buyer details; the plot answers are about the property and stay.
-          const keep = Object.fromEntries(PLOT_FIELDS.filter((f) => f in data).map((f) => [f, data[f]]));
-          return this.goto(cur.id, keep, BUYER_STEPS[0]!.key, "ठीक है, विवरण दोबारा लेते हैं।");
+          // Re-collect the people's details; the deed type and plot answers stay.
+          const keep = Object.fromEntries(["deedType", ...PLOT_FIELDS].filter((f) => f in data).map((f) => [f, data[f]]));
+          const first = data.deedType === "mortgage" ? MORTGAGE_STEPS[0]!.key : BUYER_STEPS[0]!.key;
+          return this.goto(cur.id, keep, first, "ठीक है, विवरण दोबारा लेते हैं।");
         }
         return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
 
       default: {
-        const step = ALL_STEPS.find((s) => s.key === cur.step);
+        const step = ANY_STEPS.find((s) => s.key === cur.step);
         if (!step) return null;
         const optional = step.optional || (step === PAN_STEP && !data.tax?.panRequired);
         const val = optional && SKIP.test(v) ? "" : step.validate(v);
@@ -204,8 +249,40 @@ export class DraftIntakeService {
     }
   }
 
-  /** Buyer steps → AMOUNT → buyer PAN → seller PAN (only if TDS) → FINAL. */
+  /**
+   * Starts the chosen document's questions.
+   * sale → plot questions (plots only) → buyer; mortgage → mortgagor + 2 witnesses;
+   * other → recorded for staff and submitted (the bot has no questions for it yet).
+   */
+  private async startDeed(cur: any, data: any, intent: "sale" | "mortgage" | "other", said?: string): Promise<string[]> {
+    const deed = cur.deed as DeedExtract | null;
+    if (intent === "sale") {
+      data.deedType = "sale";
+      if (!deed?.isSaleDeed) {
+        // No sale deed to read the property from -- staff will need the registry.
+        await this.save(cur.id, { needsStaff: true });
+      }
+      return this.goto(cur.id, data, isPlotDeed(deed) ? PLOT_STEPS[0].key : BUYER_STEPS[0]!.key);
+    }
+    if (intent === "mortgage") {
+      data.deedType = "mortgage";
+      const intro = ["ठीक है, बंधक पत्र का विवरण लेते हैं: पहले बंधककर्ता की जानकारी, फिर दो गवाहों की।"];
+      if (!deed?.isSaleDeed) {
+        intro.push("जिस संपत्ति को बंधक रखना है, उसकी रजिस्ट्री की PDF या फ़ोटो भी भेज दें।");
+      }
+      return this.goto(cur.id, data, MORTGAGE_STEPS[0]!.key, intro.join("\n"));
+    }
+    data.deedType = "other";
+    data.requestedDeed = (said ?? "").trim().slice(0, 200) || null;
+    await this.save(cur.id, { data, step: "FINAL", status: "SUBMITTED", workStatus: "NEW", needsStaff: true });
+    const ref = String(cur.id).slice(-6).toUpperCase();
+    return [`✅ आपका अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nइस दस्तावेज़ के लिए हमारा स्टाफ आपसे जल्द संपर्क करेगा।`];
+  }
+
+  /** Buyer steps → AMOUNT → buyer PAN → seller PAN (only if TDS) → FINAL; mortgage: people in order → FINAL. */
   private nextStep(after: string, data: any): string {
+    const m = MORTGAGE_STEPS.findIndex((s) => s.key === after);
+    if (m >= 0) return MORTGAGE_STEPS[m + 1]?.key ?? "FINAL";
     const i = BUYER_STEPS.findIndex((s) => s.key === after);
     if (i >= 0) return BUYER_STEPS[i + 1]?.key ?? "AMOUNT";
     if (after === "AMOUNT") return PAN_STEP.key;
@@ -284,6 +361,18 @@ export class DraftIntakeService {
 
   // ================= summary / submit =================
   private finalSummary(d: any): string {
+    const shownValue = (s: Step) => (d[s.key] ? (s.secret ? mask(decrypt(d[s.key])) : d[s.key]) : "—");
+    if (d.deedType === "mortgage") {
+      const lines = ["कृपया विवरण जाँचें:", `दस्तावेज़: ${DEED_LABEL.mortgage}`];
+      for (const m of MORTGAGE_PEOPLE) {
+        lines.push("", `*${m.heading}*`);
+        for (const s of MORTGAGE_STEPS.filter((x) => x.key.startsWith(m.prefix))) {
+          if (d[s.key] !== undefined) lines.push(`${s.label.split(" — ")[1]}: ${shownValue(s)}`);
+        }
+      }
+      lines.push("", 'सही है तो "हाँ" लिखें। दोबारा भरने के लिए "बदलें" लिखें।');
+      return lines.join("\n");
+    }
     const lines = ["कृपया विवरण जाँचें:"];
     for (const s of PLOT_STEPS) {
       if (d[s.field] !== undefined) lines.push(`${s.label}: ${yesNoLabel(d[s.field])}`);
@@ -311,7 +400,8 @@ export class DraftIntakeService {
 
   private deedSummary(deed: DeedExtract | null): string {
     const tail =
-      "\n\nक्या इसी संपत्ति का नया रजिस्ट्री ड्राफ्ट बनवाना है? \"हाँ\" या \"नहीं\" लिखें।" +
+      "\n\nक्या इसी संपत्ति का नया रजिस्ट्री (विक्रय पत्र) ड्राफ्ट बनवाना है? \"हाँ\" या \"नहीं\" लिखें।" +
+      "\nकोई और दस्तावेज़ बनवाना हो तो उसका नाम लिखें (जैसे बंधक पत्र)।" +
       "\n(आपकी जानकारी सिर्फ़ ड्राफ्ट बनाने में उपयोग होगी। कभी भी \"रद्द\" लिखकर बंद कर सकते हैं।)";
     if (!deed?.isSaleDeed || !deed.property) return "दस्तावेज़ मिल गया ✅ इसका विवरण स्टाफ जाँचेगा।" + tail;
     const p = deed.property;
@@ -352,9 +442,11 @@ export class DraftIntakeService {
     if (step === "AMOUNT") return AMOUNT_ASK;
     if (step === "CONFIRM_PROPERTY") return "कृपया \"हाँ\" या \"नहीं\" लिखें।";
     if (step === "FINAL") return this.finalSummary(data);
+    if (step === "CHOOSE_DEED") return CHOOSE_DEED_ASK;
+    if (step === "OTHER_DESC") return OTHER_ASK;
     const plot = PLOT_STEPS.find((s) => s.key === step);
     if (plot) return plot.ask;
     if (step === PAN_STEP.key && !data.tax?.panRequired) return PAN_STEP.ask + " PAN न हो तो \"नहीं\" लिखें।";
-    return ALL_STEPS.find((s) => s.key === step)?.ask ?? "";
+    return ANY_STEPS.find((s) => s.key === step)?.ask ?? "";
   }
 }

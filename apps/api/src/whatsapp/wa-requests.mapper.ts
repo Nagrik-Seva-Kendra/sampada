@@ -6,6 +6,8 @@
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type {
   WaDeedParty,
+  WaDeedType,
+  WaPerson,
   WaIntakeStatus,
   WaPropertySummary,
   WaRequestDetail,
@@ -13,6 +15,7 @@ import type {
   WaRevealResult,
   WaWorkStatus,
 } from "@sampada/shared";
+import { MORTGAGE_PEOPLE } from "./intake-rules.js";
 import { decrypt, mask } from "./pii-crypto.js";
 import { maskPhone } from "./webhook-diagnostics.js";
 
@@ -100,11 +103,13 @@ export function toListItem(row: DraftIntakeRow, assigneeName: string | null): Wa
     workStatus: row.workStatus && WORK_STATUSES.has(row.workStatus) ? (row.workStatus as WaWorkStatus) : null,
     needsStaff: row.needsStaff,
     createdAt: row.createdAt.toISOString(),
-    buyerName: str(d.buyerName),
+    // The list's "खरीदार" column: for a बंधक पत्र it shows the mortgagor.
+    buyerName: deedTypeOf(d) === "mortgage" ? str(d.mortgagorName) : str(d.buyerName),
     amount: num(d.amount),
     amountMode: mode,
     propertySummary: propertySummary(property(deed?.property)),
     assigneeName,
+    deedType: deedTypeOf(d),
   };
 }
 
@@ -154,6 +159,8 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
           consideration: num(deed.consideration),
         }
       : null,
+    mortgage: deedTypeOf(d) === "mortgage" ? { people: mortgagePeople(d) } : null,
+    requestedDeed: str(d.requestedDeed),
     plot: plotAsked
       ? { hasBuilding: tri(d.plotHasBuilding), corner: tri(d.plotCorner), boundaryWall: tri(d.plotBoundary) }
       : null,
@@ -165,7 +172,33 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
 
 export function revealSecrets(row: DraftIntakeRow): WaRevealResult {
   const d = (row.data ?? {}) as Record<string, unknown>;
-  return { aadhaar: revealSecret(d.buyerAadhaar), pan: revealSecret(d.buyerPan), sellerPan: revealSecret(d.sellerPan) };
+  return {
+    aadhaar: revealSecret(d.buyerAadhaar),
+    pan: revealSecret(d.buyerPan),
+    sellerPan: revealSecret(d.sellerPan),
+    people:
+      deedTypeOf(d) === "mortgage"
+        ? MORTGAGE_PEOPLE.map((m) => ({ role: m.heading, aadhaar: revealSecret(d[`${m.prefix}Aadhaar`]) }))
+        : [],
+  };
+}
+
+/** Requests from before document types existed are sale deeds. */
+export function deedTypeOf(d: Record<string, unknown>): WaDeedType {
+  return d.deedType === "mortgage" || d.deedType === "other" ? d.deedType : "sale";
+}
+
+function mortgagePeople(d: Record<string, unknown>): WaPerson[] {
+  return MORTGAGE_PEOPLE.map((m) => ({
+    role: m.heading,
+    name: str(d[`${m.prefix}Name`]),
+    fatherName: str(d[`${m.prefix}FatherName`]),
+    motherName: str(d[`${m.prefix}MotherName`]),
+    mobile: str(d[`${m.prefix}Mobile`]),
+    email: str(d[`${m.prefix}Email`]),
+    address: str(d[`${m.prefix}Address`]),
+    aadhaarMasked: maskSecret(d[`${m.prefix}Aadhaar`]),
+  }));
 }
 
 /** Storage key of the index-th file (0 = registry, 1.. = extras), or null. Keys only ever come from the row. */
