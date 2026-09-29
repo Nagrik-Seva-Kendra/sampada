@@ -340,6 +340,89 @@ describe("WaRequestsService access control (employee sees only assigned requests
   });
 });
 
+describe("DraftIntakeService plot questions", () => {
+  const plotDeed = {
+    isSaleDeed: true,
+    buyers: [{ name: "वर्तमान मालिक", relation: null }],
+    sellers: [],
+    property: { district: "ग्वालियर", propertyType: "residential_plot", areaValue: 1500, areaUnit: "वर्ग फुट" },
+  };
+  /** In-memory conversation: one DraftIntake row the service reads and updates. */
+  function conversation(deed: unknown) {
+    const cur: any = { id: "cmg1abcdefxyz123", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: {}, deed, needsStaff: false };
+    const prisma = {
+      draftIntake: {
+        findFirst: vi.fn(async () => cur),
+        update: vi.fn(async ({ data }: any) => Object.assign(cur, data)),
+      },
+    };
+    const lookup = vi.fn(async () => null);
+    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup } as any);
+    const say = (text: string) => svc.handleText({ phone: "919876543210", name: "राम" }, text);
+    return { cur, say, lookup };
+  }
+
+  it("asks house → corner → boundary for a plot, then the buyer's name", async () => {
+    const c = conversation(plotDeed);
+    expect((await c.say("हाँ"))!.join()).toContain("मकान या कोई निर्माण");
+    expect((await c.say("नहीं"))!.join()).toContain("कॉर्नर प्लॉट");
+    expect((await c.say("हाँ"))!.join()).toContain("बाउंड्री वॉल");
+    expect((await c.say("पता नहीं"))!.join()).toContain("खरीदार (क्रेता) का पूरा नाम");
+    expect(c.cur.data).toMatchObject({ plotHasBuilding: false, plotCorner: true, plotBoundary: null });
+    expect(c.cur.needsStaff).toBe(false);
+  });
+
+  it("re-asks on an unclear answer", async () => {
+    const c = conversation(plotDeed);
+    await c.say("हाँ");
+    expect((await c.say("शायद"))!.join()).toContain("पता नहीं");
+    expect(c.cur.step).toBe("PLOT_BUILDING");
+  });
+
+  it("a house on the plot (or not knowing) flags the request for staff", async () => {
+    for (const answer of ["हाँ", "पता नहीं"]) {
+      const c = conversation(plotDeed);
+      await c.say("हाँ");
+      const reply = await c.say(answer);
+      expect(reply![0]).toContain("स्टाफ निर्माण का विवरण");
+      expect(reply![1]).toContain("कॉर्नर प्लॉट");
+      expect(c.cur.needsStaff).toBe(true);
+    }
+  });
+
+  it("non-plot deeds skip the plot questions", async () => {
+    const c = conversation({ ...plotDeed, property: { ...plotDeed.property, propertyType: "agricultural" } });
+    expect((await c.say("हाँ"))!.join()).toContain("खरीदार (क्रेता) का पूरा नाम");
+  });
+
+  it("passes the answers to the guideline lookup, shows them in the summary, and keeps them on बदलें", async () => {
+    const c = conversation(plotDeed);
+    c.cur.step = "AMOUNT";
+    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: false, buyerName: "श्याम" };
+    await c.say("गाइडलाइन");
+    expect(c.lookup).toHaveBeenCalledWith(plotDeed.property, { owners: 1, plot: { hasBuilding: false, corner: true } });
+
+    c.cur.step = "FINAL";
+    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: false, buyerName: "श्याम", amount: 1500000, amountMode: "CUSTOM" };
+    const summary = await c.say("कुछ और"); // unclear answer → re-prompt with the options
+    expect(summary!.join()).toContain("बदलें");
+    await c.say("बदलें");
+    expect(c.cur.data).toEqual({ plotHasBuilding: false, plotCorner: true, plotBoundary: false });
+    expect(c.cur.step).toBe("buyerName");
+  });
+
+  it("final summary lists the plot answers", async () => {
+    const c = conversation(plotDeed);
+    c.cur.step = "sellerPan"; // last step before FINAL when TDS applies
+    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: null, tax: { tdsApplies: true, panRequired: true } };
+    const reply = await c.say("ABCDE1234F");
+    const text = reply!.join("\n");
+    expect(text).toContain("प्लॉट पर मकान/निर्माण: नहीं");
+    expect(text).toContain("कॉर्नर प्लॉट: हाँ");
+    expect(text).toContain("बाउंड्री वॉल: पता नहीं");
+  });
+});
+
 describe("DraftIntakeService", () => {
   it("submitting the draft marks it NEW for the office", async () => {
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data: {}, needsStaff: false };

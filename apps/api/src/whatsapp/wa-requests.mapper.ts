@@ -118,6 +118,9 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
   if (row.documentKey) documents.push({ index: 0, label: "पुरानी रजिस्ट्री" });
   extra.forEach((_, i) => documents.push({ index: i + 1, label: `अतिरिक्त दस्तावेज़ ${i + 1}` }));
 
+  const tri = (v: unknown): boolean | null => (v === true ? true : v === false ? false : null);
+  const plotAsked = "plotHasBuilding" in d || "plotCorner" in d || "plotBoundary" in d;
+
   return {
     ...toListItem(row, assigneeName),
     phone: row.phone,
@@ -150,6 +153,9 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
           property: property(deed.property),
           consideration: num(deed.consideration),
         }
+      : null,
+    plot: plotAsked
+      ? { hasBuilding: tri(d.plotHasBuilding), corner: tri(d.plotCorner), boundaryWall: tri(d.plotBoundary) }
       : null,
     documents,
     canReveal: canManage,

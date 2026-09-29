@@ -105,9 +105,18 @@ export class GuidelineLookupService {
   /**
    * Returns a value only when every input the office calculator needs is known
    * from the deed; otherwise null so the bot hands over to staff.
-   * Road/corner premiums are not in a deed → assumed 0 and stated as an assumption.
+   * Road premium is not in a deed → assumed 0 and stated as an assumption.
+   *
+   * opts.plot: the customer's answers for a plot (undefined = not asked, e.g. a
+   * conversation that started before these questions existed; null = "पता नहीं").
+   *  - hasBuilding true/null → a house/construction needs floor details → staff (null).
+   *  - corner true → +10% (office calculator rule 2.2); false → none; null/undefined → none, stated.
+   *  - नींव भरा (+10%, rule 2.3) is not asked → never added, stated.
    */
-  async lookup(p: DeedProperty, opts: { owners?: number } = {}): Promise<GuidelineResult | null> {
+  async lookup(
+    p: DeedProperty,
+    opts: { owners?: number; plot?: { hasBuilding?: boolean | null; corner?: boolean | null } } = {},
+  ): Promise<GuidelineResult | null> {
     if (!DISTRICT_OK(p.district)) return null;
     const entry = matchEntry(p);
     if (!entry) return null;
@@ -115,9 +124,7 @@ export class GuidelineLookupService {
     const area = Number(p.areaValue);
     if (!unit || !(area > 0)) return null;
 
-    const assumptions = [
-      "सड़क प्रीमियम 0% और कॉर्नर/नींव प्रीमियम नहीं जोड़ा गया (रजिस्ट्री से तय नहीं होता)",
-    ];
+    const assumptions: string[] = [];
     const zone = detectZoneType(entry);
     let method: GuidelineResult["method"];
     let total: number;
@@ -125,15 +132,22 @@ export class GuidelineLookupService {
 
     if (p.propertyType === "residential_plot" || p.propertyType === "commercial") {
       if (unit === "hect" || unit === "acre") return null; // unusual for a plot → staff
+      const hasBuilding = opts.plot?.hasBuilding;
+      if (hasBuilding === true || hasBuilding === null) return null; // house / unknown → staff
       method = "plot";
       const use = p.propertyType === "commercial" ? "com" : "res";
       const sqm = plotAreaToSqm(area, unit);
-      const r = plotValue({ entry, areaSqm: sqm, use });
+      const corner = opts.plot?.corner === true;
+      const r = plotValue({ entry, areaSqm: sqm, use, corner });
       total = r.value;
-      lines.push(`दर: ₹${inr(r.rate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : "आवासीय"} भूखण्ड)`);
+      lines.push(`दर: ₹${inr(r.rate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : "आवासीय"} भूखण्ड${corner ? ", कॉर्नर +10%" : ""})`);
       lines.push(`क्षेत्रफल: ${+sqm.toFixed(2)} वर्गमीटर`);
+      assumptions.push("सड़क प्रीमियम 0% माना गया (रजिस्ट्री से तय नहीं होता)");
+      if (opts.plot?.corner == null) assumptions.push("कॉर्नर प्रीमियम नहीं जोड़ा गया (कॉर्नर की जानकारी नहीं)");
+      assumptions.push("नींव भरे प्लॉट का +10% प्रीमियम नहीं जोड़ा गया");
     } else if (p.propertyType === "agricultural") {
       if (!zone) return null;
+      assumptions.push("सड़क प्रीमियम 0% माना गया (रजिस्ट्री से तय नहीं होता)");
       const owners = Math.max(1, opts.owners ?? 1);
       if (owners > 1 && zone !== "gramin") return null; // separate-khata multiplier needs staff
       const sqm = agriAreaToSqm(area, unit === "sqft" ? "sqm" : unit);
@@ -175,7 +189,10 @@ export class GuidelineLookupService {
       matchedLocality: `${entry.hi}${/^\d+$/.test(entry.ward.trim()) ? ` (वार्ड ${entry.ward})` : ""}`,
       method,
       zone,
-      ratePerUnit: method === "plot" ? plotValue({ entry, areaSqm: 1, use: p.propertyType === "commercial" ? "com" : "res" }).rate : 0,
+      ratePerUnit:
+        method === "plot"
+          ? plotValue({ entry, areaSqm: 1, use: p.propertyType === "commercial" ? "com" : "res", corner: opts.plot?.corner === true }).rate
+          : 0,
       unit: "वर्गमीटर",
       area,
       marketValue: Math.round(total),
