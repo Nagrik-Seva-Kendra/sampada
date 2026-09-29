@@ -11,6 +11,7 @@ import {
   WORK_STATUS_PILL,
   WORK_STATUSES,
 } from "./waLabels";
+import "./waRequests.css";
 
 /** Staff: draft requests customers submitted through the WhatsApp bot. */
 export function WhatsappRequestsPage() {
@@ -67,8 +68,18 @@ export function WhatsappRequestsPage() {
           </label>
         </div>
 
-        <div className="dr-table-wrap">
-          <table className="dr-table">
+        <div className="wa-table-wrap">
+          <table className="wa-table">
+            <colgroup>
+              <col className="wa-col-ref" />
+              <col className="wa-col-customer" />
+              <col className="wa-col-buyer" />
+              <col className="wa-col-property" />
+              <col className="wa-col-amount" />
+              <col className="wa-col-status" />
+              <col className="wa-col-assignee" />
+              <col className="wa-col-date" />
+            </colgroup>
             <thead>
               <tr>
                 <th>अनुरोध नं.</th>
@@ -106,20 +117,34 @@ export function WhatsappRequestsPage() {
               )}
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ fontWeight: 700 }}>
+                  <td className="wa-nowrap" style={{ fontWeight: 700 }}>
                     <Link to="/whatsapp-requests/$id" params={{ id: r.id }}>
                       {r.ref}
                     </Link>
                   </td>
                   <td>
-                    <div>{r.customerName || "—"}</div>
-                    <div className="doc-sub">{r.phoneMasked}</div>
+                    <div className="wa-clamp-2" title={r.customerName ?? undefined}>
+                      {r.customerName || "—"}
+                    </div>
+                    <div className="doc-sub wa-nowrap">{r.phoneMasked}</div>
                   </td>
-                  <td>{r.buyerName || "—"}</td>
-                  <td style={{ maxWidth: 260 }}>{r.propertySummary || "—"}</td>
-                  <td>{formatAmount(r.amount, r.amountMode)}</td>
                   <td>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div className="wa-clamp-2" title={r.buyerName ?? undefined}>
+                      {r.buyerName || "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="wa-clamp-2" title={r.propertySummary ?? undefined}>
+                      {r.propertySummary || "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="wa-clamp-2" title={formatAmount(r.amount, r.amountMode)}>
+                      {formatAmount(r.amount, r.amountMode)}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="wa-badges">
                       {r.workStatus ? (
                         <span className={`status-pill ${WORK_STATUS_PILL[r.workStatus]}`}>
                           {WORK_STATUS_LABEL[r.workStatus]}
@@ -130,8 +155,12 @@ export function WhatsappRequestsPage() {
                       {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच</span>}
                     </div>
                   </td>
-                  <td>{r.assigneeName || "—"}</td>
-                  <td className="doc-sub" style={{ whiteSpace: "nowrap" }}>
+                  <td>
+                    <div className="wa-clamp-2" title={r.assigneeName ?? undefined}>
+                      {r.assigneeName || "—"}
+                    </div>
+                  </td>
+                  <td className="doc-sub" title={formatDate(r.createdAt)}>
                     {formatDate(r.createdAt)}
                   </td>
                 </tr>
