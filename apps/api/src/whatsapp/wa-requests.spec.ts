@@ -165,22 +165,24 @@ describe("mapper", () => {
 });
 
 describe("WaRequestsService", () => {
-  const tenant = (role: string, organizationId = "org-1") => ({
-    get: () => ({ userId: "user-7", organizationId, membershipId: "m-7", role }),
+  const tenant = (role: string, organizationId = "org-1", userId = "user-7") => ({
+    get: () => ({ userId, organizationId, membershipId: "m-7", role }),
   });
+
+  /** Minimal Prisma `where` evaluator: equality and `{ in: [...] }` on top-level fields. */
+  const matches = (r: any, where: Record<string, any>) =>
+    Object.entries(where).every(([k, v]) =>
+      v && typeof v === "object" && Array.isArray(v.in) ? v.in.includes(r[k]) : r[k] === v,
+    );
 
   function fakePrisma(rows: DraftIntakeRow[]) {
     return {
       draftIntake: {
-        findMany: vi.fn(async ({ where }: any) =>
-          rows.filter((r) => r.organizationId === where.organizationId && (!where.workStatus || r.workStatus === where.workStatus)),
-        ),
-        findFirst: vi.fn(async ({ where }: any) => rows.find((r) => r.id === where.id && r.organizationId === where.organizationId) ?? null),
-        count: vi.fn(async ({ where }: any) =>
-          rows.filter((r) => r.organizationId === where.organizationId && r.workStatus === where.workStatus).length,
-        ),
+        findMany: vi.fn(async ({ where }: any) => rows.filter((r) => matches(r, where))),
+        findFirst: vi.fn(async ({ where }: any) => rows.find((r) => matches(r, where)) ?? null),
+        count: vi.fn(async ({ where }: any) => rows.filter((r) => matches(r, where)).length),
         updateMany: vi.fn(async ({ where, data }: any) => {
-          const r = rows.find((x) => x.id === where.id && x.organizationId === where.organizationId);
+          const r = rows.find((x) => matches(x, where));
           if (r) Object.assign(r, data);
           return { count: r ? 1 : 0 };
         }),
@@ -197,7 +199,7 @@ describe("WaRequestsService", () => {
 
   it("lists only the caller's organization, with the NEW count", async () => {
     const prisma = fakePrisma([row(), row({ id: "other-org-req", organizationId: "org-2" })]);
-    const res = await new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any).list({});
+    const res = await new WaRequestsService(prisma as any, tenant("OWNER") as any).list({});
     expect(res.data.map((r) => r.id)).toEqual(["cmg1abcdefxyz123"]);
     expect(res.newCount).toBe(1);
     expect(prisma.draftIntake.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
@@ -225,14 +227,14 @@ describe("WaRequestsService", () => {
   });
 
   it("detail says who may reveal", async () => {
-    const prisma = fakePrisma([row()]);
+    const prisma = fakePrisma([row({ assigneeId: "user-7" })]); // assigned to the employee below
     expect((await new WaRequestsService(prisma as any, tenant("ADMIN") as any).detail("cmg1abcdefxyz123")).canReveal).toBe(true);
     expect((await new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any).detail("cmg1abcdefxyz123")).canReveal).toBe(false);
   });
 
   it("update: sets workflow fields, rejects non-members as assignee", async () => {
     const rows = [row()];
-    const svc = new WaRequestsService(fakePrisma(rows) as any, tenant("EMPLOYEE") as any);
+    const svc = new WaRequestsService(fakePrisma(rows) as any, tenant("OWNER") as any);
     const d = await svc.update("cmg1abcdefxyz123", { workStatus: "IN_PROGRESS", assigneeId: "user-9", staffNote: "  कल फ़ोन करें  " });
     expect(d).toMatchObject({ workStatus: "IN_PROGRESS", assigneeId: "user-9", staffNote: "कल फ़ोन करें", assigneeName: "सुनील वर्मा" });
     await expect(svc.update("cmg1abcdefxyz123", { assigneeId: "user-from-other-org" })).rejects.toThrow("सक्रिय सदस्य नहीं");
@@ -244,7 +246,7 @@ describe("WaRequestsService", () => {
       await mkdir(join(dir, "whatsapp"), { recursive: true });
       await writeFile(join(dir, "whatsapp", "m1.pdf"), Buffer.from("%PDF-test"));
       vi.stubEnv("WA_MEDIA_DIR", dir);
-      const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("EMPLOYEE") as any);
+      const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("OWNER") as any);
       const f = await svc.document("cmg1abcdefxyz123", 0);
       expect(f).toMatchObject({ mimeType: "application/pdf", fileName: "whatsapp-XYZ123-registry.pdf" });
       expect(f.data.toString()).toBe("%PDF-test");
@@ -252,6 +254,88 @@ describe("WaRequestsService", () => {
       await expect(svc.document("cmg1abcdefxyz123", 5)).rejects.toBeInstanceOf(NotFoundException);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("WaRequestsService access control (employee sees only assigned requests)", () => {
+  const as = (role: string, userId: string) => ({ get: () => ({ userId, organizationId: "org-1", membershipId: "m", role }) });
+  const matches = (r: any, where: Record<string, any>) =>
+    Object.entries(where).every(([k, v]) =>
+      v && typeof v === "object" && Array.isArray(v.in) ? v.in.includes(r[k]) : r[k] === v,
+    );
+  const prismaFor = (rows: DraftIntakeRow[]) => ({
+    draftIntake: {
+      findMany: vi.fn(async ({ where }: any) => rows.filter((r) => matches(r, where))),
+      findFirst: vi.fn(async ({ where }: any) => rows.find((r) => matches(r, where)) ?? null),
+      count: vi.fn(async ({ where }: any) => rows.filter((r) => matches(r, where)).length),
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const r = rows.find((x) => matches(x, where));
+        if (r) Object.assign(r, data);
+        return { count: r ? 1 : 0 };
+      }),
+    },
+    membership: { findFirst: vi.fn(async () => ({ id: "m-9" })), findMany: vi.fn(async () => []) },
+    user: { findMany: vi.fn(async () => [{ id: "emp-1", fname: "सुनील", lname: "वर्मा" }]) },
+  });
+  // mine: assigned to emp-1; theirs: assigned to emp-2; unassigned: nobody.
+  const data = () => [
+    row({ id: "req-mine-00001", assigneeId: "emp-1", workStatus: "IN_PROGRESS" }),
+    row({ id: "req-theirs-0002", assigneeId: "emp-2", workStatus: "NEW" }),
+    row({ id: "req-unasgn-0003", assigneeId: null, workStatus: "NEW" }),
+  ];
+
+  it("employee: list and badge only include their own assigned requests", async () => {
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    const res = await svc.list({});
+    expect(res.data.map((r) => r.id)).toEqual(["req-mine-00001"]);
+    expect(res.newCount).toBe(1); // own NEW + IN_PROGRESS
+    expect(await svc.summary()).toEqual({ newCount: 1, canManage: false, visible: true });
+  });
+
+  it("employee with nothing assigned: sidebar item hidden", async () => {
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-3") as any);
+    expect(await svc.summary()).toEqual({ newCount: 0, canManage: false, visible: false });
+    expect((await svc.list({})).data).toEqual([]);
+  });
+
+  it("employee: unassigned or someone else's request is 404 for detail, document, update", async () => {
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    for (const id of ["req-theirs-0002", "req-unasgn-0003"]) {
+      await expect(svc.detail(id)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(svc.document(id, 0)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(svc.update(id, { workStatus: "DONE" })).rejects.toBeInstanceOf(NotFoundException);
+    }
+  });
+
+  it("employee: sees their own request, may change status and note, but not the assignee", async () => {
+    const rows = data();
+    const svc = new WaRequestsService(prismaFor(rows) as any, as("EMPLOYEE", "emp-1") as any);
+    const d = await svc.detail("req-mine-00001");
+    expect(d).toMatchObject({ id: "req-mine-00001", canReveal: false, canAssign: false });
+    const u = await svc.update("req-mine-00001", { workStatus: "DRAFT_READY", staffNote: "ड्राफ्ट बन गया" });
+    expect(u).toMatchObject({ workStatus: "DRAFT_READY", staffNote: "ड्राफ्ट बन गया" });
+    await expect(svc.update("req-mine-00001", { assigneeId: "emp-2" })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.update("req-mine-00001", { assigneeId: null })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rows[0]!.assigneeId).toBe("emp-1");
+  });
+
+  it("employee: reveal and the assignee list are 403, even on their own request", async () => {
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    await expect(svc.reveal("req-mine-00001")).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.assignees()).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("owner/admin: see every request, can assign and reveal", async () => {
+    for (const role of ["OWNER", "ADMIN"]) {
+      const rows = data();
+      const svc = new WaRequestsService(prismaFor(rows) as any, as(role, "boss") as any);
+      expect((await svc.list({})).data).toHaveLength(3);
+      expect(await svc.summary()).toEqual({ newCount: 2, canManage: true, visible: true });
+      expect((await svc.detail("req-unasgn-0003")).canAssign).toBe(true);
+      await svc.update("req-unasgn-0003", { assigneeId: "emp-1" });
+      expect(rows[2]!.assigneeId).toBe("emp-1");
+      await expect(svc.reveal("req-theirs-0002")).resolves.toMatchObject({ aadhaar: AADHAAR });
     }
   });
 });

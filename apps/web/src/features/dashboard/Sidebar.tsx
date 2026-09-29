@@ -9,7 +9,7 @@ import { BrandMark } from "../../components/icons";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { LangToggle } from "../../components/LangToggle";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { useWaNewCount } from "../whatsapp/useWhatsappRequests";
+import { useWaSummary } from "../whatsapp/useWhatsappRequests";
 
 const COLLAPSE_KEY = "nsk-sidebar-collapsed";
 
@@ -67,8 +67,13 @@ export function Sidebar({
   // collapsed preference set on desktop would otherwise leave bare icons.
   const collapsed = mobileOpen ? false : collapsedPref;
 
-  const showWhatsapp = isStaff && !!activeOrganization;
-  const waNewCount = useWaNewCount(showWhatsapp).data?.newCount ?? 0;
+  // WhatsApp अनुरोध: OWNER/ADMIN always; other staff only once something is
+  // assigned to them (the server decides -- it also filters what they can open).
+  const waEligible = isStaff && !!activeOrganization;
+  const isWaManager = activeOrganization?.role === "OWNER" || activeOrganization?.role === "ADMIN";
+  const waSummary = useWaSummary(waEligible).data;
+  const showWhatsapp = waEligible && (isWaManager || !!waSummary?.visible);
+  const waNewCount = waSummary?.newCount ?? 0;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 

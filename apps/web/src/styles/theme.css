@@ -74,6 +74,35 @@
   box-sizing: border-box;
 }
 
+/* Native form controls follow the app theme. Without color-scheme the browser
+   draws a <select>'s open option list in its light scheme (white) while the
+   option text inherits the dark theme's light --fg -- nearly invisible. Setting
+   the scheme per theme plus explicit option colours from the tokens keeps every
+   native select readable in both themes; class-level select rules (e.g.
+   .modal-field select) still override the background where they set one. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+select {
+  background-color: var(--surface);
+  color: var(--fg);
+}
+select option,
+select optgroup {
+  background-color: var(--surface);
+  color: var(--fg);
+}
+select option:checked {
+  background-color: var(--accent-soft);
+  color: var(--fg);
+}
+select option:disabled {
+  color: var(--muted);
+}
+
 body {
   margin: 0;
   background: var(--bg);

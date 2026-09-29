@@ -6,7 +6,8 @@ import { WaRequestsService } from "./wa-requests.service.js";
 
 /**
  * Office view of WhatsApp draft requests ("WhatsApp अनुरोध" page). Staff login
- * plus an active org membership; every query is scoped to the caller's org.
+ * plus an active org membership; every query is scoped to the caller's org, and
+ * for non-OWNER/ADMIN members to requests assigned to them (see visibleWhere).
  */
 @Controller("whatsapp/requests")
 @UseGuards(JwtStaffGuard)
@@ -22,10 +23,10 @@ export class WaRequestsController {
     });
   }
 
-  /** NEW-request count for the sidebar badge. Declared before ":id". */
+  /** Sidebar: badge count + whether to show the item. Declared before ":id". */
   @Get("summary")
   summary() {
-    return this.service.newCount();
+    return this.service.summary();
   }
 
   @Get("assignees")

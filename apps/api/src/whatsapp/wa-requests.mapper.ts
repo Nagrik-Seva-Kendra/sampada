@@ -108,7 +108,8 @@ export function toListItem(row: DraftIntakeRow, assigneeName: string | null): Wa
   };
 }
 
-export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canReveal: boolean): WaRequestDetail {
+/** canManage = OWNER/ADMIN: may reveal Aadhaar/PAN and change the assignee. */
+export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canManage: boolean): WaRequestDetail {
   const d = (row.data ?? {}) as Record<string, unknown>;
   const deed = (row.deed ?? null) as Record<string, unknown> | null;
   const tax = d.tax && typeof d.tax === "object" ? (d.tax as Record<string, unknown>) : null;
@@ -151,7 +152,8 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canRe
         }
       : null,
     documents,
-    canReveal,
+    canReveal: canManage,
+    canAssign: canManage,
   };
 }
 

@@ -45,8 +45,17 @@ export interface WaRequestListItem {
 
 export interface WaRequestList {
   data: WaRequestListItem[];
-  /** Requests with workStatus NEW (for the sidebar/list badge). */
+  /** Badge count: NEW for OWNER/ADMIN; for others their own NEW + IN_PROGRESS. */
   newCount: number;
+}
+
+/** GET /whatsapp/requests/summary -- drives the sidebar item. */
+export interface WaRequestSummary {
+  newCount: number;
+  /** OWNER/ADMIN: sees every request, assigns, reveals. */
+  canManage: boolean;
+  /** Show the sidebar item: always for managers, others only with ≥1 assigned request. */
+  visible: boolean;
 }
 
 export interface WaDeedParty {
@@ -89,6 +98,8 @@ export interface WaRequestDetail extends WaRequestListItem {
   documents: { index: number; label: string }[];
   /** Whether the caller may use POST /reveal. */
   canReveal: boolean;
+  /** Whether the caller may change the assignee (OWNER/ADMIN). */
+  canAssign: boolean;
 }
 
 export interface WaRevealResult {

@@ -5,6 +5,7 @@ import type {
   WaAssignee,
   WaRequestDetail,
   WaRequestList,
+  WaRequestSummary,
   WaRequestUpdateInput,
   WaRevealResult,
   WaWorkStatus,
@@ -12,6 +13,7 @@ import type {
 import { r2Configured, r2Get } from "../guideline/r2.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
+import type { TenantContext } from "../tenant/tenant-context.js";
 import {
   documentKeyAt,
   type DraftIntakeRow,
@@ -23,12 +25,35 @@ import {
   toListItem,
 } from "./wa-requests.mapper.js";
 
-export const canRevealRole = (role: string): boolean => role === "OWNER" || role === "ADMIN";
+/** OWNER/ADMIN manage every request of the org: see all, assign, reveal Aadhaar/PAN. */
+export const isManagerRole = (role: string): boolean => role === "OWNER" || role === "ADMIN";
+/** Kept for callers/tests that ask specifically about revealing. */
+export const canRevealRole = isManagerRole;
+
+/**
+ * Which DraftIntake rows the caller may touch at all. OWNER/ADMIN: the whole
+ * organization. Everyone else: only requests assigned to them -- anything else
+ * (unassigned, someone else's) is simply not found (404), never 403, so an id
+ * can't be probed.
+ */
+export function visibleWhere(tenant: Pick<TenantContext, "organizationId" | "userId" | "role">) {
+  return isManagerRole(tenant.role)
+    ? { organizationId: tenant.organizationId }
+    : { organizationId: tenant.organizationId, assigneeId: tenant.userId };
+}
+
+/** Badge count: NEW for managers; an employee's own open work (NEW + IN_PROGRESS). */
+function pendingWhere(tenant: Pick<TenantContext, "organizationId" | "userId" | "role">) {
+  return isManagerRole(tenant.role)
+    ? { ...visibleWhere(tenant), workStatus: "NEW" }
+    : { ...visibleWhere(tenant), workStatus: { in: ["NEW", "IN_PROGRESS"] } };
+}
 
 /**
  * Office view of WhatsApp draft requests. DraftIntake is not in TENANT_MODELS
  * (the public webhook writes it with no tenant context), so every query here
- * filters by the caller's organizationId explicitly -- never trust an id alone.
+ * filters by the caller's organizationId explicitly -- never trust an id alone --
+ * and, for non-managers, by assigneeId = caller (visibleWhere).
  */
 @Injectable()
 export class WaRequestsService {
@@ -40,48 +65,61 @@ export class WaRequestsService {
   ) {}
 
   async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean }): Promise<WaRequestList> {
-    const { organizationId } = requireTenantContext(this.cls);
+    const tenant = requireTenantContext(this.cls);
     const rows = (await this.prisma.draftIntake.findMany({
       where: {
-        organizationId,
+        ...visibleWhere(tenant),
         ...(filters.workStatus ? { workStatus: filters.workStatus } : {}),
         ...(filters.needsStaff !== undefined ? { needsStaff: filters.needsStaff } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 500,
     })) as DraftIntakeRow[];
-    const newCount = await this.prisma.draftIntake.count({ where: { organizationId, workStatus: "NEW" } });
+    const newCount = await this.prisma.draftIntake.count({ where: pendingWhere(tenant) });
     const names = await this.userNames(rows.map((r) => r.assigneeId));
     return { data: rows.map((r) => toListItem(r, r.assigneeId ? (names.get(r.assigneeId) ?? null) : null)), newCount };
   }
 
-  async newCount(): Promise<{ newCount: number }> {
-    const { organizationId } = requireTenantContext(this.cls);
-    return { newCount: await this.prisma.draftIntake.count({ where: { organizationId, workStatus: "NEW" } }) };
+  /** Sidebar: badge count, and whether the item is shown at all (employees: only with ≥1 assigned request). */
+  async summary(): Promise<WaRequestSummary> {
+    const tenant = requireTenantContext(this.cls);
+    const canManage = isManagerRole(tenant.role);
+    const [newCount, visibleCount] = await Promise.all([
+      this.prisma.draftIntake.count({ where: pendingWhere(tenant) }),
+      canManage ? Promise.resolve(0) : this.prisma.draftIntake.count({ where: visibleWhere(tenant) }),
+    ]);
+    return { newCount, canManage, visible: canManage || visibleCount > 0 };
   }
 
   async detail(id: string): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
-    const row = await this.find(id, tenant.organizationId);
+    const row = await this.find(id, tenant);
     const names = await this.userNames([row.assigneeId]);
-    return toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, canRevealRole(tenant.role));
+    return toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, isManagerRole(tenant.role));
   }
 
   /** OWNER/ADMIN only (checked by the caller's org role). Logs who revealed which request, never the values. */
   async reveal(id: string): Promise<WaRevealResult> {
     const tenant = requireTenantContext(this.cls);
-    if (!canRevealRole(tenant.role)) {
+    if (!isManagerRole(tenant.role)) {
       throw new ForbiddenException("केवल मालिक या एडमिन आधार/PAN देख सकते हैं।");
     }
-    const row = await this.find(id, tenant.organizationId);
+    const row = await this.find(id, tenant);
     const result = revealSecrets(row);
     this.log.log(`request ${requestRef(row.id)} (${row.id}): Aadhaar/PAN revealed by user ${tenant.userId} role=${tenant.role}`);
     return result;
   }
 
+  /**
+   * Status/note: managers on any request, others only on their own (find()
+   * 404s otherwise). Changing the assignee is OWNER/ADMIN only.
+   */
   async update(id: string, input: WaRequestUpdateInput): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
-    await this.find(id, tenant.organizationId);
+    await this.find(id, tenant);
+    if (input.assigneeId !== undefined && !isManagerRole(tenant.role)) {
+      throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध किसी को सौंप सकते हैं।");
+    }
     if (input.assigneeId) {
       const member = await this.prisma.membership.findFirst({
         where: { organizationId: tenant.organizationId, userId: input.assigneeId, status: "ACTIVE" },
@@ -90,7 +128,7 @@ export class WaRequestsService {
       if (!member) throw new BadRequestException("यह व्यक्ति इस संस्था का सक्रिय सदस्य नहीं है।");
     }
     await this.prisma.draftIntake.updateMany({
-      where: { id, organizationId: tenant.organizationId },
+      where: { id, ...visibleWhere(tenant) },
       data: {
         ...(input.workStatus !== undefined ? { workStatus: input.workStatus } : {}),
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
@@ -100,8 +138,13 @@ export class WaRequestsService {
     return this.detail(id);
   }
 
+  /** OWNER/ADMIN only -- only they assign. */
   async assignees(): Promise<WaAssignee[]> {
-    const { organizationId } = requireTenantContext(this.cls);
+    const tenant = requireTenantContext(this.cls);
+    if (!isManagerRole(tenant.role)) {
+      throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध किसी को सौंप सकते हैं।");
+    }
+    const { organizationId } = tenant;
     const members = await this.prisma.membership.findMany({
       where: { organizationId, status: "ACTIVE" },
       select: { user: { select: { id: true, fname: true, lname: true } } },
@@ -113,8 +156,7 @@ export class WaRequestsService {
 
   /** The customer's original file: from R2 when configured, else the local media dir. */
   async document(id: string, index: number): Promise<{ data: Buffer; mimeType: string; fileName: string }> {
-    const { organizationId } = requireTenantContext(this.cls);
-    const row = await this.find(id, organizationId);
+    const row = await this.find(id, requireTenantContext(this.cls));
     const key = documentKeyAt(row, index);
     if (!key) throw new NotFoundException("दस्तावेज़ नहीं मिला।");
     const ext = key.includes(".") ? key.slice(key.lastIndexOf(".")) : "";
@@ -135,8 +177,9 @@ export class WaRequestsService {
     return { data, mimeType: mimeForKey(key), fileName };
   }
 
-  private async find(id: string, organizationId: string): Promise<DraftIntakeRow> {
-    const row = (await this.prisma.draftIntake.findFirst({ where: { id, organizationId } })) as DraftIntakeRow | null;
+  /** The request if the caller may see it (visibleWhere), else 404. */
+  private async find(id: string, tenant: TenantContext): Promise<DraftIntakeRow> {
+    const row = (await this.prisma.draftIntake.findFirst({ where: { id, ...visibleWhere(tenant) } })) as DraftIntakeRow | null;
     if (!row) throw new NotFoundException("अनुरोध नहीं मिला।");
     return row;
   }
