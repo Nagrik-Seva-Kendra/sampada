@@ -7,6 +7,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import type {
   WaDeedParty,
   WaDeedType,
+  WaDocState,
   WaPerson,
   WaIntakeStatus,
   WaPropertySummary,
@@ -119,9 +120,15 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
   const deed = (row.deed ?? null) as Record<string, unknown> | null;
   const tax = d.tax && typeof d.tax === "object" ? (d.tax as Record<string, unknown>) : null;
   const extra = Array.isArray(d.extraDocs) ? d.extraDocs.filter((k) => typeof k === "string") : [];
+  const isMortgage = deedTypeOf(d) === "mortgage";
+  const docs = (d.docs && typeof d.docs === "object" ? d.docs : {}) as Record<string, unknown>;
+  // Name each file by what it was sent as (बंधक पत्र), else by position.
+  const roleLabel = (key: unknown): string | null =>
+    key === docs.sanction ? "बैंक सैंक्शन लेटर" : key === docs.registry ? "संपत्ति की रजिस्ट्री" : key === docs.transfer ? "वसीयत/नामांतरण दस्तावेज़" : null;
   const documents: WaRequestDetail["documents"] = [];
-  if (row.documentKey) documents.push({ index: 0, label: "पुरानी रजिस्ट्री" });
-  extra.forEach((_, i) => documents.push({ index: i + 1, label: `अतिरिक्त दस्तावेज़ ${i + 1}` }));
+  if (row.documentKey) documents.push({ index: 0, label: roleLabel(row.documentKey) ?? (isMortgage ? "पहला दस्तावेज़" : "पुरानी रजिस्ट्री") });
+  extra.forEach((k, i) => documents.push({ index: i + 1, label: roleLabel(k) ?? `अतिरिक्त दस्तावेज़ ${i + 1}` }));
+  const docState = (k: string): WaDocState => (docs[k] === "later" ? "later" : typeof docs[k] === "string" ? "received" : null);
 
   const tri = (v: unknown): boolean | null => (v === true ? true : v === false ? false : null);
   const plotAsked = "plotHasBuilding" in d || "plotCorner" in d || "plotBoundary" in d;
@@ -159,7 +166,14 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
           consideration: num(deed.consideration),
         }
       : null,
-    mortgage: deedTypeOf(d) === "mortgage" ? { people: mortgagePeople(d) } : null,
+    mortgage: isMortgage
+      ? {
+          people: mortgagePeople(d),
+          docs: { sanction: docState("sanction"), registry: docState("registry"), transfer: docState("transfer") },
+          ownerIsCurrent: "ownerIsCurrent" in d ? tri(d.ownerIsCurrent) : undefined,
+          registryOwners: Array.isArray(d.registryOwners) ? d.registryOwners.filter((x): x is string => typeof x === "string") : [],
+        }
+      : null,
     requestedDeed: str(d.requestedDeed),
     plot: plotAsked
       ? { hasBuilding: tri(d.plotHasBuilding), corner: tri(d.plotCorner), boundaryWall: tri(d.plotBoundary) }

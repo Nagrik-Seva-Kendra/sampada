@@ -54,6 +54,9 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+/** A required paper of a बंधक पत्र. */
+const docStateLabel = (v: "received" | "later" | null) =>
+  v === "received" ? "मिला ✅" : v === "later" ? "ग्राहक बाद में भेजेगा" : "नहीं मिला";
 /** Customer's plot answer: true/false, null = they said "पता नहीं". */
 const yesNo = (v: boolean | null) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
 
@@ -241,6 +244,21 @@ export function WhatsappRequestDetailPage() {
               ))
             }
           >
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>ज़रूरी दस्तावेज़</div>
+              <Field label="बैंक सैंक्शन लेटर" value={docStateLabel(r.mortgage.docs.sanction)} />
+              <Field label="संपत्ति की रजिस्ट्री" value={docStateLabel(r.mortgage.docs.registry)} />
+              {r.mortgage.registryOwners.length > 0 && (
+                <Field label="रजिस्ट्री के अनुसार मालिक" value={r.mortgage.registryOwners.join(", ")} />
+              )}
+              <Field
+                label="रजिस्ट्री वाले मालिक ही वर्तमान मालिक"
+                value={r.mortgage.ownerIsCurrent === undefined ? "— (अभी पूछा नहीं)" : yesNo(r.mortgage.ownerIsCurrent)}
+              />
+              {r.mortgage.ownerIsCurrent === false && (
+                <Field label="वसीयत/नामांतरण दस्तावेज़" value={docStateLabel(r.mortgage.docs.transfer)} />
+              )}
+            </div>
             {r.mortgage.people.map((person, i) => (
               <div key={person.role} style={{ marginTop: i ? 14 : 0 }}>
                 <div style={{ fontWeight: 800, marginBottom: 4 }}>{person.role}</div>

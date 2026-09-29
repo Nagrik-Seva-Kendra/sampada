@@ -433,8 +433,17 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
   };
   const sanctionLetter = { isSaleDeed: false, documentType: "बैंक सैंक्शन लेटर", buyers: [], sellers: [], property: null };
 
+  const saleRegistry = {
+    isSaleDeed: true,
+    documentType: "विक्रय पत्र",
+    buyers: [{ name: "स्व. रमेश चंद्र", relation: null }],
+    sellers: [],
+    property: { district: "ग्वालियर", propertyType: "house" },
+  };
+  const file = (key: string) => ({ key, buf: Buffer.from("x"), mime: "application/pdf" });
+
   function conversation(step: string, deed: unknown, data: Record<string, unknown> = {}) {
-    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data, deed, needsStaff: false };
+    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data, deed, needsStaff: false, documentKey: "wa/first.pdf" };
     const prisma = {
       draftIntake: {
         findFirst: vi.fn(async () => (cur.status === "ACTIVE" ? cur : null)),
@@ -442,20 +451,22 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
         create: vi.fn(async ({ data }: any) => Object.assign(cur, data, { status: "ACTIVE" })),
       },
     };
-    const extractor = { extract: vi.fn(async () => sanctionLetter) };
+    const extractor = { extract: vi.fn(async (): Promise<unknown> => sanctionLetter) };
     const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any);
     const say = (text: string) => svc.handleText({ phone: "919876543210", name: "अनुज" }, text);
-    return { cur, say, svc, prisma };
+    const send = (key: string) => svc.handleDocument({ phone: "919876543210", name: "अनुज" }, file(key));
+    return { cur, say, send, svc, prisma, extractor };
   }
 
-  it("the screenshot case: at 'हाँ/नहीं', \"…बंधक बनाना है\" starts the mortgage questions", async () => {
+  it("the screenshot case: at 'हाँ/नहीं', \"…बंधक बनाना है\" starts बंधक पत्र and asks for the registry", async () => {
     const c = conversation("CONFIRM_PROPERTY", sanctionLetter);
     const reply = (await c.say("यह बैंक का सैंक्शन लेटर है बंधक बनाना है"))!.join("\n");
-    expect(reply).toContain("बंधक पत्र का विवरण");
-    expect(reply).toContain("रजिस्ट्री की PDF या फ़ोटो भी भेज दें"); // no property deed yet
-    expect(reply).toContain("बंधककर्ता (जो संपत्ति बंधक रख रहे हैं) का पूरा नाम");
-    expect(c.cur.data.deedType).toBe("mortgage");
-    expect(c.cur.step).toBe("mortgagorName");
+    expect(reply).toContain("बंधक पत्र बनाते हैं। इसके लिए ये दस्तावेज़ ज़रूरी हैं");
+    expect(reply).toContain("स्टाफ इसी से देख लेगा"); // no bank/loan questions
+    expect(reply).toContain("✅ बैंक का सैंक्शन लेटर मिल गया");
+    expect(reply).toContain("जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री");
+    expect(c.cur.data).toMatchObject({ deedType: "mortgage", docs: { sanction: "wa/first.pdf" } });
+    expect(c.cur.step).toBe("M_REGISTRY");
   });
 
   it("a non-sale document asks which deed to make; 'नहीं' on a sale deed asks too (no cancel)", async () => {
@@ -470,9 +481,20 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     expect(s.cur.status).toBe("ACTIVE");
   });
 
-  it("asks mortgagor + two witnesses (name, father, mother, Aadhaar, mobile, email, address), then summary", async () => {
+  it("full बंधक पत्र: sanction → registry → owner died → will/mutation → mortgagor + 2 witnesses → summary", async () => {
     const c = conversation("CHOOSE_DEED", sanctionLetter);
-    await c.say("2");
+    expect((await c.say("2"))!.join()).toContain("रजिस्ट्री");
+    c.extractor.extract.mockResolvedValueOnce(saleRegistry);
+    const afterRegistry = (await c.send("wa/registry.pdf")).join("\n");
+    expect(afterRegistry).toContain("✅ संपत्ति की रजिस्ट्री मिल गई");
+    expect(afterRegistry).toContain("रजिस्ट्री के अनुसार संपत्ति के मालिक: स्व. रमेश चंद्र");
+    expect(c.cur.deed).toEqual(saleRegistry); // property details now come from the registry
+    const transferAsk = (await c.say("नहीं"))!.join();
+    expect(transferAsk).toContain("वसीयत, नामांतरण (mutation) आदेश");
+    const afterTransfer = (await c.send("wa/vasiyat.pdf")).join("\n");
+    expect(afterTransfer).toContain("✅ वसीयत/नामांतरण/उत्तराधिकार का दस्तावेज़ मिल गया");
+    expect(afterTransfer).toContain("बंधककर्ता (जो संपत्ति बंधक रख रहे हैं) का पूरा नाम");
+    expect(c.cur.data.docs).toEqual({ sanction: "wa/first.pdf", registry: "wa/registry.pdf", transfer: "wa/vasiyat.pdf" });
     const people = [
       ["राम प्रसाद", "श्याम प्रसाद", "सीता देवी", aadhaar("23456789012"), "9876543210", "ram@example.com", "वार्ड 12, लश्कर, ग्वालियर"],
       ["गवाह एक", "पिता एक", "माता एक", aadhaar("34567890123"), "9812345678", "नहीं", "मुरार, ग्वालियर 474006"],
@@ -483,6 +505,9 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     expect(c.cur.step).toBe("FINAL");
     const summary = last!.join("\n");
     expect(summary).toContain("दस्तावेज़: बंधक पत्र");
+    expect(summary).toContain("सैंक्शन लेटर: मिला ✅");
+    expect(summary).toContain("रजिस्ट्री वाले मालिक ही वर्तमान मालिक: नहीं");
+    expect(summary).toContain("वसीयत/नामांतरण दस्तावेज़: मिला ✅");
     expect(summary).toContain("*बंधककर्ता*");
     expect(summary).toContain("*पहला गवाह*");
     expect(summary).toContain("*दूसरा गवाह*");
@@ -493,6 +518,36 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
 
     expect((await c.say("हाँ"))!.join()).toContain("अनुरोध नंबर: XYZ123");
     expect(c.cur).toMatchObject({ status: "SUBMITTED", workStatus: "NEW" });
+  });
+
+  it("a registry sent when the sanction letter was asked counts as the registry; owner = yes skips the transfer paper", async () => {
+    const c = conversation("CHOOSE_DEED", null);
+    c.cur.documentKey = undefined; // chose बंधक before sending anything
+    expect((await c.say("बंधक पत्र"))!.join()).toContain("सैंक्शन लेटर (PDF");
+    c.extractor.extract.mockResolvedValueOnce(saleRegistry);
+    expect((await c.send("wa/reg.pdf")).join()).toContain("✅ संपत्ति की रजिस्ट्री मिल गई");
+    expect(c.cur.step).toBe("M_SANCTION"); // still needs the sanction letter
+    await c.send("wa/sanction.pdf");
+    expect(c.cur.step).toBe("M_OWNER");
+    expect((await c.say("हाँ"))!.join()).toContain("अब बंधककर्ता और दो गवाहों");
+    expect(c.cur.step).toBe("mortgagorName");
+  });
+
+  it("'बाद में' for a paper moves on and flags the request for staff", async () => {
+    const c = conversation("M_REGISTRY", sanctionLetter, { deedType: "mortgage", docs: { sanction: "wa/first.pdf" } });
+    expect((await c.say("कल भेजूँगा"))!.join()).toContain("रजिस्ट्री"); // not a document, not "बाद में" → ask again
+    await c.say("बाद में");
+    expect(c.cur.data.docs.registry).toBe("later");
+    expect(c.cur.needsStaff).toBe(true);
+    expect(c.cur.step).toBe("M_OWNER");
+  });
+
+  it("an unrecognised first document: asks what it was", async () => {
+    const c = conversation("CHOOSE_DEED", { isSaleDeed: false, documentType: null, buyers: [], sellers: [], property: null });
+    expect((await c.say("2"))!.join()).toContain("आपने जो दस्तावेज़ भेजा है वह क्या है");
+    await c.say("1");
+    expect(c.cur.data.docs).toEqual({ sanction: "wa/first.pdf" });
+    expect(c.cur.step).toBe("M_REGISTRY");
   });
 
   it("re-asks a wrong witness Aadhaar", async () => {
@@ -544,6 +599,23 @@ describe("mapper: mortgage requests", () => {
     ]);
     expect(JSON.stringify(d)).not.toContain("234567890124");
   });
+  it("names the files by what they were sent as and reports the paper checklist", () => {
+    const d = toDetail(
+      row({
+        documentKey: "k/sanction.pdf",
+        data: { deedType: "mortgage", docs: { sanction: "k/sanction.pdf", registry: "k/reg.pdf", transfer: "later" }, ownerIsCurrent: false, registryOwners: ["रमेश"], extraDocs: ["k/reg.pdf"] },
+      }),
+      null,
+      true,
+    );
+    expect(d.documents.map((x) => x.label)).toEqual(["बैंक सैंक्शन लेटर", "संपत्ति की रजिस्ट्री"]);
+    expect(d.mortgage).toMatchObject({
+      docs: { sanction: "received", registry: "received", transfer: "later" },
+      ownerIsCurrent: false,
+      registryOwners: ["रमेश"],
+    });
+  });
+
   it("reveal returns each person's Aadhaar; old requests default to sale", () => {
     expect(revealSecrets(m()).people).toEqual([
       { role: "बंधककर्ता", aadhaar: "234567890124" },

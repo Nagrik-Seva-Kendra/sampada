@@ -46,6 +46,7 @@ export interface WaRequestListItem {
 }
 
 export type WaDeedType = "sale" | "mortgage" | "other";
+export type WaDocState = "received" | "later" | null;
 
 /** One person on a mortgage deed (the mortgagor or a witness). Aadhaar masked. */
 export interface WaPerson {
@@ -115,8 +116,16 @@ export interface WaRequestDetail extends WaRequestListItem {
    * or the conversation predates the questions). Each: true/false, null = "पता नहीं".
    */
   plot: { hasBuilding: boolean | null; corner: boolean | null; boundaryWall: boolean | null } | null;
-  /** बंधक पत्र: the mortgagor and the two witnesses, in that order (null for other documents). */
-  mortgage: { people: WaPerson[] } | null;
+  /** बंधक पत्र: papers, owner check, and the mortgagor + two witnesses in that order (null for other documents). */
+  mortgage: {
+    people: WaPerson[];
+    /** Each required paper: received, customer will send it later, or not yet. */
+    docs: { sanction: WaDocState; registry: WaDocState; transfer: WaDocState };
+    /** Registry's owner is still the owner (false: died / will / mutation ... → transfer paper). null = पता नहीं, undefined → not asked yet. */
+    ownerIsCurrent: boolean | null | undefined;
+    /** Owners named in the registry, as read from it. */
+    registryOwners: string[];
+  } | null;
   /** "कोई और दस्तावेज़": what the customer wrote they want (e.g. "दान पत्र"). */
   requestedDeed: string | null;
   /** Files the customer sent: index 0 is the registry, then extras. */
