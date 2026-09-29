@@ -2965,6 +2965,7 @@ h3 {
   width: 100%;
 }
 .sidebar.collapsed .sidebar-link {
+  position: relative;
   justify-content: center;
   padding: 10px;
   width: 44px;
@@ -2987,6 +2988,28 @@ h3 {
 .sidebar-link svg {
   flex-shrink: 0;
   opacity: 0.85;
+}
+.sidebar-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  line-height: 18px;
+}
+.sidebar.collapsed .sidebar-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  margin: 0;
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
 }
 .sidebar-spacer {
   flex: 1;

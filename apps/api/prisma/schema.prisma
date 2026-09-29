@@ -631,10 +631,16 @@ model DraftIntake {
   deed           Json?
   documentKey    String?
   needsStaff     Boolean  @default(false)
+  /// Office workflow once submitted: NEW | IN_PROGRESS | DRAFT_READY | DONE | REJECTED (null before submit).
+  workStatus     String?
+  /// Staff member (User.id, an ACTIVE member of organizationId) handling it.
+  assigneeId     String?
+  staffNote      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([organizationId, phone, status])
+  @@index([organizationId, workStatus])
 }
 
 /// Processed WhatsApp message ids — Meta re-delivers webhooks; this makes them idempotent.
