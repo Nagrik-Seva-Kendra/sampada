@@ -149,7 +149,7 @@ export class DraftIntakeService {
   private async handleAmount(cur: any, data: any, v: string): Promise<string[]> {
     const deed = cur.deed as DeedExtract | null;
     const g: GuidelineResult | null = deed?.property
-      ? await this.guideline.lookup(deed.property).catch(() => null)
+      ? await this.guideline.lookup(deed.property, { owners: deed.buyers?.length }).catch(() => null)
       : null;
     const out: string[] = [];
     let needsStaff = cur.needsStaff as boolean;
@@ -196,15 +196,16 @@ export class DraftIntakeService {
   private guidelineMsg(g: GuidelineResult): string {
     const lines = [
       `📍 गाइडलाइन (${g.year}) — ${g.matchedLocality}`,
-      `दर: ₹${inr(g.ratePerUnit)} प्रति ${g.unit}`,
-      `क्षेत्रफल: ${g.area} ${g.unit}`,
-      `गाइडलाइन मूल्य: ₹${inr(g.marketValue)}`,
+      ...g.lines,
+      `*गाइडलाइन मूल्य: ₹${inr(g.marketValue)}*`,
+      "",
+      `स्टाम्प शुल्क (${(g.stamp.sdPct * 100).toFixed(1)}%): ₹${inr(g.stamp.male.stampDuty)}`,
+      `पंजीयन शुल्क: पुरुष क्रेता ₹${inr(g.stamp.male.registration)} (3%) | महिला क्रेता ₹${inr(g.stamp.female.registration)} (1%)`,
+      `कुल अनुमानित खर्च: पुरुष ₹${inr(g.stamp.male.total)} | महिला ₹${inr(g.stamp.female.total)}`,
+      "",
+      ...g.assumptions.map((a) => `ℹ️ ${a}`),
+      "यह अनुमानित है, अंतिम गणना संपदा पोर्टल पर होगी।",
     ];
-    const sd = parseFloat(process.env.STAMP_DUTY_PCT ?? "");
-    const rf = parseFloat(process.env.REG_FEE_PCT ?? "");
-    if (!isNaN(sd)) lines.push(`अनुमानित स्टाम्प शुल्क: ₹${inr(Math.round((g.marketValue * sd) / 100))}`);
-    if (!isNaN(rf)) lines.push(`अनुमानित पंजीयन शुल्क: ₹${inr(Math.round((g.marketValue * rf) / 100))}`);
-    lines.push("यह अनुमानित है, अंतिम गणना संपदा पोर्टल पर होगी।");
     return lines.join("\n");
   }
 
