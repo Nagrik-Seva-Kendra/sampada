@@ -1,12 +1,17 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { r2Configured, r2Put } from "../guideline/r2.js";
 import { DraftIntakeService, type IncomingFile } from "./draft-intake.service.js";
-
-const graph = () => `https://graph.facebook.com/${process.env.WA_GRAPH_VERSION || "v21.0"}`;
+import {
+  checkSignature,
+  graphBase as graph,
+  graphErrorSummary,
+  isUniqueViolation,
+  maskPhone,
+  type SignatureResult,
+} from "./webhook-diagnostics.js";
 
 @Injectable()
 export class WhatsappService {
@@ -18,12 +23,8 @@ export class WhatsappService {
   ) {}
 
   // ---------- security ----------
-  isValidSignature(rawBody: Buffer | undefined, header: string | undefined): boolean {
-    const secret = process.env.WA_APP_SECRET;
-    if (!secret || !rawBody || !header?.startsWith("sha256=")) return false;
-    const expected = Buffer.from(createHmac("sha256", secret).update(rawBody).digest("hex"), "hex");
-    const received = Buffer.from(header.slice("sha256=".length), "hex");
-    return expected.length === received.length && timingSafeEqual(expected, received);
+  verifySignature(rawBody: Buffer | undefined, header: string | undefined): SignatureResult {
+    return checkSignature(process.env.WA_APP_SECRET, rawBody, header);
   }
 
   // ---------- incoming ----------
@@ -46,13 +47,23 @@ export class WhatsappService {
     }
   }
 
-  /** Records the WhatsApp message id; false if it was already processed. */
-  private async firstTime(waMessageId: string): Promise<boolean> {
+  /**
+   * Records the WhatsApp message id; false only if it was already processed
+   * (unique violation). Any other DB error is logged and the message is still
+   * handled -- a customer getting a rare duplicate reply beats silently
+   * dropping every message while the table is missing or the DB is down.
+   */
+  async firstTime(waMessageId: string): Promise<boolean> {
     try {
       await this.prisma.waInboundMessage.create({ data: { waMessageId } });
       return true;
-    } catch {
-      return false; // unique violation = duplicate delivery
+    } catch (e: any) {
+      if (isUniqueViolation(e)) {
+        this.log.log(`message ${waMessageId} already processed, skipping duplicate delivery`);
+        return false;
+      }
+      this.log.error(`idempotency check failed for ${waMessageId} (${e?.code ?? e?.name ?? "error"}); processing anyway`);
+      return true;
     }
   }
 
@@ -78,7 +89,9 @@ export class WhatsappService {
       default:
         replies = ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"];
     }
-    for (const r of replies) if (r) await this.sendText(from, r);
+    const toSend = replies.filter(Boolean);
+    for (const r of toSend) await this.sendText(from, r);
+    this.log.log(`handled message ${msg.id} type=${msg.type} replies=${toSend.length}`);
   }
 
   // ---------- media ----------
@@ -111,7 +124,12 @@ export class WhatsappService {
       headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
     });
-    if (!res.ok) this.log.error(`send failed ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      this.log.error(`send failed to ${maskPhone(to)}: ${await graphErrorSummary(res)}`);
+      return;
+    }
+    const wamid = ((await res.json().catch(() => null)) as any)?.messages?.[0]?.id ?? "-";
+    this.log.log(`sent reply to ${maskPhone(to)} wamid=${wamid}`);
   }
 
   private async markRead(messageId: string): Promise<void> {
