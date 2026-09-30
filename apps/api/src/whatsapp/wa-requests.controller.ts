@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { WaRequestUpdateInput, WaSendDraftInput, WaWorkStatus } from "@sampada/shared";
+import { WaBulkDeleteInput, WaDeleteInput, WaRequestUpdateInput, WaSendDraftInput, WaWorkStatus } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { DraftReviewService } from "./draft-review.service.js";
 import { WaRequestsService } from "./wa-requests.service.js";
@@ -38,6 +38,13 @@ export class WaRequestsController {
     return this.service.assignees();
   }
 
+  /** OWNER/ADMIN: delete several requests; body { ids, confirm: "DELETE <count>" }. Declared before ":id". */
+  @Post("bulk-delete")
+  removeMany(@Body() body: unknown) {
+    const input = WaBulkDeleteInput.parse(body);
+    return this.service.removeMany(input.ids, input.confirm);
+  }
+
   @Get(":id")
   detail(@Param("id") id: string) {
     return this.service.detail(id);
@@ -48,6 +55,12 @@ export class WaRequestsController {
   async reveal(@Param("id") id: string, @Res({ passthrough: true }) res: Response) {
     res.set("Cache-Control", "no-store");
     return this.service.reveal(id);
+  }
+
+  /** OWNER/ADMIN: permanently delete a request and its files; body { confirm: "<request number>" }. */
+  @Delete(":id")
+  remove(@Param("id") id: string, @Body() body: unknown) {
+    return this.service.remove(id, WaDeleteInput.parse(body ?? {}).confirm);
   }
 
   @Patch(":id")

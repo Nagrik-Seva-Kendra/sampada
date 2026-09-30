@@ -217,6 +217,28 @@ export const WaRequestUpdateInput = z
   .strict();
 export type WaRequestUpdateInput = z.infer<typeof WaRequestUpdateInput>;
 
+/** DELETE /whatsapp/requests/:id -- confirm must be the request number (last 6 of the id, uppercase). */
+export const WaDeleteInput = z.object({ confirm: z.string().max(40) }).strict();
+export type WaDeleteInput = z.infer<typeof WaDeleteInput>;
+
+/** POST /whatsapp/requests/bulk-delete -- confirm must be "DELETE <count>". */
+export const WaBulkDeleteInput = z
+  .object({ ids: z.array(z.string().trim().min(1).max(64)).min(1).max(100), confirm: z.string().max(40) })
+  .strict();
+export type WaBulkDeleteInput = z.infer<typeof WaBulkDeleteInput>;
+
+export interface WaDeleteResult {
+  ref: string;
+  /** The deed made from this request is NOT deleted -- only unlinked; delete it separately if needed. */
+  deedTemplateId: string | null;
+  filesDeleted: number;
+}
+
+export interface WaBulkDeleteResult {
+  deleted: WaDeleteResult[];
+  failed: { id: string; ref: string; reason: string }[];
+}
+
 /** POST /whatsapp/requests/:id/send-draft -- the customer-copy PDF built in the browser. */
 export const WaSendDraftInput = z.object({ pdfBase64: z.string().min(10).max(14_000_000) }).strict();
 export type WaSendDraftInput = z.infer<typeof WaSendDraftInput>;
