@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { IdPhotoKind } from "./id-photos.js";
+import type { WaNotification } from "./wa-notify.js";
 
 /**
  * API contract for the web "WhatsApp अनुरोध" pages: draft requests collected
@@ -158,6 +159,8 @@ export interface WaRequestDetail extends WaRequestListItem {
   idCards: WaIdCards[];
   /** When the ID photos were deleted by the retention job (ISO), else null. */
   idPhotosPurgedAt: string | null;
+  /** WhatsApp messages sent for this request (status updates ...), oldest first. PENDING ones can be resent. */
+  notifications?: WaNotification[];
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: { index: number; label: string }[];
   /** Whether the caller may use POST /reveal. */

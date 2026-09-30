@@ -653,3 +653,37 @@ model WaInboundMessage {
   waMessageId String   @id
   createdAt   DateTime @default(now())
 }
+
+/// Last message received from a WhatsApp number: WhatsApp allows free-form
+/// text only within 24 hours of it (customer-service window); after that only
+/// an approved template.
+model WaContact {
+  phone         String   @id
+  lastInboundAt DateTime
+}
+
+/// Every message the office sends for a WhatsApp request outside the bot
+/// conversation (status updates, owner alerts, draft for review) -- sent or
+/// PENDING (to be resent by hand).
+model WaNotification {
+  id             String    @id @default(cuid())
+  organizationId String
+  draftIntakeId  String
+  /// STATUS | ALERT | DRAFT
+  kind           String
+  /// SENT | PENDING
+  status         String
+  /// text | template (null when nothing could be sent)
+  via            String?
+  toPhone        String
+  body           String
+  /// Template name and its parameters, for a resend outside the window.
+  template       Json?
+  /// Short reason when PENDING (Graph error code, no message content).
+  reason         String?
+  wamid          String?
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+
+  @@index([draftIntakeId, createdAt])
+}

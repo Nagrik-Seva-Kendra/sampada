@@ -101,7 +101,7 @@ describe("WhatsappController POST logging", () => {
 
   it("logs a summary line and rejects an invalid signature with a warning", () => {
     vi.stubEnv("WA_APP_SECRET", SECRET);
-    const wa = new WhatsappService({} as any, {} as any);
+    const wa = new WhatsappService({} as any, {} as any, { touchContact: async () => undefined } as any);
     const handle = vi.spyOn(wa, "handlePayload").mockResolvedValue();
     const ctrl = new WhatsappController(wa);
     expect(() => ctrl.receive({ rawBody: raw, body: payload } as any, sign(raw, "wrong"))).toThrow(ForbiddenException);
@@ -113,7 +113,7 @@ describe("WhatsappController POST logging", () => {
 
   it("logs a valid delivery and never the message text", async () => {
     vi.stubEnv("WA_APP_SECRET", SECRET);
-    const wa = new WhatsappService({} as any, {} as any);
+    const wa = new WhatsappService({} as any, {} as any, { touchContact: async () => undefined } as any);
     const handle = vi.spyOn(wa, "handlePayload").mockResolvedValue();
     expect(new WhatsappController(wa).receive({ rawBody: raw, body: payload } as any, sign(raw))).toBe("OK");
     await new Promise((r) => setImmediate(r)); // let the background hand-off run while still mocked
@@ -126,7 +126,7 @@ describe("WhatsappController POST logging", () => {
 describe("WhatsappService", () => {
   it("firstTime: a unique violation is a duplicate, any other DB error still processes", async () => {
     const create = vi.fn();
-    const wa = new WhatsappService({ waInboundMessage: { create } } as any, {} as any);
+    const wa = new WhatsappService({ waInboundMessage: { create } } as any, {} as any, { touchContact: async () => undefined } as any);
 
     create.mockResolvedValueOnce({});
     expect(await wa.firstTime("wamid.1")).toBe(true);
@@ -145,7 +145,7 @@ describe("WhatsappService", () => {
     const fetchMock = vi.fn(async () => json(200, { messages: [{ id: "wamid.out" }] }));
     vi.stubGlobal("fetch", fetchMock);
     const intake = { handleText: vi.fn(async () => ["reply one", "reply two"]) };
-    const wa = new WhatsappService({ waInboundMessage: { create: vi.fn(async () => ({})) } } as any, intake as any);
+    const wa = new WhatsappService({ waInboundMessage: { create: vi.fn(async () => ({})) } } as any, intake as any, { touchContact: async () => undefined } as any);
 
     await wa.handlePayload({
       object: "whatsapp_business_account",
@@ -162,7 +162,7 @@ describe("WhatsappService", () => {
   it("logs a failed send with Meta's error code", async () => {
     vi.stubEnv("WA_ACCESS_TOKEN", TOKEN);
     vi.stubGlobal("fetch", vi.fn(async () => json(401, { error: { code: 190, type: "OAuthException", message: "Session has expired" } })));
-    await new WhatsappService({} as any, {} as any).sendText("919876543210", "hi");
+    await new WhatsappService({} as any, {} as any, { touchContact: async () => undefined } as any).sendText("919876543210", "hi");
     expect(logged).toContain('error: send failed to ********3210: http=401 code=190 type=OAuthException message="Session has expired"');
   });
 });

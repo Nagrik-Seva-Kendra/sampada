@@ -281,15 +281,15 @@ describe("ID photo permissions: OWNER/ADMIN and the request's assignee only", ()
       vi.stubEnv("WA_MEDIA_DIR", dir);
       const rows = [row()];
       for (const [role, user] of [["EMPLOYEE", "emp-1"], ["OWNER", "own-1"], ["ADMIN", "adm-1"]] as const) {
-        const f = await new WaRequestsService(prismaFor(rows) as any, as(role, user) as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarFront");
+        const f = await new WaRequestsService(prismaFor(rows) as any, as(role, user) as any, { list: async () => [] } as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarFront");
         expect(f).toMatchObject({ mimeType: "image/jpeg", fileName: "whatsapp-XYZ123-buyer-aadhaarFront.jpg" });
         expect(f.data.toString()).toBe("JPEG-BYTES");
       }
       await expect(
-        new WaRequestsService(prismaFor(rows) as any, as("EMPLOYEE", "emp-2") as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarFront"),
+        new WaRequestsService(prismaFor(rows) as any, as("EMPLOYEE", "emp-2") as any, { list: async () => [] } as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarFront"),
       ).rejects.toBeInstanceOf(NotFoundException);
       await expect(
-        new WaRequestsService(prismaFor(rows) as any, as("OWNER", "own-1") as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarBack"),
+        new WaRequestsService(prismaFor(rows) as any, as("OWNER", "own-1") as any, { list: async () => [] } as any).idPhoto("cmg1abcdefxyz123", "buyer", "aadhaarBack"),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(logged).toContain("log: request XYZ123 (cmg1abcdefxyz123): ID photo buyer/aadhaarFront viewed by user emp-1 role=EMPLOYEE");
       expect(logged.join("\n")).not.toContain("JPEG-BYTES");

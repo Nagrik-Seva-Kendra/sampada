@@ -1,19 +1,25 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { readFile } from "node:fs/promises";
 import { ClsService } from "nestjs-cls";
-import type {
-  WaAssignee,
-  WaRequestDetail,
-  WaRequestList,
-  WaRequestSummary,
-  WaRequestUpdateInput,
-  WaRevealResult,
-  WaWorkStatus,
+import {
+  statusText,
+  WA_NOTIFY_STATUSES,
+  WA_STATUS_PHRASE,
+  WA_TEMPLATES,
+  type WaAssignee,
+  type WaNotification,
+  type WaRequestDetail,
+  type WaRequestList,
+  type WaRequestSummary,
+  type WaRequestUpdateInput,
+  type WaRevealResult,
+  type WaWorkStatus,
 } from "@sampada/shared";
 import { r2Configured, r2Get } from "../guideline/r2.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
+import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   documentKeyAt,
   type DraftIntakeRow,
@@ -70,6 +76,7 @@ export class WaRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
+    private readonly outbox: WaOutboxService,
   ) {}
 
   async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean }): Promise<WaRequestList> {
@@ -102,8 +109,11 @@ export class WaRequestsService {
   async detail(id: string): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
     const row = await this.find(id, tenant);
-    const names = await this.userNames([row.assigneeId]);
-    return toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, isManagerRole(tenant.role));
+    const [names, notifications] = await Promise.all([this.userNames([row.assigneeId]), this.outbox.list(row.id)]);
+    return {
+      ...toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, isManagerRole(tenant.role)),
+      notifications,
+    };
   }
 
   /** OWNER/ADMIN only (checked by the caller's org role). Logs who revealed which request, never the values. */
@@ -125,6 +135,7 @@ export class WaRequestsService {
   async update(id: string, input: WaRequestUpdateInput): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
     const before = await this.find(id, tenant);
+    const prevStatus = before.workStatus;
     if (input.assigneeId !== undefined && !isManagerRole(tenant.role)) {
       throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध किसी को सौंप सकते हैं।");
     }
@@ -143,7 +154,37 @@ export class WaRequestsService {
         ...(input.staffNote !== undefined ? { staffNote: input.staffNote?.trim() || null } : {}),
       },
     });
+    if (input.workStatus !== undefined && input.workStatus !== prevStatus && before.status === "SUBMITTED") {
+      await this.notifyStatus(before, input.workStatus);
+    }
     return this.detail(id);
+  }
+
+  /**
+   * Tells the customer about a status change on WhatsApp (request number +
+   * Hindi text; the approved template outside the 24h window). A failure never
+   * blocks the status change: the message is stored PENDING for a manual resend.
+   */
+  private async notifyStatus(row: DraftIntakeRow, status: WaWorkStatus): Promise<void> {
+    const s = (WA_NOTIFY_STATUSES as readonly string[]).includes(status) ? (status as (typeof WA_NOTIFY_STATUSES)[number]) : null;
+    if (!s) return;
+    const ref = requestRef(row.id);
+    await this.outbox
+      .send({
+        organizationId: row.organizationId,
+        draftIntakeId: row.id,
+        kind: "STATUS",
+        to: row.phone,
+        text: statusText(ref, s),
+        template: { name: WA_TEMPLATES.status.name, language: WA_TEMPLATES.status.language, params: [ref, WA_STATUS_PHRASE[s]] },
+      })
+      .catch((e) => this.log.error(`status message for request ${ref} not recorded: ${e?.code ?? e?.name ?? "error"}`));
+  }
+
+  /** Resend a PENDING message of a request the caller may see (same access as the request). */
+  async resendNotification(id: string, notificationId: string): Promise<WaNotification> {
+    const row = await this.find(id, requireTenantContext(this.cls));
+    return this.outbox.resend(row.id, notificationId);
   }
 
   /** OWNER/ADMIN only -- only they assign. */

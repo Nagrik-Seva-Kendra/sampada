@@ -21,6 +21,8 @@ import {
 import { WaRequestsService } from "./wa-requests.service.js";
 
 const KEY = "a".repeat(64); // test-only key
+/** WaOutboxService stand-in: records what would be sent. */
+const outboxStub = () => ({ list: vi.fn(async () => []), send: vi.fn(async (m: any) => ({ id: "n1", status: "SENT", ...m })), resend: vi.fn() });
 /** The typed-question tests start after the ID photos (covered in id-photos.spec.ts). */
 const PHOTOS_DONE = { idDone: { buyer: true, mortgagor: true, witness1: true, witness2: true } };
 const AADHAAR = "234567890124";
@@ -203,25 +205,25 @@ describe("WaRequestsService", () => {
 
   it("lists only the caller's organization, with the NEW count", async () => {
     const prisma = fakePrisma([row(), row({ id: "other-org-req", organizationId: "org-2" })]);
-    const res = await new WaRequestsService(prisma as any, tenant("OWNER") as any).list({});
+    const res = await new WaRequestsService(prisma as any, tenant("OWNER") as any, outboxStub() as any).list({});
     expect(res.data.map((r) => r.id)).toEqual(["cmg1abcdefxyz123"]);
     expect(res.newCount).toBe(1);
     expect(prisma.draftIntake.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
   });
 
   it("another organization's request is not found", async () => {
-    const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("OWNER", "org-2") as any);
+    const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("OWNER", "org-2") as any, outboxStub() as any);
     await expect(svc.detail("cmg1abcdefxyz123")).rejects.toBeInstanceOf(NotFoundException);
     await expect(svc.reveal("cmg1abcdefxyz123")).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("reveal: EMPLOYEE is refused; OWNER/ADMIN get values, and only who/which is logged", async () => {
     const prisma = fakePrisma([row()]);
-    await expect(new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any).reveal("cmg1abcdefxyz123")).rejects.toBeInstanceOf(
+    await expect(new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any, outboxStub() as any).reveal("cmg1abcdefxyz123")).rejects.toBeInstanceOf(
       ForbiddenException,
     );
     for (const role of ["OWNER", "ADMIN"]) {
-      const out = await new WaRequestsService(prisma as any, tenant(role) as any).reveal("cmg1abcdefxyz123");
+      const out = await new WaRequestsService(prisma as any, tenant(role) as any, outboxStub() as any).reveal("cmg1abcdefxyz123");
       expect(out).toEqual({ aadhaar: AADHAAR, pan: PAN, sellerPan: null, people: [] });
     }
     expect(logged).toContain("log: request XYZ123 (cmg1abcdefxyz123): Aadhaar/PAN revealed by user user-7 role=OWNER");
@@ -232,13 +234,13 @@ describe("WaRequestsService", () => {
 
   it("detail says who may reveal", async () => {
     const prisma = fakePrisma([row({ assigneeId: "user-7" })]); // assigned to the employee below
-    expect((await new WaRequestsService(prisma as any, tenant("ADMIN") as any).detail("cmg1abcdefxyz123")).canReveal).toBe(true);
-    expect((await new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any).detail("cmg1abcdefxyz123")).canReveal).toBe(false);
+    expect((await new WaRequestsService(prisma as any, tenant("ADMIN") as any, outboxStub() as any).detail("cmg1abcdefxyz123")).canReveal).toBe(true);
+    expect((await new WaRequestsService(prisma as any, tenant("EMPLOYEE") as any, outboxStub() as any).detail("cmg1abcdefxyz123")).canReveal).toBe(false);
   });
 
   it("update: sets workflow fields, rejects non-members as assignee", async () => {
     const rows = [row()];
-    const svc = new WaRequestsService(fakePrisma(rows) as any, tenant("OWNER") as any);
+    const svc = new WaRequestsService(fakePrisma(rows) as any, tenant("OWNER") as any, outboxStub() as any);
     const d = await svc.update("cmg1abcdefxyz123", { workStatus: "IN_PROGRESS", assigneeId: "user-9", staffNote: "  कल फ़ोन करें  " });
     expect(d).toMatchObject({ workStatus: "IN_PROGRESS", assigneeId: "user-9", staffNote: "कल फ़ोन करें", assigneeName: "सुनील वर्मा" });
     await expect(svc.update("cmg1abcdefxyz123", { assigneeId: "user-from-other-org" })).rejects.toThrow("सक्रिय सदस्य नहीं");
@@ -250,7 +252,7 @@ describe("WaRequestsService", () => {
       await mkdir(join(dir, "whatsapp"), { recursive: true });
       await writeFile(join(dir, "whatsapp", "m1.pdf"), Buffer.from("%PDF-test"));
       vi.stubEnv("WA_MEDIA_DIR", dir);
-      const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("OWNER") as any);
+      const svc = new WaRequestsService(fakePrisma([row()]) as any, tenant("OWNER") as any, outboxStub() as any);
       const f = await svc.document("cmg1abcdefxyz123", 0);
       expect(f).toMatchObject({ mimeType: "application/pdf", fileName: "whatsapp-XYZ123-registry.pdf" });
       expect(f.data.toString()).toBe("%PDF-test");
@@ -290,7 +292,7 @@ describe("WaRequestsService access control (employee sees only assigned requests
   ];
 
   it("employee: list and badge only include their own assigned requests", async () => {
-    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any, outboxStub() as any);
     const res = await svc.list({});
     expect(res.data.map((r) => r.id)).toEqual(["req-mine-00001"]);
     expect(res.newCount).toBe(1); // own NEW + IN_PROGRESS
@@ -298,13 +300,13 @@ describe("WaRequestsService access control (employee sees only assigned requests
   });
 
   it("employee with nothing assigned: sidebar item hidden", async () => {
-    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-3") as any);
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-3") as any, outboxStub() as any);
     expect(await svc.summary()).toEqual({ newCount: 0, canManage: false, visible: false });
     expect((await svc.list({})).data).toEqual([]);
   });
 
   it("employee: unassigned or someone else's request is 404 for detail, document, update", async () => {
-    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any, outboxStub() as any);
     for (const id of ["req-theirs-0002", "req-unasgn-0003"]) {
       await expect(svc.detail(id)).rejects.toBeInstanceOf(NotFoundException);
       await expect(svc.document(id, 0)).rejects.toBeInstanceOf(NotFoundException);
@@ -314,7 +316,7 @@ describe("WaRequestsService access control (employee sees only assigned requests
 
   it("employee: sees their own request, may change status and note, but not the assignee", async () => {
     const rows = data();
-    const svc = new WaRequestsService(prismaFor(rows) as any, as("EMPLOYEE", "emp-1") as any);
+    const svc = new WaRequestsService(prismaFor(rows) as any, as("EMPLOYEE", "emp-1") as any, outboxStub() as any);
     const d = await svc.detail("req-mine-00001");
     expect(d).toMatchObject({ id: "req-mine-00001", canReveal: false, canAssign: false });
     const u = await svc.update("req-mine-00001", { workStatus: "DRAFT_READY", staffNote: "ड्राफ्ट बन गया" });
@@ -325,7 +327,7 @@ describe("WaRequestsService access control (employee sees only assigned requests
   });
 
   it("employee: reveal and the assignee list are 403, even on their own request", async () => {
-    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any);
+    const svc = new WaRequestsService(prismaFor(data()) as any, as("EMPLOYEE", "emp-1") as any, outboxStub() as any);
     await expect(svc.reveal("req-mine-00001")).rejects.toBeInstanceOf(ForbiddenException);
     await expect(svc.assignees()).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -333,7 +335,7 @@ describe("WaRequestsService access control (employee sees only assigned requests
   it("owner/admin: see every request, can assign and reveal", async () => {
     for (const role of ["OWNER", "ADMIN"]) {
       const rows = data();
-      const svc = new WaRequestsService(prismaFor(rows) as any, as(role, "boss") as any);
+      const svc = new WaRequestsService(prismaFor(rows) as any, as(role, "boss") as any, outboxStub() as any);
       expect((await svc.list({})).data).toHaveLength(3);
       expect(await svc.summary()).toEqual({ newCount: 2, canManage: true, visible: true });
       expect((await svc.detail("req-unasgn-0003")).canAssign).toBe(true);
