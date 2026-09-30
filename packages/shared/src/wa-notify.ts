@@ -63,6 +63,17 @@ export const WA_TEMPLATES = {
   },
 } as const satisfies Record<string, WaTemplateDef>;
 
+export type WaReasonCode =
+  | "notConfigured"
+  | "windowClosedTemplate"
+  | "windowClosed"
+  | "templateNotApproved"
+  | "cannotReceive"
+  | "pdfMissing"
+  | "pdfUpload"
+  | "noticeSent"
+  | "sendFailed";
+
 export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT";
 /** SENT: accepted by WhatsApp. PENDING: could not be sent (window closed and template not approved, ...) -- resend by hand. */
 export type WaNotificationStatus = "SENT" | "PENDING";
@@ -79,6 +90,10 @@ export interface WaNotification {
   body: string;
   /** Short reason when PENDING (e.g. "टेम्पलेट स्वीकृत नहीं"). */
   reason: string | null;
+  /** The same reason as a code, for the UI's language (null when unknown / none). */
+  reasonCode?: WaReasonCode | null;
+  /** Graph error code / channel for reasonCode "sendFailed". */
+  reasonVars?: { via?: string; code?: string };
   createdAt: string;
   sentAt: string | null;
 }
@@ -89,4 +104,14 @@ export interface WaTemplateStatus {
   name: string;
   /** Meta's status (APPROVED, PENDING, REJECTED ...), or null when not submitted. */
   status: string | null;
+}
+
+/** POST /whatsapp/templates/submit: one row per template (code for the UI's language; result = Hindi text). */
+export interface WaTemplateSubmitResult {
+  key: string;
+  name: string;
+  code: "exists" | "submitted" | "error";
+  status?: string;
+  errorCode?: string | number;
+  result: string;
 }

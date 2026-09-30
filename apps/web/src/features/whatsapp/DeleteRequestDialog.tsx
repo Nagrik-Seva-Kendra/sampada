@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWaT } from "./waI18n";
 
 /**
  * "Type it to confirm" dialog for permanently deleting WhatsApp requests: the
@@ -24,6 +25,7 @@ export function DeleteRequestDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useWaT();
   const [typed, setTyped] = useState("");
   const ok = typed.trim().replace(/\s+/g, " ").toUpperCase() === expected.toUpperCase();
   return (
@@ -31,7 +33,7 @@ export function DeleteRequestDialog({
       <div className="modal-card modal-card--form wa-delete-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="बंद करें" disabled={busy}>
+          <button className="modal-close" onClick={onClose} aria-label={t("waClose")} disabled={busy}>
             ✕
           </button>
         </div>
@@ -42,7 +44,7 @@ export function DeleteRequestDialog({
             if (ok && !busy) onConfirm();
           }}
         >
-          <p style={{ fontWeight: 700, color: "var(--wa-danger)" }}>यह स्थायी है, वापस नहीं आएगा।</p>
+          <p style={{ fontWeight: 700, color: "var(--wa-danger)" }}>{t("waDeletePermanent")}</p>
           {note && <p className="doc-sub">{note}</p>}
           <label className="modal-field">
             {prompt}
@@ -50,7 +52,7 @@ export function DeleteRequestDialog({
           </label>
           {error && <p className="modal-error">{error}</p>}
           <button type="submit" className="wa-btn-delete modal-submit" disabled={!ok || busy}>
-            {busy ? "हटा रहे हैं…" : "स्थायी रूप से हटाएँ"}
+            {busy ? t("waDeleting") : t("waDeleteConfirm")}
           </button>
         </form>
       </div>

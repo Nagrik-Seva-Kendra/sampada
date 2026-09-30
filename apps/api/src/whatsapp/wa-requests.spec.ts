@@ -120,8 +120,8 @@ describe("mapper", () => {
     expect(d.registry?.currentOwners).toEqual([{ name: "वर्तमान मालिक", relation: "पुत्र" }]);
     expect(d.registry?.registrationNo).toBe("MP123/2019");
     expect(d.documents).toEqual([
-      { index: 0, label: "पुरानी रजिस्ट्री" },
-      { index: 1, label: "अतिरिक्त दस्तावेज़ 1" },
+      { index: 0, label: "पुरानी रजिस्ट्री", kind: "oldRegistry" },
+      { index: 1, label: "अतिरिक्त दस्तावेज़ 1", kind: "extra", n: 1 },
     ]);
     expect(d.canReveal).toBe(false);
     const json = JSON.stringify(d);

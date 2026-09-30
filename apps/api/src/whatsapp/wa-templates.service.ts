@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
-import { WA_TEMPLATES, type WaTemplateDef, type WaTemplateStatus } from "@sampada/shared";
+import { WA_TEMPLATES, type WaTemplateDef, type WaTemplateStatus, type WaTemplateSubmitResult } from "@sampada/shared";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { isManagerRole } from "./wa-requests.service.js";
 import { graphBase } from "./webhook-diagnostics.js";
@@ -50,13 +50,13 @@ export class WaTemplatesService {
   }
 
   /** Submits every configured template that Meta does not have yet. */
-  async submit(): Promise<{ key: string; name: string; result: string }[]> {
+  async submit(): Promise<WaTemplateSubmitResult[]> {
     const { tenant, waba, token } = this.guard();
     const current = await this.status();
-    const out: { key: string; name: string; result: string }[] = [];
+    const out: WaTemplateSubmitResult[] = [];
     for (const [key, t] of Object.entries(WA_TEMPLATES as Record<string, WaTemplateDef>)) {
       if (current.find((c) => c.key === key)?.status) {
-        out.push({ key, name: t.name, result: "पहले से भेजा हुआ" });
+        out.push({ key, name: t.name, code: "exists", result: "पहले से भेजा हुआ" });
         continue;
       }
       const res = await fetch(`${graphBase()}/${waba}/message_templates`, {
@@ -65,7 +65,13 @@ export class WaTemplatesService {
         body: JSON.stringify(templateSubmission(t)),
       });
       const json: any = await res.json().catch(() => null);
-      out.push({ key, name: t.name, result: res.ok ? `भेजा गया (${json?.status ?? "PENDING"})` : `त्रुटि (कोड ${json?.error?.code ?? res.status})` });
+      const status = json?.status ?? "PENDING";
+      const errorCode = json?.error?.code ?? res.status;
+      out.push(
+        res.ok
+          ? { key, name: t.name, code: "submitted", status, result: `भेजा गया (${status})` }
+          : { key, name: t.name, code: "error", errorCode, result: `त्रुटि (कोड ${errorCode})` },
+      );
     }
     this.log.log(`templates submitted by user ${tenant.userId}: ${out.map((o) => `${o.name}=${o.result}`).join(", ")}`);
     return out;

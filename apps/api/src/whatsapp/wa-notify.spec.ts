@@ -215,3 +215,18 @@ describe("status change → customer message", () => {
     expect(r.workStatus).toBe("DONE");
   });
 });
+
+describe("reason codes for the web app's language", () => {
+  it("maps every stored reason; unknown text → null", async () => {
+    const { reasonCodeOf } = await import("./wa-outbox.service.js");
+    expect(reasonCodeOf("WhatsApp कॉन्फ़िगर नहीं (WA_ACCESS_TOKEN)")).toEqual({ reasonCode: "notConfigured" });
+    expect(reasonCodeOf(reasonFor(131047, "text"))).toEqual({ reasonCode: "windowClosedTemplate" });
+    expect(reasonCodeOf(reasonFor(132001, "template"))).toEqual({ reasonCode: "templateNotApproved" });
+    expect(reasonCodeOf(reasonFor(131026, "text"))).toEqual({ reasonCode: "cannotReceive" });
+    expect(reasonCodeOf(reasonFor(500, "template"))).toEqual({ reasonCode: "sendFailed", reasonVars: { via: "template", code: "500" } });
+    expect(reasonCodeOf(reasonFor(null, "text"))).toEqual({ reasonCode: "sendFailed", reasonVars: { via: "text" } });
+    expect(reasonCodeOf("ग्राहक को सूचना भेजी — जवाब आते ही PDF अपने-आप जाएगी")).toEqual({ reasonCode: "noticeSent" });
+    expect(reasonCodeOf("कुछ और")).toEqual({ reasonCode: null });
+    expect(reasonCodeOf(null)).toEqual({ reasonCode: null });
+  });
+});

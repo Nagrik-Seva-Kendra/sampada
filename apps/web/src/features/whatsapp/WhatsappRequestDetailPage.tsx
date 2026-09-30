@@ -5,7 +5,6 @@ import {
   formatPartyBlock,
   formatPropertyBlock,
   missingSampadaFields,
-  PARTY_FIELD_LABEL,
   type PartyField,
   splitNameRelation,
   type WaRequestDetail,
@@ -31,23 +30,76 @@ import {
   useWaIdPhotoOpener,
   useWaRequest,
 } from "./useWhatsappRequests";
-import {
-  DEED_TYPE_LABEL,
-  formatAmount,
-  formatDate,
-  INTAKE_STATUS_LABEL,
-  WORK_STATUS_LABEL,
-  WORK_STATUS_PILL,
-  WORK_STATUSES,
-} from "./waLabels";
+import type { StringKey } from "../../i18n/strings";
+import { DEED_TYPE_KEY, INTAKE_STATUS_KEY, useWaT, type WaT, WORK_STATUS_KEY } from "./waI18n";
+import { formatAmount, formatDate, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
 
-const PROPERTY_TYPE_LABEL: Record<string, string> = {
-  agricultural: "कृषि भूमि",
-  residential_plot: "आवासीय प्लॉट",
-  house: "मकान",
-  flat: "फ्लैट",
-  commercial: "व्यावसायिक",
+const PROPERTY_TYPE_KEY: Record<string, StringKey> = {
+  agricultural: "waPropAgricultural",
+  residential_plot: "waPropResidentialPlot",
+  house: "waPropHouse",
+  flat: "waPropFlat",
+  commercial: "waPropCommercial",
 };
+const PARTY_FIELD_KEY: Record<PartyField, StringKey> = {
+  name: "waFieldName",
+  guardian: "waFieldGuardian",
+  motherName: "waFieldMotherName",
+  aadhaar: "waFieldAadhaar",
+  mobile: "waFieldMobile",
+  email: "waFieldEmail",
+  address: "waFieldAddress",
+};
+const PARTY_KEY: Record<string, StringKey> = {
+  buyer: "waRoleBuyer",
+  mortgagor: "waRoleMortgagor",
+  witness1: "waRoleWitness1",
+  witness2: "waRoleWitness2",
+};
+/** detail.mortgage.people is always mortgagor, first witness, second witness. */
+const MORTGAGE_ROLE_KEYS: StringKey[] = ["waRoleMortgagor", "waRoleWitness1", "waRoleWitness2"];
+const ID_KIND_KEY: Record<string, StringKey> = {
+  aadhaarFront: "waIdKindAadhaarFront",
+  aadhaarBack: "waIdKindAadhaarBack",
+  pan: "waIdKindPan",
+  passportPhoto: "waIdKindPassportPhoto",
+};
+const ID_WARNING_KEY: Record<string, StringKey> = {
+  aadhaarPanName: "waIdWarnAadhaarPanName",
+  panFather: "waIdWarnPanFather",
+  unreadable: "waIdWarnUnreadable",
+};
+const DOC_KIND_KEY: Record<string, StringKey> = {
+  sanction: "waDocSanction",
+  registry: "waDocRegistry",
+  transfer: "waDocTransfer",
+  first: "waDocFirst",
+  oldRegistry: "waDocOldRegistry",
+};
+/** Gender as stored from the Aadhaar card (Hindi data) → the UI's language. */
+// i18n-exempt: keys are the stored data values, not UI text.
+const GENDER_KEY: Record<string, StringKey> = { पुरुष: "waGenderMale", महिला: "waGenderFemale", अन्य: "waGenderOther" };
+const genderText = (g: string | null | undefined, t: WaT) => (g ? (GENDER_KEY[g] ? t(GENDER_KEY[g]!) : g) : null);
+const REASON_KEY: Record<string, StringKey> = {
+  notConfigured: "waReasonNotConfigured",
+  windowClosedTemplate: "waReasonWindowClosedTemplate",
+  windowClosed: "waReasonWindowClosed",
+  templateNotApproved: "waReasonTemplateNotApproved",
+  cannotReceive: "waReasonCannotReceive",
+  pdfMissing: "waReasonPdfMissing",
+  pdfUpload: "waReasonPdfUpload",
+  noticeSent: "waReasonNoticeSent",
+};
+/** Why a message is pending, in the UI's language (falls back to the stored text). */
+function reasonText(n: { reason: string | null; reasonCode?: string | null; reasonVars?: { via?: string; code?: string } }, t: WaT): string {
+  if (n.reasonCode === "sendFailed") {
+    const code = n.reasonVars?.code ? t("waReasonCode", { code: n.reasonVars.code }) : "";
+    return t("waReasonSendFailed", { via: n.reasonVars?.via ?? "", code });
+  }
+  return n.reasonCode && REASON_KEY[n.reasonCode] ? t(REASON_KEY[n.reasonCode]!) : (n.reason ?? "");
+}
+const docLabel = (d: WaRequestDetail["documents"][number], t: WaT) =>
+  d.kind === "extra" ? t("waDocExtra", { n: d.n ?? d.index }) : d.kind && DOC_KIND_KEY[d.kind] ? t(DOC_KIND_KEY[d.kind]!) : d.label;
 
 function Card({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
   return (
@@ -81,6 +133,7 @@ const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
  */
 function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): string | null {
   const reg = r.registry;
+  // i18n-exempt: deed text in the office's Hindi drafting style (docs/nsk-deed-drafting-pattern.md).
   const property = reg?.property ? formatPropertyBlock(reg.property, r.deedType === "mortgage" ? "बंधक सम्पत्ति का विवरण -" : undefined) : null;
   if (r.deedType === "sale") {
     const sellers = (reg?.currentOwners ?? []).map((o) => {
@@ -94,6 +147,7 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
       aadhaar: revealed?.aadhaar ?? r.buyer.aadhaarMasked,
       pan: revealed?.pan ?? null,
     });
+    // i18n-exempt: deed text (office drafting style)
     return [formatPartyBlock("विक्रेता पक्ष", sellers), formatPartyBlock("क्रेता पक्ष", [buyer]), property]
       .filter(Boolean)
       .join("\n\n");
@@ -102,7 +156,8 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
     const [mortgagor, ...witnesses] = r.mortgage.people.map((x, i) =>
       formatParty({ name: x.name, relation: x.relation, guardian: x.fatherName, aadhaar: revealed?.people[i]?.aadhaar ?? x.aadhaarMasked }),
     );
-    return [formatPartyBlock("बंधककर्ता", mortgagor ? [mortgagor] : []), formatPartyBlock("गवाह", witnesses), property]
+    // i18n-exempt: deed text (office drafting style)
+  return [formatPartyBlock("बंधककर्ता", mortgagor ? [mortgagor] : []), formatPartyBlock("गवाह", witnesses), property]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -115,6 +170,7 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
  */
 /** OWNER/ADMIN: red "अनुरोध हटाएँ" with a type-the-number dialog; back to the list afterwards. */
 function DeleteRequestButton({ r }: { r: WaRequestDetail }) {
+  const { t } = useWaT();
   const del = useDeleteWaRequest(r.id);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -123,29 +179,23 @@ function DeleteRequestButton({ r }: { r: WaRequestDetail }) {
     setError(null);
     try {
       const out = await del.mutateAsync(r.ref);
-      setWaToast(
-        `अनुरोध ${out.ref} हटा दिया गया।` +
-          (out.deedTemplateId ? " इससे बनी डीड नहीं हटाई गई — ज़रूरत हो तो उसे डीड सूची से अलग से हटाएँ।" : ""),
-      );
+      setWaToast(t("waDeletedOne", { ref: out.ref }) + (out.deedTemplateId ? t("waDeletedDeedKept") : ""));
       navigate({ to: "/whatsapp-requests" });
     } catch (err) {
-      setError(await apiErrorMessage(err, "अनुरोध नहीं हटाया जा सका।"));
+      setError(await apiErrorMessage(err, t("waDeleteError")));
     }
   }
   return (
     <>
       <button type="button" className="wa-btn-delete" onClick={() => setOpen(true)}>
-        अनुरोध हटाएँ
+        {t("waDeleteRequest")}
       </button>
       {open && (
         <DeleteRequestDialog
-          title={`अनुरोध ${r.ref} हटाएँ`}
+          title={t("waDeleteTitleOne", { ref: r.ref })}
           expected={r.ref}
-          prompt={`पक्का करने के लिए अनुरोध नंबर (${r.ref}) लिखें`}
-          note={
-            "ग्राहक के सारे दस्तावेज़, ID फ़ोटो, भेजे गए ड्राफ्ट और संदेशों का रिकॉर्ड भी हट जाएगा।" +
-            (r.deed ? ` जुड़ी हुई डीड "${r.deed.title}" नहीं हटेगी — उसे अलग से हटाना होगा।` : "")
-          }
+          prompt={t("waDeletePromptOne", { ref: r.ref })}
+          note={t("waDeleteNoteOne") + (r.deed ? t("waDeleteNoteDeed", { title: r.deed.title }) : "")}
           busy={del.isPending}
           error={error}
           onConfirm={onConfirm}
@@ -156,13 +206,14 @@ function DeleteRequestButton({ r }: { r: WaRequestDetail }) {
   );
 }
 
-const DRAFT_STATE: Record<string, string> = {
-  pending: "अभी ग्राहक तक नहीं पहुँचा — कारण नीचे संदेशों में; विंडो बंद हो तो ग्राहक का संदेश आते ही अपने-आप जाएगा",
-  sent: "भेजा गया — ग्राहक के जवाब का इंतज़ार",
-  approved: "ग्राहक ने सही बताया ✅",
-  correction: "ग्राहक ने सुधार माँगा ✏️",
+const DRAFT_STATE: Record<string, StringKey> = {
+  pending: "waDraftStatePending",
+  sent: "waDraftStateSent",
+  approved: "waDraftStateApproved",
+  correction: "waDraftStateCorrection",
 };
-const WATERMARK = "DRAFT - केवल जाँच हेतु";
+/** On the customer's PDF (customer-facing, so always Hindi like the bot's messages). */
+const WATERMARK = "DRAFT - केवल जाँच हेतु"; // i18n-exempt: printed on the customer's PDF
 
 /** "/deeds/sale-deed/edit/<id>" or a bare id → the id. */
 function deedIdFrom(input: string): string | null {
@@ -178,6 +229,7 @@ function deedIdFrom(input: string): string | null {
  * last 4, plus their "SAHI HAI" / correction answer.
  */
 function DraftCard({ r }: { r: WaRequestDetail }) {
+  const { t } = useWaT();
   const update = useUpdateWaRequest(r.id);
   const send = useSendWaDraft(r.id);
   const loadDraft = useDraftForCustomer();
@@ -188,41 +240,41 @@ function DraftCard({ r }: { r: WaRequestDetail }) {
   async function onLink() {
     setMsg(null);
     const id = deedIdFrom(link);
-    if (!id) return setMsg("डीड का लिंक या ID सही नहीं है।");
+    if (!id) return setMsg(t("waLinkInvalid"));
     try {
       await update.mutateAsync({ deedTemplateId: id });
       setLink("");
     } catch (err) {
-      setMsg(await apiErrorMessage(err, "डीड नहीं जुड़ सकी।"));
+      setMsg(await apiErrorMessage(err, t("waLinkError")));
     }
   }
   async function onSend() {
     setMsg(null);
-    if (!window.confirm("ग्राहक को WhatsApp पर ड्राफ्ट (वॉटरमार्क, आधार/PAN के सिर्फ़ आखिरी 4 अंक) भेजें?")) return;
+    if (!window.confirm(t("waSendDraftConfirm"))) return;
     setBusy(true);
     try {
       const d = await loadDraft(r.id);
       const pdf = await deedPdfBase64(d.title, d.content, WATERMARK);
       const detail = await send.mutateAsync(pdf);
-      setMsg(detail.draftReview?.state === "sent" ? "ड्राफ्ट भेज दिया गया।" : "ड्राफ्ट अभी नहीं पहुँचा — नीचे संदेशों में कारण देखें।");
+      setMsg(detail.draftReview?.state === "sent" ? t("waDraftSent") : t("waDraftNotDelivered"));
     } catch (err) {
-      setMsg(await apiErrorMessage(err, "ड्राफ्ट नहीं भेजा जा सका।"));
+      setMsg(await apiErrorMessage(err, t("waDraftSendError")));
     } finally {
       setBusy(false);
     }
   }
   const review = r.draftReview;
   return (
-    <Card title="ड्राफ्ट और ग्राहक की जाँच">
+    <Card title={t("waCardDraft")}>
       <Field
-        label="जुड़ी हुई डीड"
+        label={t("waLinkedDeed")}
         value={
           r.deed ? (
             <a href={`/deeds/${r.deed.type}/edit/${r.deed.id}`} target="_blank" rel="noreferrer">
               {r.deed.title}
             </a>
           ) : (
-            "— कोई नहीं"
+            t("waNone")
           )
         }
       />
@@ -231,37 +283,38 @@ function DraftCard({ r }: { r: WaRequestDetail }) {
           <input
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="मौजूदा डीड का लिंक या ID"
+            placeholder={t("waLinkPlaceholder")}
             style={{ flex: "1 1 240px" }}
           />
           <button type="button" className="doc-btn" onClick={onLink} disabled={update.isPending || !link.trim()}>
-            डीड जोड़ें
+            {t("waLinkDeed")}
           </button>
         </div>
       )}
       {review && (
         <>
-          <Field label="ड्राफ्ट की स्थिति" value={DRAFT_STATE[review.state]} />
-          {review.reply && <Field label="ग्राहक का जवाब" value={<span style={{ whiteSpace: "pre-wrap" }}>{review.reply}</span>} />}
+          <Field label={t("waDraftState")} value={t(DRAFT_STATE[review.state]!)} />
+          {review.reply && <Field label={t("waCustomerReply")} value={<span style={{ whiteSpace: "pre-wrap" }}>{review.reply}</span>} />}
         </>
       )}
       {r.canSendDraft && (
         <button type="button" className="btn-calc" style={{ marginTop: 8 }} onClick={onSend} disabled={busy}>
-          {busy ? "PDF बनाकर भेज रहे हैं…" : review ? "ग्राहक को ड्राफ्ट दोबारा भेजें" : "ग्राहक को ड्राफ्ट भेजें"}
+          {busy ? t("waSendingDraft") : review ? t("waResendDraft") : t("waSendDraft")}
         </button>
       )}
       {!r.canSendDraft && r.canAssign && r.deed && r.workStatus !== "DRAFT_READY" && (
-        <p className="doc-sub">ग्राहक को ड्राफ्ट भेजने के लिए स्थिति "ड्राफ्ट तैयार" करें।</p>
+        <p className="doc-sub">{t("waDraftNeedsReady")}</p>
       )}
       {msg && <p className="doc-sub" role="status">{msg}</p>}
     </Card>
   );
 }
 
-const NOTIFICATION_KIND: Record<string, string> = { STATUS: "स्थिति सूचना", ALERT: "मालिक को अलर्ट", DRAFT: "ड्राफ्ट जाँच" };
+const NOTIFICATION_KIND: Record<string, StringKey> = { STATUS: "waKindSTATUS", ALERT: "waKindALERT", DRAFT: "waKindDRAFT" };
 
 /** WhatsApp messages sent for this request; PENDING ones get a resend button. */
 function MessagesCard({ r }: { r: WaRequestDetail }) {
+  const { t, lang } = useWaT();
   const resend = useResendWaNotification(r.id);
   const [error, setError] = useState<string | null>(null);
   const list = r.notifications ?? [];
@@ -270,27 +323,33 @@ function MessagesCard({ r }: { r: WaRequestDetail }) {
     setError(null);
     try {
       const n = await resend.mutateAsync(nid);
-      if (n.status !== "SENT") setError(`अभी भी नहीं भेजा जा सका: ${n.reason ?? ""}`);
+      if (n.status !== "SENT") setError(t("waStillNotSent", { reason: reasonText(n, t) }));
     } catch (err) {
-      setError(await apiErrorMessage(err, "संदेश दोबारा नहीं भेजा जा सका।"));
+      setError(await apiErrorMessage(err, t("waResendError")));
     }
   }
   return (
-    <Card title="ग्राहक को भेजे WhatsApp संदेश">
+    <Card title={t("waCardMessages")}>
       {list.map((n) => (
         <div key={n.id} style={{ padding: "8px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700 }}>{NOTIFICATION_KIND[n.kind] ?? n.kind}</span>
+            <span style={{ fontWeight: 700 }}>{NOTIFICATION_KIND[n.kind] ? t(NOTIFICATION_KIND[n.kind]!) : n.kind}</span>
             <span className="doc-sub" style={{ marginTop: 0 }}>
-              {n.toMasked} · {formatDate(n.sentAt ?? n.createdAt)}
+              {n.toMasked} · {formatDate(n.sentAt ?? n.createdAt, lang)}
             </span>
             {n.status === "SENT" ? (
-              <span className="status-pill good">भेजा गया{n.via === "template" ? " (टेम्पलेट)" : ""}</span>
+              <span className="status-pill good">
+                {t("waMsgSent")}
+                {n.via === "template" ? t("waMsgViaTemplate") : ""}
+              </span>
             ) : (
               <>
-                <span className="status-pill bad">बाकी{n.reason ? ` — ${n.reason}` : ""}</span>
+                <span className="status-pill bad">
+                  {t("waMsgPendingPill")}
+                  {n.reason ? ` — ${reasonText(n, t)}` : ""}
+                </span>
                 <button type="button" className="doc-btn" disabled={resend.isPending} onClick={() => onResend(n.id)}>
-                  {resend.isPending ? "भेज रहे हैं…" : "फिर से भेजें"}
+                  {resend.isPending ? t("waSending") : t("waResend")}
                 </button>
               </>
             )}
@@ -303,7 +362,7 @@ function MessagesCard({ r }: { r: WaRequestDetail }) {
   );
 }
 
-const ID_PHOTO_STATE: Record<string, string> ={ later: "ग्राहक बाद में भेजेगा", deleted: "हटा दी गई (अवधि पूरी)" };
+const ID_PHOTO_STATE: Record<string, StringKey> = { later: "waIdPhotoLater", deleted: "waIdPhotoDeleted" };
 
 /**
  * ID-card photos per person, the cross-check warnings, and whether the Aadhaar/PAN
@@ -311,6 +370,7 @@ const ID_PHOTO_STATE: Record<string, string> ={ later: "ग्राहक ब�
  * request's assignee (the API 404s for anyone else).
  */
 function IdCardsCard({ r }: { r: WaRequestDetail }) {
+  const { t, lang } = useWaT();
   const openPhoto = useWaIdPhotoOpener();
   const [error, setError] = useState<string | null>(null);
   if (!r.idCards.length) return null;
@@ -324,38 +384,38 @@ function IdCardsCard({ r }: { r: WaRequestDetail }) {
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       tab?.close();
-      setError(await apiErrorMessage(err, "फ़ोटो नहीं खुल सकी।"));
+      setError(await apiErrorMessage(err, t("waIdPhotoOpenError")));
     }
   }
   return (
-    <Card title="पहचान पत्र (ID) की फ़ोटो">
+    <Card title={t("waCardIdPhotos")}>
       {r.idPhotosPurgedAt && (
         <p className="doc-sub" style={{ marginBottom: 8 }}>
-          काम पूरा होने के बाद तय अवधि बीतने पर ये फ़ोटो {formatDate(r.idPhotosPurgedAt)} को अपने-आप हटा दी गईं।
+          {t("waIdPurged", { date: formatDate(r.idPhotosPurgedAt, lang) })}
         </p>
       )}
       {r.idCards.map((c, i) => (
         <div key={c.party} style={{ marginTop: i ? 14 : 0 }}>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>{c.heading}</div>
-          {c.warnings.map((w) => (
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{PARTY_KEY[c.party] ? t(PARTY_KEY[c.party]!) : c.heading}</div>
+          {(c.warningKinds?.map((k) => (ID_WARNING_KEY[k] ? t(ID_WARNING_KEY[k]!) : k)) ?? c.warnings).map((w) => (
             <p key={w} className="status-pill warn" style={{ margin: "4px 0" }}>
-              ⚠️ {w} — स्टाफ जाँच करें
+              ⚠️ {t("waIdCheckStaff", { warning: w })}
             </p>
           ))}
           <Field
-            label="कार्ड से भरी जानकारी"
-            value={[c.aadhaarFromCard && "आधार (ग्राहक ने पुष्टि की)", c.panFromCard && "PAN (ग्राहक ने पुष्टि की)"].filter(Boolean).join(" · ") || "नहीं — ग्राहक ने लिखकर दी"}
+            label={t("waIdFromCard")}
+            value={[c.aadhaarFromCard && t("waIdAadhaarConfirmed"), c.panFromCard && t("waIdPanConfirmed")].filter(Boolean).join(" · ") || t("waIdTyped")}
           />
           {c.photos.map((p) => (
             <div key={p.kind} style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 600, minWidth: 160 }}>{p.label}</span>
+              <span style={{ fontWeight: 600, minWidth: 160 }}>{ID_KIND_KEY[p.kind] ? t(ID_KIND_KEY[p.kind]!) : p.label}</span>
               {p.state === "received" ? (
                 <button type="button" className="doc-btn" onClick={() => onView(c.party, p.kind)}>
-                  देखें
+                  {t("waView")}
                 </button>
               ) : (
                 <span className="doc-sub" style={{ marginTop: 0 }}>
-                  {p.state ? ID_PHOTO_STATE[p.state] : "— नहीं मिली"}
+                  {p.state && ID_PHOTO_STATE[p.state] ? t(ID_PHOTO_STATE[p.state]!) : t("waIdPhotoMissing")}
                 </span>
               )}
             </div>
@@ -368,24 +428,26 @@ function IdCardsCard({ r }: { r: WaRequestDetail }) {
 }
 
 function SampadaMissing({ party }: { party: Partial<Record<PartyField, string | null>> }) {
+  const { t } = useWaT();
   const missing = missingSampadaFields(party);
-  if (!missing.length) return <Field label="SAMPADA 2.0 जानकारी" value="पूरी ✅" />;
+  if (!missing.length) return <Field label={t("waSampadaComplete")} value={t("waSampadaCompleteValue")} />;
   return (
     <Field
-      label="SAMPADA के लिए बाकी"
-      value={<span className="status-pill bad">{missing.map((f) => PARTY_FIELD_LABEL[f]).join(", ")}</span>}
+      label={t("waSampadaMissing")}
+      value={<span className="status-pill bad">{missing.map((f) => t(PARTY_FIELD_KEY[f])).join(", ")}</span>}
     />
   );
 }
 
 /** A required paper of a बंधक पत्र. */
-const docStateLabel = (v: "received" | "later" | null) =>
-  v === "received" ? "मिला ✅" : v === "later" ? "ग्राहक बाद में भेजेगा" : "नहीं मिला";
+const docStateLabel = (v: "received" | "later" | null, t: WaT) =>
+  v === "received" ? t("waDocReceived") : v === "later" ? t("waDocLater") : t("waDocMissing");
 /** Customer's plot answer: true/false, null = they said "पता नहीं". */
-const yesNo = (v: boolean | null) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
+const yesNo = (v: boolean | null, t: WaT) => (v === true ? t("waYes") : v === false ? t("waNo") : t("waUnknown"));
 
 /** Staff: one WhatsApp draft request -- customer, buyer, registry details, files and office workflow. */
 export function WhatsappRequestDetailPage() {
+  const { t, lang } = useWaT();
   const { id } = useParams({ strict: false }) as { id: string };
   const query = useWaRequest(id);
   const assignees = useWaAssignees(!!query.data?.canAssign);
@@ -426,8 +488,8 @@ export function WhatsappRequestDetailPage() {
     return (
       <section className="page">
         <div className="wrap">
-          <p className="modal-error">अनुरोध नहीं मिला।</p>
-          <Link to="/whatsapp-requests">← सभी अनुरोध</Link>
+          <p className="modal-error">{t("waNotFound")}</p>
+          <Link to="/whatsapp-requests">{t("waBackToAll")}</Link>
         </div>
       </section>
     );
@@ -438,7 +500,7 @@ export function WhatsappRequestDetailPage() {
     try {
       setRevealed(await reveal.mutateAsync());
     } catch (err) {
-      setMessage(await apiErrorMessage(err, "आधार/PAN नहीं दिखाया जा सका।"));
+      setMessage(await apiErrorMessage(err, t("waRevealError")));
     }
   }
 
@@ -451,9 +513,9 @@ export function WhatsappRequestDetailPage() {
         ...(r!.canAssign ? { assigneeId: assigneeId || null } : {}),
         staffNote: staffNote.trim() || null,
       });
-      setMessage("बदलाव सहेज दिए गए।");
+      setMessage(t("waSaved"));
     } catch (err) {
-      setMessage(await apiErrorMessage(err, "बदलाव सहेजे नहीं जा सके।"));
+      setMessage(await apiErrorMessage(err, t("waSaveError")));
     }
   }
 
@@ -476,7 +538,7 @@ export function WhatsappRequestDetailPage() {
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       tab?.close();
-      setDocError(await apiErrorMessage(err, "दस्तावेज़ नहीं खुल सका।"));
+      setDocError(await apiErrorMessage(err, t("waDocOpenError")));
     }
   }
 
@@ -485,7 +547,7 @@ export function WhatsappRequestDetailPage() {
     // current owners) and the property detail once the editor supports seeding them.
     // For now: a blank deed of the requested type, titled with the request number and name.
     const type = r!.deedType === "mortgage" ? "equitable-mortgage-deed" : "sale-deed";
-    const title = `WhatsApp अनुरोध ${r!.ref}${r!.buyerName ? ` — ${r!.buyerName}` : ""}`;
+    const title = `${t("waTitle")} ${r!.ref}${r!.buyerName ? ` — ${r!.buyerName}` : ""}`;
     createDeed.mutate(
       { type, title, content: "" },
       {
@@ -497,7 +559,7 @@ export function WhatsappRequestDetailPage() {
           const tab = window.open(url, "_blank");
           if (!tab) window.location.assign(url);
         },
-        onError: async (err) => setMessage(await apiErrorMessage(err, "नया डीड नहीं बन सका।")),
+        onError: async (err) => setMessage(await apiErrorMessage(err, t("waCreateDeedError"))),
       },
     );
   }
@@ -511,34 +573,34 @@ export function WhatsappRequestDetailPage() {
     <section className="page">
       <div className="wrap" style={{ maxWidth: 920 }}>
         <Link to="/whatsapp-requests" className="doc-sub" style={{ fontSize: 13 }}>
-          ← सभी अनुरोध
+          {t("waBackToAll")}
         </Link>
         <div className="page-head" style={{ marginTop: 8 }}>
           <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            अनुरोध {r.ref}
+            {t("waRequestNo", { ref: r.ref })}
             {r.workStatus ? (
-              <span className={`status-pill ${WORK_STATUS_PILL[r.workStatus]}`}>{WORK_STATUS_LABEL[r.workStatus]}</span>
+              <span className={`status-pill ${WORK_STATUS_PILL[r.workStatus]}`}>{t(WORK_STATUS_KEY[r.workStatus])}</span>
             ) : (
-              <span className="status-pill neutral">{INTAKE_STATUS_LABEL[r.status]}</span>
+              <span className="status-pill neutral">{t(INTAKE_STATUS_KEY[r.status])}</span>
             )}
-            {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच ज़रूरी</span>}
+            {r.needsStaff && <span className="status-pill bad">{t("waStaffCheckNeeded")}</span>}
             {(r.notifications ?? []).some((n) => n.status === "PENDING" && n.kind !== "ALERT") && (
-              <span className="status-pill bad">ग्राहक को संदेश बाकी</span>
+              <span className="status-pill bad">{t("waMsgPending")}</span>
             )}
             {(r.reusedFrom ?? []).length > 0 && (
-              <span className="status-pill warn">पिछले अनुरोध {r.reusedFrom!.join(", ")} की जानकारी दोबारा उपयोग की गई</span>
+              <span className="status-pill warn">{t("waReusedFrom", { refs: r.reusedFrom!.join(", ") })}</span>
             )}
             {r.idCards.some((c) => c.warnings.length > 0) && (
-              <span className="status-pill warn">⚠️ ID कार्ड मिलान में अंतर — नीचे देखें</span>
+              <span className="status-pill warn">{t("waIdMismatch")}</span>
             )}
-            <span className="status-pill good">{DEED_TYPE_LABEL[r.deedType]}</span>
+            <span className="status-pill good">{t(DEED_TYPE_KEY[r.deedType])}</span>
           </h2>
           {r.deedType === "other" ? (
             // The bot doesn't know which deed type this is -- staff pick it.
-            <CreateDeedMenu triggerLabel="नया डीड बनाएँ (प्रकार चुनें)" />
+            <CreateDeedMenu triggerLabel={t("waCreateDeedPick")} />
           ) : (
             <button type="button" className="btn-calc" onClick={onCreateDeed} disabled={createDeed.isPending}>
-              {createDeed.isPending ? "बनाया जा रहा है…" : "इससे नया डीड बनाएँ"}
+              {createDeed.isPending ? t("waCreating") : t("waCreateDeed")}
             </button>
           )}
           {r.canAssign && <DeleteRequestButton r={r} />}
@@ -549,16 +611,16 @@ export function WhatsappRequestDetailPage() {
           </p>
         )}
 
-        <Card title="ग्राहक की जानकारी">
-          <Field label="WhatsApp नाम" value={orDash(r.customerName)} />
-          <Field label="WhatsApp नंबर" value={<a href={`tel:+${r.phone}`}>+{r.phone}</a>} />
-          <Field label="अनुरोध की तारीख" value={formatDate(r.createdAt)} />
-          <Field label="बातचीत की स्थिति" value={INTAKE_STATUS_LABEL[r.status]} />
+        <Card title={t("waCardCustomer")}>
+          <Field label={t("waWhatsappName")} value={orDash(r.customerName)} />
+          <Field label={t("waWhatsappNumber")} value={<a href={`tel:+${r.phone}`}>+{r.phone}</a>} />
+          <Field label={t("waRequestDate")} value={formatDate(r.createdAt, lang)} />
+          <Field label={t("waChatStatus")} value={t(INTAKE_STATUS_KEY[r.status])} />
         </Card>
 
         {draftText && (
           <Card
-            title="ड्राफ्ट टेक्स्ट (ऑफ़िस प्रारूप)"
+            title={t("waCardDraftText")}
             actions={
               <button
                 type="button"
@@ -573,7 +635,7 @@ export function WhatsappRequestDetailPage() {
                   }
                 }}
               >
-                {copied ? "कॉपी हो गया ✓" : "कॉपी करें"}
+                {copied ? t("waCopied") : t("waCopy")}
               </button>
             }
           >
@@ -584,69 +646,69 @@ export function WhatsappRequestDetailPage() {
               style={{ width: "100%", fontFamily: "inherit", fontSize: 14, lineHeight: 1.6 }}
             />
             <p className="doc-sub" style={{ marginTop: 6 }}>
-              "____" वाली जगहें (चतुःसीमा, भुजाएँ, विक्रेता का आधार आदि) स्टाफ भरें।
-              {r.canReveal && !revealed && " पूरा आधार/PAN \"आधार दिखाएँ\" के बाद आएगा।"}
+              {t("waDraftBlanksNote")}
+              {r.canReveal && !revealed && t("waDraftRevealNote")}
             </p>
           </Card>
         )}
 
         {r.deedType === "other" && (
-          <Card title="अनुरोधित दस्तावेज़">
-            <Field label="ग्राहक ने लिखा" value={orDash(r.requestedDeed)} />
+          <Card title={t("waCardRequestedDoc")}>
+            <Field label={t("waCustomerWrote")} value={orDash(r.requestedDeed)} />
             <p className="doc-sub" style={{ marginTop: 6 }}>
-              इस दस्तावेज़ के लिए bot ने विवरण नहीं लिया है — ग्राहक से संपर्क करें।
+              {t("waOtherDocNote")}
             </p>
           </Card>
         )}
 
         {r.mortgage && (
           <Card
-            title="बंधक पत्र — बंधककर्ता और गवाह"
+            title={t("waCardMortgage")}
             actions={
               r.canReveal &&
               r.mortgage.people.some((x) => x.aadhaarMasked) &&
               (revealed ? (
                 <button type="button" className="doc-btn" onClick={() => setRevealed(null)}>
-                  छिपाएँ
+                  {t("waHide")}
                 </button>
               ) : (
                 <button type="button" className="doc-btn" onClick={onReveal} disabled={reveal.isPending}>
-                  {reveal.isPending ? "लोड हो रहा है…" : "आधार दिखाएँ"}
+                  {reveal.isPending ? t("waLoading") : t("waShowAadhaar")}
                 </button>
               ))
             }
           >
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 800, marginBottom: 4 }}>ज़रूरी दस्तावेज़</div>
-              <Field label="बैंक सैंक्शन लेटर" value={docStateLabel(r.mortgage.docs.sanction)} />
-              <Field label="संपत्ति की रजिस्ट्री" value={docStateLabel(r.mortgage.docs.registry)} />
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>{t("waRequiredDocs")}</div>
+              <Field label={t("waSanctionLetter")} value={docStateLabel(r.mortgage.docs.sanction, t)} />
+              <Field label={t("waPropertyRegistry")} value={docStateLabel(r.mortgage.docs.registry, t)} />
               {r.mortgage.registryOwners.length > 0 && (
-                <Field label="रजिस्ट्री के अनुसार मालिक" value={r.mortgage.registryOwners.join(", ")} />
+                <Field label={t("waRegistryOwners")} value={r.mortgage.registryOwners.join(", ")} />
               )}
               <Field
-                label="रजिस्ट्री वाले मालिक ही वर्तमान मालिक"
-                value={r.mortgage.ownerIsCurrent === undefined ? "— (अभी पूछा नहीं)" : yesNo(r.mortgage.ownerIsCurrent)}
+                label={t("waOwnerIsCurrent")}
+                value={r.mortgage.ownerIsCurrent === undefined ? t("waNotAskedYet") : yesNo(r.mortgage.ownerIsCurrent, t)}
               />
               {r.mortgage.ownerIsCurrent === false && (
-                <Field label="वसीयत/नामांतरण दस्तावेज़" value={docStateLabel(r.mortgage.docs.transfer)} />
+                <Field label={t("waTransferDoc")} value={docStateLabel(r.mortgage.docs.transfer, t)} />
               )}
             </div>
             {r.mortgage.people.map((person, i) => (
               <div key={person.role} style={{ marginTop: i ? 14 : 0 }}>
-                <div style={{ fontWeight: 800, marginBottom: 4 }}>{person.role}</div>
-                <Field label="नाम" value={orDash(person.name)} />
-                <Field label="पिता/पति का नाम" value={orDash(person.fatherName)} />
-                <Field label="माता का नाम" value={orDash(person.motherName)} />
-                <Field label="मोबाइल" value={orDash(person.mobile)} />
-                <Field label="ईमेल" value={orDash(person.email)} />
-                <Field label="पता" value={orDash(person.address)} />
+                <div style={{ fontWeight: 800, marginBottom: 4 }}>{MORTGAGE_ROLE_KEYS[i] ? t(MORTGAGE_ROLE_KEYS[i]!) : person.role}</div>
+                <Field label={t("waName")} value={orDash(person.name)} />
+                <Field label={t("waFatherHusband")} value={orDash(person.fatherName)} />
+                <Field label={t("waMother")} value={orDash(person.motherName)} />
+                <Field label={t("waMobile")} value={orDash(person.mobile)} />
+                <Field label={t("waEmail")} value={orDash(person.email)} />
+                <Field label={t("waAddress")} value={orDash(person.address)} />
                 <Field
-                  label="आधार"
+                  label={t("waAadhaar")}
                   value={revealed ? orDash(revealed.people[i]?.aadhaar) : orDash(person.aadhaarMasked)}
                 />
-                {person.panMasked && <Field label="PAN" value={person.panMasked} />}
+                {person.panMasked && <Field label={t("waPan")} value={person.panMasked} />}
                 {(person.dob || person.gender) && (
-                  <Field label="जन्म तिथि / लिंग (आधार से)" value={[person.dob, person.gender].filter(Boolean).join(" · ")} />
+                  <Field label={t("waDobGender")} value={[person.dob, genderText(person.gender, t)].filter(Boolean).join(" · ")} />
                 )}
                 <SampadaMissing
                   party={{
@@ -666,33 +728,33 @@ export function WhatsappRequestDetailPage() {
 
         {r.deedType === "sale" && (
           <Card
-            title="खरीदार का विवरण"
+            title={t("waCardBuyer")}
             actions={
               r.canReveal &&
               (r.buyer.aadhaarMasked || r.buyer.panMasked || r.sellerPanMasked) &&
               (revealed ? (
                 <button type="button" className="doc-btn" onClick={() => setRevealed(null)}>
-                  छिपाएँ
+                  {t("waHide")}
                 </button>
               ) : (
                 <button type="button" className="doc-btn" onClick={onReveal} disabled={reveal.isPending}>
-                  {reveal.isPending ? "लोड हो रहा है…" : "आधार/PAN दिखाएँ"}
+                  {reveal.isPending ? t("waLoading") : t("waShowAadhaarPan")}
                 </button>
               ))
             }
           >
-            <Field label="नाम" value={orDash(r.buyer.name)} />
-            <Field label="पिता/पति का नाम" value={orDash(r.buyer.fatherName)} />
-            <Field label="माता का नाम" value={orDash(r.buyer.motherName)} />
-            <Field label="मोबाइल" value={orDash(r.buyer.mobile)} />
-            <Field label="ईमेल" value={orDash(r.buyer.email)} />
-            <Field label="पता" value={orDash(r.buyer.address)} />
-            <Field label="आधार" value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
-            <Field label="PAN" value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
+            <Field label={t("waName")} value={orDash(r.buyer.name)} />
+            <Field label={t("waFatherHusband")} value={orDash(r.buyer.fatherName)} />
+            <Field label={t("waMother")} value={orDash(r.buyer.motherName)} />
+            <Field label={t("waMobile")} value={orDash(r.buyer.mobile)} />
+            <Field label={t("waEmail")} value={orDash(r.buyer.email)} />
+            <Field label={t("waAddress")} value={orDash(r.buyer.address)} />
+            <Field label={t("waAadhaar")} value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
+            <Field label={t("waPan")} value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
             {(r.buyer.dob || r.buyer.gender) && (
-              <Field label="जन्म तिथि / लिंग (आधार से)" value={[r.buyer.dob, r.buyer.gender].filter(Boolean).join(" · ")} />
+              <Field label={t("waDobGender")} value={[r.buyer.dob, genderText(r.buyer.gender, t)].filter(Boolean).join(" · ")} />
             )}
-            <Field label="विक्रेता PAN (TDS)" value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
+            <Field label={t("waSellerPan")} value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
             <SampadaMissing
               party={{
                 name: r.buyer.name,
@@ -708,63 +770,66 @@ export function WhatsappRequestDetailPage() {
         )}
 
         {r.deedType === "sale" && (
-          <Card title="राशि और आयकर">
-            <Field label="रजिस्ट्री राशि" value={formatAmount(r.amount, r.amountMode)} />
+          <Card title={t("waCardAmount")}>
+            <Field label={t("waRegistryAmount")} value={formatAmount(r.amount, r.amountMode, t)} />
             {r.tax && (
               <Field
-                label="आयकर नियम"
+                label={t("waTaxRules")}
                 value={
                   [
-                    r.tax.panRequired && "PAN अनिवार्य",
-                    r.tax.sftReported && "SFT रिपोर्टिंग",
-                    r.tax.tdsApplies && "1% TDS लागू",
+                    r.tax.panRequired && t("waTaxPan"),
+                    r.tax.sftReported && t("waTaxSft"),
+                    r.tax.tdsApplies && t("waTaxTds"),
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "कोई विशेष नियम नहीं"
+                    .join(" · ") || t("waTaxNone")
                 }
               />
             )}
           </Card>
         )}
 
-        <Card title="पुरानी रजिस्ट्री से निकाला विवरण">
+        <Card title={t("waCardRegistry")}>
           {!reg ? (
-            <p className="doc-sub">रजिस्ट्री से कोई विवरण नहीं निकला — स्टाफ मूल दस्तावेज़ देखें।</p>
+            <p className="doc-sub">{t("waRegistryNone")}</p>
           ) : (
             <>
               {!reg.isSaleDeed && (
                 <p className="status-pill warn" style={{ marginBottom: 8 }}>
-                  यह विक्रय पत्र नहीं लगता — जाँच करें
+                  {t("waNotSaleDeed")}
                 </p>
               )}
-              <Field label="संपत्ति" value={orDash(place)} />
-              <Field label="खसरा/प्लॉट नं." value={orDash(p?.khasraOrPlotNo)} />
+              <Field label={t("waProperty")} value={orDash(place)} />
+              <Field label={t("waKhasra")} value={orDash(p?.khasraOrPlotNo)} />
               <Field
-                label="क्षेत्रफल"
+                label={t("waArea")}
                 value={p?.areaValue != null ? `${p.areaValue} ${p.areaUnit ?? ""}`.trim() : "—"}
               />
-              <Field label="संपत्ति का प्रकार" value={p?.propertyType ? (PROPERTY_TYPE_LABEL[p.propertyType] ?? p.propertyType) : "—"} />
               <Field
-                label="वर्तमान मालिक (विक्रेता)"
+                label={t("waPropertyType")}
+                value={p?.propertyType ? (PROPERTY_TYPE_KEY[p.propertyType] ? t(PROPERTY_TYPE_KEY[p.propertyType]!) : p.propertyType) : "—"}
+              />
+              <Field
+                label={t("waCurrentOwners")}
                 value={reg.currentOwners.length ? reg.currentOwners.map((o) => o.name).join(", ") : "—"}
               />
               <Field
-                label="पिछली रजिस्ट्री नं."
+                label={t("waPrevRegistryNo")}
                 value={reg.registrationNo ? `${reg.registrationNo}${reg.registrationDate ? `, ${reg.registrationDate}` : ""}` : "—"}
               />
               <Field
-                label="पिछले विक्रेता"
+                label={t("waPrevSellers")}
                 value={reg.previousSellers.length ? reg.previousSellers.map((o) => o.name).join(", ") : "—"}
               />
               {r.plot && (
                 <>
-                  <Field label="प्लॉट पर मकान/निर्माण" value={yesNo(r.plot.hasBuilding)} />
-                  <Field label="कॉर्नर प्लॉट" value={yesNo(r.plot.corner)} />
-                  <Field label="बाउंड्री वॉल" value={yesNo(r.plot.boundaryWall)} />
+                  <Field label={t("waPlotBuilding")} value={yesNo(r.plot.hasBuilding, t)} />
+                  <Field label={t("waPlotCorner")} value={yesNo(r.plot.corner, t)} />
+                  <Field label={t("waPlotBoundary")} value={yesNo(r.plot.boundaryWall, t)} />
                 </>
               )}
               <Field
-                label="पिछला प्रतिफल"
+                label={t("waPrevConsideration")}
                 value={reg.consideration != null ? `₹${reg.consideration.toLocaleString("en-IN")}` : "—"}
               />
             </>
@@ -777,18 +842,18 @@ export function WhatsappRequestDetailPage() {
 
         <IdCardsCard r={r} />
 
-        <Card title="दस्तावेज़">
+        <Card title={t("waCardDocuments")}>
           {r.documents.length === 0 ? (
-            <p className="doc-sub">कोई दस्तावेज़ नहीं।</p>
+            <p className="doc-sub">{t("waNoDocuments")}</p>
           ) : (
             r.documents.map((d) => (
               <div key={d.index} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 600, minWidth: 160 }}>{d.label}</span>
+                <span style={{ fontWeight: 600, minWidth: 160 }}>{docLabel(d, t)}</span>
                 <button type="button" className="doc-btn" onClick={() => onOpenDocument(d.index, false)}>
-                  देखें
+                  {t("waView")}
                 </button>
                 <button type="button" className="doc-btn" onClick={() => onOpenDocument(d.index, true)}>
-                  डाउनलोड करें
+                  {t("waDownload")}
                 </button>
               </div>
             ))
@@ -796,24 +861,24 @@ export function WhatsappRequestDetailPage() {
           {docError && <p className="modal-error">{docError}</p>}
         </Card>
 
-        <Card title="कार्यालय कार्य">
+        <Card title={t("waCardOffice")}>
           <div className="dr-form-grid">
             <label>
-              स्थिति
+              {t("waColStatus")}
               <select value={workStatus} onChange={(e) => setWorkStatus(e.target.value as WaWorkStatus | "")}>
-                {!r.workStatus && <option value="">— चुनें —</option>}
+                {!r.workStatus && <option value="">{t("waChoose")}</option>}
                 {WORK_STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {WORK_STATUS_LABEL[s]}
+                    {t(WORK_STATUS_KEY[s])}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              ज़िम्मेदार स्टाफ
+              {t("waAssigneeStaff")}
               {r.canAssign ? (
                 <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                  <option value="">— कोई नहीं —</option>
+                  <option value="">{t("waNobody")}</option>
                   {(assignees.data ?? []).map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
@@ -825,7 +890,7 @@ export function WhatsappRequestDetailPage() {
               )}
             </label>
             <label className="dr-notes">
-              स्टाफ नोट
+              {t("waStaffNote")}
               <textarea
                 rows={3}
                 maxLength={2000}
@@ -836,7 +901,7 @@ export function WhatsappRequestDetailPage() {
             </label>
           </div>
           <button type="button" className="btn-calc" onClick={onSave} disabled={update.isPending}>
-            {update.isPending ? "सहेजा जा रहा है…" : "सहेजें"}
+            {update.isPending ? t("waSaving") : t("waSave")}
           </button>
         </Card>
       </div>

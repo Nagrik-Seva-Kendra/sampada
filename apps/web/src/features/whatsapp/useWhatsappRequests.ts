@@ -6,6 +6,7 @@ import type {
   WaDraftForCustomer,
   WaNotification,
   WaTemplateStatus,
+  WaTemplateSubmitResult,
   WaRequestDetail,
   WaRequestList,
   WaRequestSummary,
@@ -184,7 +185,7 @@ export function useWaTemplates(enabled: boolean) {
 export function useSubmitWaTemplates() {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();
-  return useMutation<{ key: string; name: string; result: string }[], Error, void>({
+  return useMutation<WaTemplateSubmitResult[], Error, void>({
     mutationFn: () => api.post("whatsapp/templates/submit", { headers: authHeaders(token) }).json(),
     onSettled: () => qc.invalidateQueries({ queryKey: ["wa-templates"] }),
   });

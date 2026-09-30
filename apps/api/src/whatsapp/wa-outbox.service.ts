@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import type { WaNotification, WaNotificationKind, WaTemplateDef } from "@sampada/shared";
+import type { WaNotification, WaNotificationKind, WaReasonCode, WaTemplateDef } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { readMedia } from "./wa-media.js";
 import { requestRef } from "./wa-requests.mapper.js";
@@ -223,6 +223,26 @@ export class WaOutboxService {
   }
 }
 
+/** The stored (Hindi) reason as a code the web app can show in English or Hindi. */
+export function reasonCodeOf(reason: string | null): { reasonCode: WaReasonCode | null; reasonVars?: { via?: string; code?: string } } {
+  if (!reason) return { reasonCode: null };
+  const exact: [string, WaReasonCode][] = [
+    ["WhatsApp कॉन्फ़िगर नहीं", "notConfigured"],
+    ["24 घंटे की विंडो बंद — टेम्पलेट ज़रूरी", "windowClosedTemplate"],
+    ["24 घंटे की विंडो बंद", "windowClosed"],
+    ["WhatsApp टेम्पलेट स्वीकृत नहीं", "templateNotApproved"],
+    ["यह नंबर WhatsApp पर संदेश नहीं ले सकता", "cannotReceive"],
+    ["PDF फ़ाइल नहीं मिली", "pdfMissing"],
+    ["PDF WhatsApp पर अपलोड", "pdfUpload"],
+    ["ग्राहक को सूचना भेजी", "noticeSent"],
+  ];
+  const hit = exact.find(([prefix]) => reason.startsWith(prefix));
+  if (hit) return { reasonCode: hit[1] };
+  const m = reason.match(/^भेजा नहीं जा सका \((\w+)(?:, कोड ([^)]+))?\)$/);
+  if (m) return { reasonCode: "sendFailed", reasonVars: { via: m[1], ...(m[2] ? { code: m[2] } : {}) } };
+  return { reasonCode: null };
+}
+
 export function toNotification(row: {
   id: string;
   kind: string;
@@ -242,6 +262,7 @@ export function toNotification(row: {
     toMasked: maskPhone(row.toPhone),
     body: row.body,
     reason: row.reason,
+    ...reasonCodeOf(row.reason),
     createdAt: row.createdAt.toISOString(),
     sentAt: row.sentAt ? row.sentAt.toISOString() : null,
   };
