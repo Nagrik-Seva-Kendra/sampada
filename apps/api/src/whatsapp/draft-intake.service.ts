@@ -17,6 +17,8 @@ import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
 import { IdCardExtractorService } from "./id-card-extractor.service.js";
 import { idWarningsFor, mapIdRead } from "./id-cards.js";
+import { alertMessage, alertNumbers } from "./wa-alerts.js";
+import { WaOutboxService } from "./wa-outbox.service.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
   detectDeedIntent,
@@ -299,6 +301,7 @@ export class DraftIntakeService {
     private readonly extractor: DeedExtractorService,
     private readonly guideline: GuidelineLookupService,
     private readonly idReader: IdCardExtractorService,
+    private readonly outbox: WaOutboxService,
   ) {}
 
   // ================= document received =================
@@ -526,6 +529,7 @@ export class DraftIntakeService {
     data.deedType = "other";
     data.requestedDeed = (said ?? "").trim().slice(0, 200) || null;
     await this.save(cur.id, { data, step: "FINAL", status: "SUBMITTED", workStatus: "NEW", needsStaff: true });
+    await this.alertOwners(cur, data, true);
     const ref = String(cur.id).slice(-6).toUpperCase();
     return [`✅ आपका अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nइस दस्तावेज़ के लिए हमारा स्टाफ आपसे जल्द संपर्क करेगा।`];
   }
@@ -690,10 +694,27 @@ export class DraftIntakeService {
       (p) => idWarningsFor(d.idRead?.[p], { fatherName: d[`${p}FatherName`], relation: d[`${p}Relation`] }).length > 0,
     );
     await this.save(cur.id, { status: "SUBMITTED", workStatus: "NEW", ...(idWarn ? { needsStaff: true } : {}) });
+    await this.alertOwners(cur, d, idWarn || !!cur.needsStaff);
     // workStatus NEW puts it on the office's "WhatsApp अनुरोध" page.
     // TODO: notify staff (e.g. push/email) when a new request arrives.
     const ref = String(cur.id).slice(-6).toUpperCase();
     return [`✅ आपका ड्राफ्ट अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nस्टाफ ड्राफ्ट तैयार करके आपसे संपर्क करेगा।`];
+  }
+
+  /**
+   * WhatsApp alert to the owner's numbers (WA_ALERT_NUMBERS) for a new request.
+   * Never fails the customer's submit; unsent alerts stay PENDING on the request.
+   */
+  private async alertOwners(cur: any, data: any, needsStaff: boolean): Promise<void> {
+    const numbers = alertNumbers();
+    if (!numbers.length) return;
+    const ref = String(cur.id).slice(-6).toUpperCase();
+    const m = alertMessage({ id: cur.id, ref, phone: cur.phone ?? "", customerName: cur.customerName ?? null, data, needsStaff });
+    for (const to of numbers) {
+      await this.outbox
+        .send({ organizationId: cur.organizationId ?? this.orgId, draftIntakeId: cur.id, kind: "ALERT", to, text: m.text, template: m.template })
+        .catch((e) => this.log.error(`owner alert for request ${ref} not recorded: ${e?.code ?? e?.name ?? "error"}`));
+    }
   }
 
   private deedSummary(deed: DeedExtract | null): string {

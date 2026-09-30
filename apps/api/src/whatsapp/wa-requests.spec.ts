@@ -363,7 +363,7 @@ describe("DraftIntakeService plot questions", () => {
       },
     };
     const lookup = vi.fn(async () => null);
-    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup } as any, {} as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup } as any, {} as any, { send: async () => ({}) } as any);
     const say = (text: string) => svc.handleText({ phone: "919876543210", name: "राम" }, text);
     return { cur, say, lookup };
   }
@@ -456,7 +456,7 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
       },
     };
     const extractor = { extract: vi.fn(async (): Promise<unknown> => sanctionLetter) };
-    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any);
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any, { send: async () => ({}) } as any);
     const say = (text: string) => svc.handleText({ phone: "919876543210", name: "अनुज" }, text);
     const send = (key: string) => svc.handleDocument({ phone: "919876543210", name: "अनुज" }, file(key));
     return { cur, say, send, svc, prisma, extractor };
@@ -698,7 +698,7 @@ describe("office drafting style in the sale flow", () => {
       property: { district: "ग्वालियर", propertyType: "residential_plot", khasraOrPlotNo: "45", areaValue: 1500, areaUnit: "वर्ग फुट" },
     };
     const extractor = { extract: vi.fn(async () => plotDeed) };
-    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any);
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any, { send: async () => ({}) } as any);
     return { cur, svc, say: (t: string) => svc.handleText({ phone: "919876543210", name: "अ" }, t) };
   }
 
@@ -741,7 +741,7 @@ describe("DraftIntakeService", () => {
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update } };
-    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any);
     const replies = await svc.handleText({ phone: "919876543210", name: "राम" }, "हाँ");
     expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW" } });
     expect(replies?.[0]).toContain("XYZ123");
@@ -750,7 +750,7 @@ describe("DraftIntakeService", () => {
   it("the buyer-name question says to write only the name", async () => {
     const cur = { id: "x", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: { ...PHOTOS_DONE }, needsStaff: false };
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update: vi.fn(async () => ({})) } };
-    const replies = await new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any).handleText({ phone: "1", name: "" }, "हाँ");
+    const replies = await new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any).handleText({ phone: "1", name: "" }, "हाँ");
     expect(replies?.[0]).toContain("सिर्फ़ नाम लिखें");
     expect(replies?.[0]).toContain("पिता/पति का नाम आगे पूछा जाएगा");
   });
