@@ -52,6 +52,8 @@ export type WaDocState = "received" | "later" | null;
 export interface WaPerson {
   role: string; // "बंधककर्ता" | "पहला गवाह" | "दूसरा गवाह"
   name: string | null;
+  /** पुत्र / पुत्री / पत्नी -- decides "पुत्र श्री" / "पत्नी श्री" and the honorific. */
+  relation: "पुत्र" | "पुत्री" | "पत्नी" | null;
   fatherName: string | null;
   motherName: string | null;
   mobile: string | null;
@@ -90,6 +92,7 @@ export interface WaRequestDetail extends WaRequestListItem {
   staffNote: string | null;
   buyer: {
     name: string | null;
+    relation: "पुत्र" | "पुत्री" | "पत्नी" | null;
     fatherName: string | null;
     motherName: string | null;
     mobile: string | null;

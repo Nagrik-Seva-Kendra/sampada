@@ -14,3 +14,4 @@ export * from "./platform.js";
 export * from "./hindi-numerals.js";
 export * from "./verify-amounts.js";
 export * from "./whatsapp-request.js";
+export * from "./deed-format.js";

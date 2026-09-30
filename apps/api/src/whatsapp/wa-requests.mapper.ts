@@ -142,6 +142,7 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
     staffNote: row.staffNote,
     buyer: {
       name: str(d.buyerName),
+      relation: relationOf(d.buyerRelation),
       fatherName: str(d.buyerFatherName),
       motherName: str(d.buyerMotherName),
       mobile: str(d.buyerMobile),
@@ -197,6 +198,9 @@ export function revealSecrets(row: DraftIntakeRow): WaRevealResult {
   };
 }
 
+const relationOf = (v: unknown): "पुत्र" | "पुत्री" | "पत्नी" | null =>
+  v === "पुत्र" || v === "पुत्री" || v === "पत्नी" ? v : null;
+
 /** Requests from before document types existed are sale deeds. */
 export function deedTypeOf(d: Record<string, unknown>): WaDeedType {
   return d.deedType === "mortgage" || d.deedType === "other" ? d.deedType : "sale";
@@ -206,6 +210,7 @@ function mortgagePeople(d: Record<string, unknown>): WaPerson[] {
   return MORTGAGE_PEOPLE.map((m) => ({
     role: m.heading,
     name: str(d[`${m.prefix}Name`]),
+    relation: relationOf(d[`${m.prefix}Relation`]),
     fatherName: str(d[`${m.prefix}FatherName`]),
     motherName: str(d[`${m.prefix}MotherName`]),
     mobile: str(d[`${m.prefix}Mobile`]),
