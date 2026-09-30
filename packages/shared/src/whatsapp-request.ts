@@ -159,6 +159,8 @@ export interface WaRequestDetail extends WaRequestListItem {
   idCards: WaIdCards[];
   /** When the ID photos were deleted by the retention job (ISO), else null. */
   idPhotosPurgedAt: string | null;
+  /** Request number(s) whose details the returning customer chose to reuse (same WhatsApp number). */
+  reusedFrom?: string[];
   /** WhatsApp messages sent for this request (status updates ...), oldest first. PENDING ones can be resent. */
   notifications?: WaNotification[];
   /** Files the customer sent: index 0 is the registry, then extras. */

@@ -88,7 +88,7 @@ const PLOT_STEPS = [
 ] as const;
 const PLOT_FIELDS = PLOT_STEPS.map((s) => s.field);
 /** ID-photo bookkeeping kept when the customer re-enters their details ("बदलें"). */
-const ID_KEEP = ["idPhotos", "idFiles", "idTries", "idDone", "idNoticeShown", "idRead"];
+const ID_KEEP = ["idPhotos", "idFiles", "idTries", "idDone", "idNoticeShown", "idRead", "reuse"];
 
 /** Plot deeds (residential or commercial plot) get the plot questions. */
 export function isPlotDeed(deed: DeedExtract | null | undefined): boolean {
@@ -174,6 +174,55 @@ export function idNext(prefix: string, d: any): string | null {
     if (k === "pan" && pend.pan && pend.panOk === undefined) return `ID_OK:${prefix}:pan`;
   }
   return null;
+}
+
+// ---------- returning customer: reuse the details from their last request ----------
+// Same WhatsApp number only (never anyone else's data). Offered for the main
+// party (खरीदार / बंधककर्ता) before their ID photos. Older than 12 months →
+// every copied field is confirmed one by one.
+const REUSE_PARTIES = ["buyer", "mortgagor"];
+const REUSE_FIELDS = ["Name", "Relation", "FatherName", "MotherName", "Aadhaar", "Mobile", "Email", "Address", "Pan", "Dob", "Gender"] as const;
+/** Fields re-confirmed one by one when the old request is older than 12 months (in this order). */
+const REUSE_CHECK_FIELDS = ["Name", "Relation", "FatherName", "MotherName", "Aadhaar", "Mobile", "Email", "Address", "Pan"] as const;
+const REUSE_LABEL: Record<string, string> = {
+  Name: "नाम",
+  Relation: "संबंध (पुत्र/पुत्री/पत्नी)",
+  FatherName: "पिता/पति का नाम",
+  MotherName: "माता का नाम",
+  Aadhaar: "आधार",
+  Mobile: "मोबाइल",
+  Email: "ईमेल",
+  Address: "पता",
+  Pan: "PAN",
+};
+const YEAR_MS = 365 * 24 * 3600 * 1000;
+const reuseOfferRe = /^REUSE:(buyer|mortgagor)$/;
+const reuseCheckRe = /^REUSE_CHECK:(buyer|mortgagor):(\w+)$/;
+const maskStored = (v: unknown): string | null => {
+  if (typeof v !== "string" || !v) return null;
+  try {
+    return mask(decrypt(v));
+  } catch {
+    return "XXXX????";
+  }
+};
+
+/** The main party's fields of an earlier request, re-keyed for `toPrefix` (Aadhaar/PAN stay encrypted). */
+export function copyParty(prevData: any, toPrefix: string): Record<string, unknown> {
+  const from = prevData?.deedType === "mortgage" ? "mortgagor" : "buyer";
+  const out: Record<string, unknown> = {};
+  for (const f of REUSE_FIELDS) {
+    const v = prevData?.[`${from}${f}`];
+    if (v !== undefined && v !== null && v !== "") out[`${toPrefix}${f}`] = v;
+  }
+  return out;
+}
+
+/** Next field to re-confirm after `after` (or the first), among those copied; null when done. */
+export function nextReuseCheck(prefix: string, data: any, after?: string): string | null {
+  const start = after ? REUSE_CHECK_FIELDS.indexOf(after as any) + 1 : 0;
+  const f = REUSE_CHECK_FIELDS.slice(start).find((x) => data[`${prefix}${x}`]);
+  return f ? `REUSE_CHECK:${prefix}:${f}` : null;
 }
 
 // ---------- how a person is written in the deed (docs/nsk-deed-drafting-pattern.md) ----------
@@ -457,6 +506,8 @@ export class DraftIntakeService {
         return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
 
       default: {
+        if (reuseOfferRe.test(cur.step)) return this.reuseAnswer(cur, data, v);
+        if (reuseCheckRe.test(cur.step)) return this.reuseCheck(cur, data, raw, v);
         if (idStepRe.test(cur.step)) return this.idPhotoText(cur, data, v);
         if (idOkRe.test(cur.step)) return this.idConfirm(cur, data, v);
         const step = ANY_STEPS.find((s) => s.key === cur.step);
@@ -755,7 +806,12 @@ export class DraftIntakeService {
   /** Saves and asks `step` -- or, before a person's first question, their ID photos. */
   private async goto(id: string, data: any, step: string, prefix?: string): Promise<string[]> {
     const person = step.match(personNameRe)?.[1];
-    if (person && !data.idDone?.[person]) {
+    if (person && REUSE_PARTIES.includes(person) && !data.idDone?.[person] && data.reuse?.[person] === undefined) {
+      const prev = await this.previousParty(id);
+      data.reuse = { ...(data.reuse ?? {}), [person]: prev ?? false };
+      if (prev) step = `REUSE:${person}`;
+    }
+    if (person && !data.idDone?.[person] && !step.startsWith("REUSE:")) {
       const id0 = idNext(person, data);
       if (id0) step = id0;
       else data.idDone = { ...(data.idDone ?? {}), [person]: true };
@@ -774,6 +830,81 @@ export class DraftIntakeService {
     let next = this.nextStep(from, data);
     while (ANY_STEPS.some((x) => x.key === next) && data[next] !== undefined) next = this.nextStep(next, data);
     return next;
+  }
+
+  // ================= returning customer =================
+  /**
+   * The customer's own last submitted request (same WhatsApp number, same
+   * organization) with a main party, as an offer; null if none.
+   */
+  private async previousParty(id: string): Promise<{ from: string; name: string; aadhaar: string | null; old: boolean } | null> {
+    const me = await this.prisma.draftIntake.findFirst({ where: { id } });
+    if (!me?.phone) return null;
+    const prev = await this.prisma.draftIntake.findFirst({
+      where: { organizationId: me.organizationId ?? this.orgId, phone: me.phone, status: "SUBMITTED", id: { not: id } },
+      orderBy: { createdAt: "desc" },
+    });
+    // Belt and braces: never another number's (or this same) request.
+    if (!prev || prev.id === id || prev.phone !== me.phone || prev.status !== "SUBMITTED") return null;
+    const d = (prev.data ?? {}) as any;
+    const pfx = d.deedType === "mortgage" ? "mortgagor" : "buyer";
+    if (!d[`${pfx}Name`]) return null;
+    const old = !(prev.createdAt instanceof Date) || Date.now() - prev.createdAt.getTime() > YEAR_MS;
+    return { from: prev.id, name: d[`${pfx}Name`], aadhaar: maskStored(d[`${pfx}Aadhaar`]), old };
+  }
+
+  private async reuseAnswer(cur: any, data: any, v: string): Promise<string[]> {
+    const person = cur.step.match(reuseOfferRe)![1]!;
+    const offer = data.reuse?.[person];
+    if (!YES.test(v) && !NO.test(v)) return ['कृपया "हाँ" या "नहीं" लिखें।\n\n' + this.question(cur.step, data)];
+    if (NO.test(v) || !offer) {
+      data.reuse = { ...(data.reuse ?? {}), [person]: { ...(offer || {}), declined: true } };
+      return this.goto(cur.id, data, `${person}Name`, "ठीक है, इस बार की जानकारी नए सिरे से लेते हैं।");
+    }
+    // Re-read the old request, again only for this same number.
+    const prev = await this.prisma.draftIntake.findFirst({
+      where: { id: offer.from, organizationId: cur.organizationId ?? this.orgId, phone: cur.phone, status: "SUBMITTED" },
+    });
+    if (!prev || prev.phone !== cur.phone) {
+      data.reuse = { ...(data.reuse ?? {}), [person]: false };
+      return this.goto(cur.id, data, `${person}Name`, "पिछली जानकारी नहीं मिल पाई, नए सिरे से लेते हैं।");
+    }
+    Object.assign(data, copyParty(prev.data, person));
+    data.idDone = { ...(data.idDone ?? {}), [person]: true };
+    data.reuse = { ...(data.reuse ?? {}), [person]: { ...offer, used: true } };
+    if (offer.old) {
+      const first = nextReuseCheck(person, data);
+      if (first) return this.goto(cur.id, data, first, "पिछली जानकारी 12 महीने से पुरानी है, इसलिए हर जानकारी एक बार जाँच लें।");
+    }
+    return this.goto(cur.id, data, this.afterId(person, data), "✅ पिछली बार की जानकारी भर दी गई। अंत में सारांश में सब दिखेगा।");
+  }
+
+  private async reuseCheck(cur: any, data: any, raw: string, v: string): Promise<string[]> {
+    const [, person, field] = cur.step.match(reuseCheckRe) as [string, string, string];
+    const key = `${person}${field}`;
+    if (!YES.test(v)) {
+      const step = ANY_STEPS.find((s) => s.key === key);
+      const validate = step?.validate ?? (field === "Pan" ? validPan : validText());
+      const val = validate(v);
+      if (val === null) return [(step?.err ?? "कृपया सही जानकारी भेजें।") + '\n(पुरानी जानकारी सही है तो "हाँ" लिखें।)'];
+      const clean = /Name$/.test(field) ? stripHonorific(val) : val;
+      data[key] = field === "Aadhaar" || field === "Pan" ? encrypt(clean) : clean;
+      if (field === "Aadhaar") delete data[`${person}Dob`];
+    }
+    const next = nextReuseCheck(person, data, field);
+    return this.goto(cur.id, data, next ?? this.afterId(person, data));
+  }
+
+  private reuseAsk(step: string, data: any): string {
+    const offer = reuseOfferRe.test(step) ? data.reuse?.[step.match(reuseOfferRe)![1]!] : null;
+    if (offer) {
+      const aad = offer.aadhaar ? `, आधार ${offer.aadhaar}` : "";
+      return `आपने पहले भी हमसे काम करवाया है। पिछली बार की जानकारी (नाम: ${offer.name}${aad}) इस बार भी उपयोग करें? "हाँ" या "नहीं" लिखें।`;
+    }
+    const [, person, field] = step.match(reuseCheckRe) as [string, string, string];
+    const val = data[`${person}${field}`];
+    const shown = field === "Aadhaar" || field === "Pan" ? maskStored(val) : val;
+    return `पिछली बार: ${REUSE_LABEL[field] ?? field} — ${shown}\nसही है तो "हाँ" लिखें, नहीं तो नया ${REUSE_LABEL[field] ?? field} लिखें।`;
   }
 
   // ================= ID-card photos =================
@@ -924,6 +1055,7 @@ export class DraftIntakeService {
     if (step === "M_REGISTRY") return M_REGISTRY_ASK;
     if (step === "M_TRANSFER") return M_TRANSFER_ASK;
     if (step === "M_OWNER") return ownerAsk(data);
+    if (reuseOfferRe.test(step) || reuseCheckRe.test(step)) return this.reuseAsk(step, data);
     const idm = step.match(idStepRe);
     if (idm) {
       const tries = data.idTries?.[idm[1]!]?.[idm[2]!] ?? 0;

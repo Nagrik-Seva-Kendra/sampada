@@ -190,6 +190,9 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
     plot: plotAsked
       ? { hasBuilding: tri(d.plotHasBuilding), corner: tri(d.plotCorner), boundaryWall: tri(d.plotBoundary) }
       : null,
+    reusedFrom: Object.values((d.reuse ?? {}) as Record<string, any>)
+      .filter((r) => r && r.used && typeof r.from === "string")
+      .map((r) => requestRef(r.from)),
     idCards: idCards(d),
     idPhotosPurgedAt: row.idPhotosPurgedAt ? row.idPhotosPurgedAt.toISOString() : null,
     documents,
