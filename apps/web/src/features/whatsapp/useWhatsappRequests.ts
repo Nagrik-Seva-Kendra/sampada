@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   WaAssignee,
+  WaNotification,
+  WaTemplateStatus,
   WaRequestDetail,
   WaRequestList,
   WaRequestSummary,
@@ -103,6 +105,38 @@ export function useWaDocumentOpener() {
       .get(`whatsapp/requests/${id}/document`, { headers: authHeaders(token), searchParams: { i: String(index) } })
       .blob()
       .then((b) => URL.createObjectURL(b));
+}
+
+/** Resend a PENDING WhatsApp message of this request, then refresh the request. */
+export function useResendWaNotification(id: string) {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<WaNotification, Error, string>({
+    mutationFn: (nid) =>
+      api.post(`whatsapp/requests/${id}/notifications/${nid}/resend`, { headers: authHeaders(token) }).json<WaNotification>(),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["wa-requests", "detail", id] }),
+  });
+}
+
+/** OWNER/ADMIN: the WhatsApp templates' approval state at Meta. */
+export function useWaTemplates(enabled: boolean) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["wa-templates"],
+    enabled: enabled && !!token,
+    retry: false,
+    queryFn: () => api.get("whatsapp/templates", { headers: authHeaders(token) }).json<WaTemplateStatus[]>(),
+  });
+}
+
+/** OWNER/ADMIN: send the configured templates to Meta for approval. */
+export function useSubmitWaTemplates() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<{ key: string; name: string; result: string }[], Error, void>({
+    mutationFn: () => api.post("whatsapp/templates/submit", { headers: authHeaders(token) }).json(),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["wa-templates"] }),
+  });
 }
 
 /** One ID-card photo as an object URL (same access as the request: OWNER/ADMIN or its assignee). */

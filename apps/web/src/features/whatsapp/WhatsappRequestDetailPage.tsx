@@ -17,6 +17,7 @@ import { apiErrorMessage } from "../../lib/api";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
 import {
+  useResendWaNotification,
   useRevealWaRequest,
   useUpdateWaRequest,
   useWaAssignees,
@@ -106,7 +107,52 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
  * SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
  * address for every party's ID. Shows what this party is still missing.
  */
-const ID_PHOTO_STATE: Record<string, string> = { later: "ग्राहक बाद में भेजेगा", deleted: "हटा दी गई (अवधि पूरी)" };
+const NOTIFICATION_KIND: Record<string, string> = { STATUS: "स्थिति सूचना", ALERT: "मालिक को अलर्ट", DRAFT: "ड्राफ्ट जाँच" };
+
+/** WhatsApp messages sent for this request; PENDING ones get a resend button. */
+function MessagesCard({ r }: { r: WaRequestDetail }) {
+  const resend = useResendWaNotification(r.id);
+  const [error, setError] = useState<string | null>(null);
+  const list = r.notifications ?? [];
+  if (!list.length) return null;
+  async function onResend(nid: string) {
+    setError(null);
+    try {
+      const n = await resend.mutateAsync(nid);
+      if (n.status !== "SENT") setError(`अभी भी नहीं भेजा जा सका: ${n.reason ?? ""}`);
+    } catch (err) {
+      setError(await apiErrorMessage(err, "संदेश दोबारा नहीं भेजा जा सका।"));
+    }
+  }
+  return (
+    <Card title="ग्राहक को भेजे WhatsApp संदेश">
+      {list.map((n) => (
+        <div key={n.id} style={{ padding: "8px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700 }}>{NOTIFICATION_KIND[n.kind] ?? n.kind}</span>
+            <span className="doc-sub" style={{ marginTop: 0 }}>
+              {n.toMasked} · {formatDate(n.sentAt ?? n.createdAt)}
+            </span>
+            {n.status === "SENT" ? (
+              <span className="status-pill good">भेजा गया{n.via === "template" ? " (टेम्पलेट)" : ""}</span>
+            ) : (
+              <>
+                <span className="status-pill bad">बाकी{n.reason ? ` — ${n.reason}` : ""}</span>
+                <button type="button" className="doc-btn" disabled={resend.isPending} onClick={() => onResend(n.id)}>
+                  {resend.isPending ? "भेज रहे हैं…" : "फिर से भेजें"}
+                </button>
+              </>
+            )}
+          </div>
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 13, marginTop: 4 }}>{n.body}</div>
+        </div>
+      ))}
+      {error && <p className="modal-error">{error}</p>}
+    </Card>
+  );
+}
+
+const ID_PHOTO_STATE: Record<string, string> ={ later: "ग्राहक बाद में भेजेगा", deleted: "हटा दी गई (अवधि पूरी)" };
 
 /**
  * ID-card photos per person, the cross-check warnings, and whether the Aadhaar/PAN
@@ -323,6 +369,9 @@ export function WhatsappRequestDetailPage() {
               <span className="status-pill neutral">{INTAKE_STATUS_LABEL[r.status]}</span>
             )}
             {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच ज़रूरी</span>}
+            {(r.notifications ?? []).some((n) => n.status === "PENDING" && n.kind !== "ALERT") && (
+              <span className="status-pill bad">ग्राहक को संदेश बाकी</span>
+            )}
             {r.idCards.some((c) => c.warnings.length > 0) && (
               <span className="status-pill warn">⚠️ ID कार्ड मिलान में अंतर — नीचे देखें</span>
             )}
@@ -564,6 +613,8 @@ export function WhatsappRequestDetailPage() {
             </>
           )}
         </Card>
+
+        <MessagesCard r={r} />
 
         <IdCardsCard r={r} />
 

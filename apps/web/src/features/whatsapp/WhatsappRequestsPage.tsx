@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useWaRequests } from "./useWhatsappRequests";
+import { apiErrorMessage } from "../../lib/api";
+import { useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
 import {
   DEED_TYPE_LABEL,
   formatAmount,
@@ -14,8 +15,53 @@ import {
 } from "./waLabels";
 import "./waRequests.css";
 
+const TEMPLATE_STATUS: Record<string, string> = { APPROVED: "स्वीकृत", PENDING: "जाँच में", REJECTED: "अस्वीकृत", PAUSED: "रुका हुआ" };
+
+/**
+ * OWNER/ADMIN: the WhatsApp templates used outside the 24-hour window, their
+ * state at Meta, and a button to send them for approval.
+ */
+function TemplatesPanel() {
+  const templates = useWaTemplates(true);
+  const submit = useSubmitWaTemplates();
+  const [msg, setMsg] = useState<string | null>(null);
+  async function onSubmit() {
+    setMsg(null);
+    try {
+      const out = await submit.mutateAsync();
+      setMsg(out.map((o) => `${o.name}: ${o.result}`).join(" · "));
+    } catch (err) {
+      setMsg(await apiErrorMessage(err, "टेम्पलेट नहीं भेजे जा सके।"));
+    }
+  }
+  return (
+    <details style={{ marginBottom: 14 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 700 }}>WhatsApp टेम्पलेट (24 घंटे के बाद के संदेश)</summary>
+      <div style={{ padding: "8px 0" }}>
+        {templates.isError ? (
+          <p className="doc-sub">Meta से टेम्पलेट की स्थिति नहीं मिली — WA_WABA_ID और WA_ACCESS_TOKEN जाँचें।</p>
+        ) : (
+          (templates.data ?? []).map((t) => (
+            <div key={t.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0" }}>
+              <code>{t.name}</code>
+              <span className={`status-pill ${t.status === "APPROVED" ? "good" : t.status ? "warn" : "bad"}`}>
+                {t.status ? (TEMPLATE_STATUS[t.status] ?? t.status) : "भेजा नहीं गया"}
+              </span>
+            </div>
+          ))
+        )}
+        <button type="button" className="doc-btn" style={{ marginTop: 6 }} disabled={submit.isPending} onClick={onSubmit}>
+          {submit.isPending ? "भेज रहे हैं…" : "स्वीकृति के लिए Meta को भेजें"}
+        </button>
+        {msg && <p className="doc-sub">{msg}</p>}
+      </div>
+    </details>
+  );
+}
+
 /** Staff: draft requests customers submitted through the WhatsApp bot. */
 export function WhatsappRequestsPage() {
+  const canManage = useWaSummary(true).data?.canManage ?? false;
   const [workStatus, setWorkStatus] = useState<WaWorkStatus | "">("");
   const [needsStaff, setNeedsStaff] = useState<"" | "true" | "false">("");
   const query = useWaRequests({
@@ -38,6 +84,8 @@ export function WhatsappRequestsPage() {
             {newCount > 0 && <span className="status-pill warn">{newCount} नए</span>}
           </h2>
         </div>
+
+        {canManage && <TemplatesPanel />}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>

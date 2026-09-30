@@ -51,6 +51,12 @@ export class WaRequestsController {
     return this.service.update(id, WaRequestUpdateInput.parse(body));
   }
 
+  /** Resend a message that is still PENDING ("ग्राहक को संदेश बाकी"). */
+  @Post(":id/notifications/:nid/resend")
+  resend(@Param("id") id: string, @Param("nid") nid: string) {
+    return this.service.resendNotification(id, nid);
+  }
+
   /** One ID-card photo (?party=buyer|mortgagor|witness1|witness2&kind=aadhaarFront|aadhaarBack|pan|passportPhoto), inline only. */
   @Get(":id/id-photo")
   async idPhoto(

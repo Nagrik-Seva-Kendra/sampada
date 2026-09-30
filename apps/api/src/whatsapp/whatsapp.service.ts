@@ -4,6 +4,7 @@ import { extname, join } from "node:path";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { r2Configured, r2Put } from "../guideline/r2.js";
 import { DraftIntakeService, type IncomingFile } from "./draft-intake.service.js";
+import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
   graphBase as graph,
@@ -20,6 +21,7 @@ export class WhatsappService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly intake: DraftIntakeService,
+    private readonly outbox: WaOutboxService,
   ) {}
 
   // ---------- security ----------
@@ -69,6 +71,8 @@ export class WhatsappService {
 
   private async handleMessage(msg: any, from: string, name: string): Promise<void> {
     await this.markRead(msg.id);
+    // Opens the 24h window in which the office may send free-form text (status updates ...).
+    await this.outbox.touchContact(from).catch((e) => this.log.warn(`window update failed: ${e?.code ?? e?.name ?? "error"}`));
     const ctx = { phone: from, name };
     let replies: string[];
 

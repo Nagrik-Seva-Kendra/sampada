@@ -16,3 +16,4 @@ export * from "./verify-amounts.js";
 export * from "./whatsapp-request.js";
 export * from "./deed-format.js";
 export * from "./id-photos.js";
+export * from "./wa-notify.js";
