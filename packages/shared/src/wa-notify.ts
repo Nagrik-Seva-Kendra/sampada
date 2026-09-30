@@ -44,6 +44,13 @@ export const WA_TEMPLATES = {
     body: "नमस्ते, नागरिक सेवा केंद्र से सूचना: अनुरोध नंबर {{1}} — {{2}}। धन्यवाद।",
     example: ["AB12CD", "आपका ड्राफ्ट तैयार है, स्टाफ जल्द संपर्क करेगा"],
   },
+  alert: {
+    name: "new_request_alert",
+    language: "hi",
+    category: "UTILITY",
+    body: "नया WhatsApp अनुरोध {{1}} — दस्तावेज़: {{2}}, ग्राहक: {{3}} ({{4}}), स्टाफ जाँच: {{5}}। देखें: {{6}} धन्यवाद।",
+    example: ["AB12CD", "विक्रय पत्र", "अमित शर्मा", "********3210", "नहीं", "https://app.nsk.mpe-registry.com/whatsapp-requests/abc123"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT";
