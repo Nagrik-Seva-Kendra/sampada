@@ -1,16 +1,7 @@
-import type { WaDeedType, WaIntakeStatus, WaWorkStatus } from "@sampada/shared";
+import type { WaWorkStatus } from "@sampada/shared";
+import type { WaLang, WaT } from "./waI18n";
 
-/** Hindi labels for the "WhatsApp अनुरोध" pages (Hindi-only UI by request). */
-export const WORK_STATUS_LABEL: Record<WaWorkStatus, string> = {
-  NEW: "नया",
-  IN_PROGRESS: "काम चल रहा है",
-  DRAFT_READY: "ड्राफ्ट तैयार",
-  CUSTOMER_APPROVED: "ग्राहक ने सही बताया",
-  CORRECTION_REQUESTED: "ग्राहक ने सुधार माँगा",
-  DONE: "पूर्ण",
-  REJECTED: "अस्वीकृत",
-};
-
+/** Status pill colour per work status (labels: WORK_STATUS_KEY in waI18n.ts). */
 export const WORK_STATUS_PILL: Record<WaWorkStatus, string> = {
   NEW: "warn",
   IN_PROGRESS: "neutral",
@@ -19,18 +10,6 @@ export const WORK_STATUS_PILL: Record<WaWorkStatus, string> = {
   CORRECTION_REQUESTED: "warn",
   DONE: "good",
   REJECTED: "bad",
-};
-
-export const INTAKE_STATUS_LABEL: Record<WaIntakeStatus, string> = {
-  ACTIVE: "बातचीत जारी",
-  SUBMITTED: "जमा किया",
-  CANCELLED: "रद्द",
-};
-
-export const DEED_TYPE_LABEL: Record<WaDeedType, string> = {
-  sale: "विक्रय पत्र",
-  mortgage: "बंधक पत्र",
-  other: "अन्य दस्तावेज़",
 };
 
 export const WORK_STATUSES: WaWorkStatus[] = [
@@ -45,14 +24,15 @@ export const WORK_STATUSES: WaWorkStatus[] = [
 
 /**
  * Amount cell text; never blank. GUIDELINE with no value yet → staff will tell;
- * a number → "₹15,00,000" (+ "(गाइडलाइन)" when it came from the guideline).
+ * a number → "₹15,00,000" (+ "(guideline)" when it came from the guideline).
  */
-export function formatAmount(amount: number | null | undefined, mode: "CUSTOM" | "GUIDELINE" | null): string {
+export function formatAmount(amount: number | null | undefined, mode: "CUSTOM" | "GUIDELINE" | null, t: WaT): string {
   const n = typeof amount === "number" && Number.isFinite(amount) ? amount : null;
-  if (n == null) return mode === "GUIDELINE" ? "गाइडलाइन (स्टाफ बताएगा)" : "—";
-  return `₹${Math.round(n).toLocaleString("en-IN")}${mode === "GUIDELINE" ? " (गाइडलाइन)" : ""}`;
+  if (n == null) return mode === "GUIDELINE" ? t("waAmountGuidelinePending") : "—";
+  return `₹${Math.round(n).toLocaleString("en-IN")}${mode === "GUIDELINE" ? t("waAmountGuideline") : ""}`;
 }
 
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("hi-IN", { dateStyle: "medium", timeStyle: "short" });
+/** Date + time in the chosen language's locale. */
+export function formatDate(iso: string, lang: WaLang): string {
+  return new Date(iso).toLocaleString(lang === "hi" ? "hi-IN" : "en-IN", { dateStyle: "medium", timeStyle: "short" });
 }

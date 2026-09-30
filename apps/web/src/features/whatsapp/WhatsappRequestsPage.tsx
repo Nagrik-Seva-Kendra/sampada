@@ -2,27 +2,22 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
 import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
 import { useBulkDeleteWaRequests, useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
-import {
-  DEED_TYPE_LABEL,
-  formatAmount,
-  formatDate,
-  INTAKE_STATUS_LABEL,
-  WORK_STATUS_LABEL,
-  WORK_STATUS_PILL,
-  WORK_STATUSES,
-} from "./waLabels";
+import { DEED_TYPE_KEY, INTAKE_STATUS_KEY, useWaT, type WaT, WORK_STATUS_KEY } from "./waI18n";
+import { formatAmount, formatDate, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
 import "./waRequests.css";
 
-const TEMPLATE_STATUS: Record<string, string> = { APPROVED: "स्वीकृत", PENDING: "जाँच में", REJECTED: "अस्वीकृत", PAUSED: "रुका हुआ" };
+const TEMPLATE_STATUS: Record<string, StringKey> = { APPROVED: "waTplAPPROVED", PENDING: "waTplPENDING", REJECTED: "waTplREJECTED", PAUSED: "waTplPAUSED" };
 
 /**
  * OWNER/ADMIN: the WhatsApp templates used outside the 24-hour window, their
  * state at Meta, and a button to send them for approval.
  */
 function TemplatesPanel() {
+  const { t } = useWaT();
   const templates = useWaTemplates(true);
   const submit = useSubmitWaTemplates();
   const [msg, setMsg] = useState<string | null>(null);
@@ -30,29 +25,29 @@ function TemplatesPanel() {
     setMsg(null);
     try {
       const out = await submit.mutateAsync();
-      setMsg(out.map((o) => `${o.name}: ${o.result}`).join(" · "));
+      setMsg(out.map((o) => `${o.name}: ${templateResult(o, t)}`).join(" · "));
     } catch (err) {
-      setMsg(await apiErrorMessage(err, "टेम्पलेट नहीं भेजे जा सके।"));
+      setMsg(await apiErrorMessage(err, t("waTplSubmitError")));
     }
   }
   return (
     <details style={{ marginBottom: 14 }}>
-      <summary style={{ cursor: "pointer", fontWeight: 700 }}>WhatsApp टेम्पलेट (24 घंटे के बाद के संदेश)</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("waTplTitle")}</summary>
       <div style={{ padding: "8px 0" }}>
         {templates.isError ? (
-          <p className="doc-sub">Meta से टेम्पलेट की स्थिति नहीं मिली — WA_WABA_ID और WA_ACCESS_TOKEN जाँचें।</p>
+          <p className="doc-sub">{t("waTplLoadError")}</p>
         ) : (
-          (templates.data ?? []).map((t) => (
-            <div key={t.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0" }}>
-              <code>{t.name}</code>
-              <span className={`status-pill ${t.status === "APPROVED" ? "good" : t.status ? "warn" : "bad"}`}>
-                {t.status ? (TEMPLATE_STATUS[t.status] ?? t.status) : "भेजा नहीं गया"}
+          (templates.data ?? []).map((tpl) => (
+            <div key={tpl.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0" }}>
+              <code>{tpl.name}</code>
+              <span className={`status-pill ${tpl.status === "APPROVED" ? "good" : tpl.status ? "warn" : "bad"}`}>
+                {tpl.status ? (TEMPLATE_STATUS[tpl.status] ? t(TEMPLATE_STATUS[tpl.status]!) : tpl.status) : t("waTplNotSubmitted")}
               </span>
             </div>
           ))
         )}
         <button type="button" className="doc-btn" style={{ marginTop: 6 }} disabled={submit.isPending} onClick={onSubmit}>
-          {submit.isPending ? "भेज रहे हैं…" : "स्वीकृति के लिए Meta को भेजें"}
+          {submit.isPending ? t("waSending") : t("waTplSubmit")}
         </button>
         {msg && <p className="doc-sub">{msg}</p>}
       </div>
@@ -62,6 +57,7 @@ function TemplatesPanel() {
 
 /** Staff: draft requests customers submitted through the WhatsApp bot. */
 export function WhatsappRequestsPage() {
+  const { t, lang } = useWaT();
   const canManage = useWaSummary(true).data?.canManage ?? false;
   const [workStatus, setWorkStatus] = useState<WaWorkStatus | "">("");
   const [needsStaff, setNeedsStaff] = useState<"" | "true" | "false">("");
@@ -114,12 +110,14 @@ export function WhatsappRequestsPage() {
       setSelected(new Set());
       const deeds = out.deleted.filter((d) => d.deedTemplateId).length;
       setToast(
-        `${out.deleted.length} अनुरोध हटाए गए।` +
-          (out.failed.length ? ` ${out.failed.length} नहीं हटे: ${out.failed.map((f) => `${f.ref} (${f.reason})`).join(", ")}।` : "") +
-          (deeds ? ` ${deeds} अनुरोधों से बनी डीड नहीं हटाई गई — ज़रूरत हो तो डीड सूची से अलग से हटाएँ।` : ""),
+        t("waDeletedMany", { n: out.deleted.length }) +
+          (out.failed.length
+            ? t("waDeleteFailedMany", { n: out.failed.length, list: out.failed.map((f) => `${f.ref} (${f.reason})`).join(", ") })
+            : "") +
+          (deeds ? t("waDeletedDeedsKept", { n: deeds }) : ""),
       );
     } catch (err) {
-      setBulkError(await apiErrorMessage(err, "अनुरोध नहीं हटाए जा सके।"));
+      setBulkError(await apiErrorMessage(err, t("waDeleteManyError")));
     }
   }
   const newCount = query.data?.newCount ?? 0;
@@ -133,8 +131,8 @@ export function WhatsappRequestsPage() {
         </div>
         <div className="page-head">
           <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            WhatsApp अनुरोध
-            {newCount > 0 && <span className="status-pill warn">{newCount} नए</span>}
+            {t("waTitle")}
+            {newCount > 0 && <span className="status-pill warn">{t("waNewCount", { n: newCount })}</span>}
           </h2>
         </div>
 
@@ -142,42 +140,42 @@ export function WhatsappRequestsPage() {
 
         {canManage && selected.size > 0 && (
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700 }}>{selected.size} चुने गए</span>
+            <span style={{ fontWeight: 700 }}>{t("waSelectedCount", { n: selected.size })}</span>
             <button type="button" className="wa-btn-delete" onClick={() => setBulkOpen(true)}>
-              चुने हुए अनुरोध हटाएँ
+              {t("waDeleteSelected")}
             </button>
             <button type="button" className="doc-btn" onClick={() => setSelected(new Set())}>
-              चुनाव हटाएँ
+              {t("waClearSelection")}
             </button>
           </div>
         )}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            स्थिति
+            {t("waFilterStatus")}
             <select
               className="dr-action-select"
               value={workStatus}
               onChange={(e) => setWorkStatus(e.target.value as WaWorkStatus | "")}
             >
-              <option value="">सभी</option>
+              <option value="">{t("waFilterAll")}</option>
               {WORK_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {WORK_STATUS_LABEL[s]}
+                  {t(WORK_STATUS_KEY[s])}
                 </option>
               ))}
             </select>
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            स्टाफ जाँच
+            {t("waFilterStaffCheck")}
             <select
               className="dr-action-select"
               value={needsStaff}
               onChange={(e) => setNeedsStaff(e.target.value as "" | "true" | "false")}
             >
-              <option value="">सभी</option>
-              <option value="true">स्टाफ जाँच ज़रूरी</option>
-              <option value="false">ज़रूरी नहीं</option>
+              <option value="">{t("waFilterAll")}</option>
+              <option value="true">{t("waFilterStaffNeeded")}</option>
+              <option value="false">{t("waFilterStaffNotNeeded")}</option>
             </select>
           </label>
         </div>
@@ -201,20 +199,20 @@ export function WhatsappRequestsPage() {
                   <th>
                     <input
                       type="checkbox"
-                      aria-label="सभी चुनें"
+                      aria-label={t("waSelectAll")}
                       checked={allSelected}
                       onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                     />
                   </th>
                 )}
-                <th>अनुरोध नं.</th>
-                <th>ग्राहक</th>
-                <th>खरीदार / बंधककर्ता</th>
-                <th>संपत्ति</th>
-                <th>राशि</th>
-                <th>स्थिति</th>
-                <th>ज़िम्मेदार</th>
-                <th>तारीख</th>
+                <th>{t("waColRef")}</th>
+                <th>{t("waColCustomer")}</th>
+                <th>{t("waColBuyer")}</th>
+                <th>{t("waColProperty")}</th>
+                <th>{t("waColAmount")}</th>
+                <th>{t("waColStatus")}</th>
+                <th>{t("waColAssignee")}</th>
+                <th>{t("waColDate")}</th>
               </tr>
             </thead>
             <tbody>
@@ -229,14 +227,14 @@ export function WhatsappRequestsPage() {
               {query.isError && (
                 <tr>
                   <td colSpan={cols} className="doc-empty">
-                    अनुरोध लोड नहीं हो सके। कृपया दोबारा कोशिश करें।
+                    {t("waLoadError")}
                   </td>
                 </tr>
               )}
               {!query.isLoading && !query.isError && rows.length === 0 && (
                 <tr>
                   <td colSpan={cols} className="doc-empty">
-                    कोई अनुरोध नहीं मिला।
+                    {t("waEmpty")}
                   </td>
                 </tr>
               )}
@@ -244,7 +242,7 @@ export function WhatsappRequestsPage() {
                 <tr key={r.id}>
                   {canManage && (
                     <td>
-                      <input type="checkbox" aria-label={`अनुरोध ${r.ref} चुनें`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                      <input type="checkbox" aria-label={t("waSelectOne", { ref: r.ref })} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                     </td>
                   )}
                   <td className="wa-nowrap" style={{ fontWeight: 700 }}>
@@ -262,7 +260,7 @@ export function WhatsappRequestsPage() {
                     <div className="wa-clamp-2" title={r.buyerName ?? undefined}>
                       {r.buyerName || "—"}
                     </div>
-                    <div className="doc-sub wa-nowrap">{DEED_TYPE_LABEL[r.deedType]}</div>
+                    <div className="doc-sub wa-nowrap">{t(DEED_TYPE_KEY[r.deedType])}</div>
                   </td>
                   <td>
                     <div className="wa-clamp-2" title={r.propertySummary ?? undefined}>
@@ -270,20 +268,20 @@ export function WhatsappRequestsPage() {
                     </div>
                   </td>
                   <td>
-                    <div className="wa-clamp-2" title={formatAmount(r.amount, r.amountMode)}>
-                      {formatAmount(r.amount, r.amountMode)}
+                    <div className="wa-clamp-2" title={formatAmount(r.amount, r.amountMode, t)}>
+                      {formatAmount(r.amount, r.amountMode, t)}
                     </div>
                   </td>
                   <td>
                     <div className="wa-badges">
                       {r.workStatus ? (
                         <span className={`status-pill ${WORK_STATUS_PILL[r.workStatus]}`}>
-                          {WORK_STATUS_LABEL[r.workStatus]}
+                          {t(WORK_STATUS_KEY[r.workStatus])}
                         </span>
                       ) : (
-                        <span className="status-pill neutral">{INTAKE_STATUS_LABEL[r.status]}</span>
+                        <span className="status-pill neutral">{t(INTAKE_STATUS_KEY[r.status])}</span>
                       )}
-                      {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच</span>}
+                      {r.needsStaff && <span className="status-pill bad">{t("waStaffCheck")}</span>}
                     </div>
                   </td>
                   <td>
@@ -291,8 +289,8 @@ export function WhatsappRequestsPage() {
                       {r.assigneeName || "—"}
                     </div>
                   </td>
-                  <td className="doc-sub" title={formatDate(r.createdAt)}>
-                    {formatDate(r.createdAt)}
+                  <td className="doc-sub" title={formatDate(r.createdAt, lang)}>
+                    {formatDate(r.createdAt, lang)}
                   </td>
                 </tr>
               ))}
@@ -302,10 +300,10 @@ export function WhatsappRequestsPage() {
       </div>
       {bulkOpen && (
         <DeleteRequestDialog
-          title={`${selected.size} अनुरोध हटाएँ`}
+          title={t("waDeleteTitleMany", { n: selected.size })}
           expected={`DELETE ${selected.size}`}
-          prompt={`पक्का करने के लिए "DELETE ${selected.size}" लिखें`}
-          note="इन अनुरोधों के सारे दस्तावेज़, ID फ़ोटो, ड्राफ्ट और संदेशों का रिकॉर्ड हट जाएगा। इनसे बनी डीड नहीं हटेगी — उन्हें अलग से हटाना होगा।"
+          prompt={t("waDeletePromptMany", { text: `DELETE ${selected.size}` })}
+          note={t("waDeleteNoteMany")}
           busy={bulk.isPending}
           error={bulkError}
           onConfirm={onBulkDelete}
@@ -322,4 +320,12 @@ export function WhatsappRequestsPage() {
       )}
     </section>
   );
+}
+
+/** Result of one template submission, in the chosen language. */
+function templateResult(o: { code?: string; status?: string | null; errorCode?: string | number | null; result: string }, t: WaT): string {
+  if (o.code === "exists") return t("waTplResultExists");
+  if (o.code === "submitted") return t("waTplResultSubmitted", { status: o.status ?? "PENDING" });
+  if (o.code === "error") return t("waTplResultError", { code: String(o.errorCode ?? "-") });
+  return o.result;
 }

@@ -92,6 +92,8 @@ export interface WaIdCards {
   panFromCard: boolean;
   /** Hindi warnings ("आधार और PAN कार्ड पर नाम मेल नहीं खाता" ...). */
   warnings: string[];
+  /** Same warnings as keys, for the UI's language. */
+  warningKinds?: import("./id-photos.js").IdWarningKind[];
 }
 
 export interface WaRequestList {
@@ -186,7 +188,14 @@ export interface WaRequestDetail extends WaRequestListItem {
   /** WhatsApp messages sent for this request (status updates ...), oldest first. PENDING ones can be resent. */
   notifications?: WaNotification[];
   /** Files the customer sent: index 0 is the registry, then extras. */
-  documents: { index: number; label: string }[];
+  documents: {
+    index: number;
+    /** Hindi label (kept for older clients). */
+    label: string;
+    /** What the file is, for the UI's language; extra → "additional document n". */
+    kind?: "sanction" | "registry" | "transfer" | "first" | "oldRegistry" | "extra";
+    n?: number;
+  }[];
   /** Whether the caller may use POST /reveal. */
   canReveal: boolean;
   /** Whether the caller may change the assignee (OWNER/ADMIN). */

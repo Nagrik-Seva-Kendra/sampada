@@ -1,4 +1,5 @@
 import type { Language } from "@sampada/shared";
+import { waStrings } from "./waStrings";
 
 /**
  * Bilingual string dictionary (EN / Hindi). Drive UI copy from keys, never
@@ -687,6 +688,9 @@ export const strings = {
   },
   deleteOrgConfirmTitle: { en: "Delete this organisation?", hi: "क्या यह संस्था हटानी है?" },
   deleteOrgConfirmPrompt: { en: "Type the organisation name to confirm:", hi: "पुष्टि के लिए संस्था का नाम लिखें:" },
+
+  // WhatsApp Requests pages (i18n/waStrings.ts)
+  ...waStrings,
 } as const;
 
 export type StringKey = keyof typeof strings;

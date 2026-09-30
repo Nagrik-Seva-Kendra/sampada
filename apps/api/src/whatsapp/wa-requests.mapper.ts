@@ -135,8 +135,18 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
   const roleLabel = (key: unknown): string | null =>
     key === docs.sanction ? "बैंक सैंक्शन लेटर" : key === docs.registry ? "संपत्ति की रजिस्ट्री" : key === docs.transfer ? "वसीयत/नामांतरण दस्तावेज़" : null;
   const documents: WaRequestDetail["documents"] = [];
-  if (row.documentKey) documents.push({ index: 0, label: roleLabel(row.documentKey) ?? (isMortgage ? "पहला दस्तावेज़" : "पुरानी रजिस्ट्री") });
-  extra.forEach((k, i) => documents.push({ index: i + 1, label: roleLabel(k) ?? `अतिरिक्त दस्तावेज़ ${i + 1}` }));
+  const roleKind = (key: unknown) =>
+    key === docs.sanction ? ("sanction" as const) : key === docs.registry ? ("registry" as const) : key === docs.transfer ? ("transfer" as const) : null;
+  if (row.documentKey) {
+    documents.push({
+      index: 0,
+      label: roleLabel(row.documentKey) ?? (isMortgage ? "पहला दस्तावेज़" : "पुरानी रजिस्ट्री"),
+      kind: roleKind(row.documentKey) ?? (isMortgage ? "first" : "oldRegistry"),
+    });
+  }
+  extra.forEach((k, i) =>
+    documents.push({ index: i + 1, label: roleLabel(k) ?? `अतिरिक्त दस्तावेज़ ${i + 1}`, kind: roleKind(k) ?? "extra", n: i + 1 }),
+  );
   const docState = (k: string): WaDocState => (docs[k] === "later" ? "later" : typeof docs[k] === "string" ? "received" : null);
 
   const tri = (v: unknown): boolean | null => (v === true ? true : v === false ? false : null);
@@ -253,6 +263,7 @@ export function idCards(d: Record<string, unknown>): WaIdCards[] {
   const read = (d.idRead ?? {}) as Record<string, any>;
   return ID_PARTIES.filter((p) => photos[p.prefix] || read[p.prefix]).map((p) => {
     const mine = photos[p.prefix] ?? {};
+    const warnKinds = idWarningsFor(read[p.prefix], { fatherName: d[`${p.prefix}FatherName`], relation: d[`${p.prefix}Relation`] });
     const kinds = [...new Set([...SAMPADA_REQUIRED_PARTY_PHOTOS, ...(Object.keys(mine) as IdPhotoKind[])])].filter((k) => k in ID_PHOTO_LABEL);
     return {
       party: p.prefix,
@@ -260,7 +271,8 @@ export function idCards(d: Record<string, unknown>): WaIdCards[] {
       photos: kinds.map((kind) => ({ kind, label: ID_PHOTO_LABEL[kind], state: photoState(mine[kind]) })),
       aadhaarFromCard: pending[p.prefix]?.aadhaarOk === true || !!read[p.prefix]?.aadhaarName,
       panFromCard: pending[p.prefix]?.panOk === true || !!read[p.prefix]?.panName,
-      warnings: idWarningsFor(read[p.prefix], { fatherName: d[`${p.prefix}FatherName`], relation: d[`${p.prefix}Relation`] }).map((w) => ID_WARNING_TEXT[w]),
+      warnings: warnKinds.map((w) => ID_WARNING_TEXT[w]),
+      warningKinds: warnKinds,
     };
   });
 }

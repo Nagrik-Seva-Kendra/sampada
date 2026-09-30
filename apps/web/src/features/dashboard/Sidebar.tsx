@@ -19,12 +19,14 @@ function SidebarLink({
   label,
   collapsed,
   badge,
+  badgeLabel,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   collapsed: boolean;
   badge?: number;
+  badgeLabel?: string;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const on = pathname === to || pathname.startsWith(to + "/");
@@ -33,7 +35,7 @@ function SidebarLink({
       {icon}
       {!collapsed && label}
       {!!badge && (
-        <span className="sidebar-count" aria-label={`${badge} नए`}>
+        <span className="sidebar-count" aria-label={badgeLabel ?? String(badge)}>
           {badge}
         </span>
       )}
@@ -133,9 +135,10 @@ export function Sidebar({
           <SidebarLink
             to="/whatsapp-requests"
             icon={<MessageCircle size={17} strokeWidth={2.2} />}
-            label="WhatsApp अनुरोध"
+            label={t("waTitle")}
             collapsed={collapsed}
             badge={waNewCount}
+            badgeLabel={t("waNewCount").replace("{n}", String(waNewCount))}
           />
         )}
         {canManageTeam && (
