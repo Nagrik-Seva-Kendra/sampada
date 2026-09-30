@@ -1,6 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import type { WaRevealResult, WaWorkStatus } from "@sampada/shared";
+import {
+  formatParty,
+  formatPartyBlock,
+  formatPropertyBlock,
+  missingSampadaFields,
+  PARTY_FIELD_LABEL,
+  type PartyField,
+  splitNameRelation,
+  type WaRequestDetail,
+  type WaRevealResult,
+  type WaWorkStatus,
+} from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "../../lib/api";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
@@ -54,6 +65,57 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+/**
+ * Party + property text in the office's drafting style
+ * (docs/nsk-deed-drafting-pattern.md), ready to paste into the deed. Full
+ * Aadhaar/PAN only after the owner/admin reveal; blanks ("____") where the
+ * office fills in (boundaries, sides, seller Aadhaar) -- nothing is invented.
+ */
+function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): string | null {
+  const reg = r.registry;
+  const property = reg?.property ? formatPropertyBlock(reg.property, r.deedType === "mortgage" ? "बंधक सम्पत्ति का विवरण -" : undefined) : null;
+  if (r.deedType === "sale") {
+    const sellers = (reg?.currentOwners ?? []).map((o) => {
+      const split = o.relation ? splitNameRelation(`${o.name} ${o.relation}`) : null;
+      return formatParty(split ?? { name: o.name, relation: null, guardian: null });
+    });
+    const buyer = formatParty({
+      name: r.buyer.name,
+      relation: r.buyer.relation,
+      guardian: r.buyer.fatherName,
+      aadhaar: revealed?.aadhaar ?? r.buyer.aadhaarMasked,
+      pan: revealed?.pan ?? null,
+    });
+    return [formatPartyBlock("विक्रेता पक्ष", sellers), formatPartyBlock("क्रेता पक्ष", [buyer]), property]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  if (r.deedType === "mortgage" && r.mortgage) {
+    const [mortgagor, ...witnesses] = r.mortgage.people.map((x, i) =>
+      formatParty({ name: x.name, relation: x.relation, guardian: x.fatherName, aadhaar: revealed?.people[i]?.aadhaar ?? x.aadhaarMasked }),
+    );
+    return [formatPartyBlock("बंधककर्ता", mortgagor ? [mortgagor] : []), formatPartyBlock("गवाह", witnesses), property]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return null;
+}
+
+/**
+ * SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
+ * address for every party's ID. Shows what this party is still missing.
+ */
+function SampadaMissing({ party }: { party: Partial<Record<PartyField, string | null>> }) {
+  const missing = missingSampadaFields(party);
+  if (!missing.length) return <Field label="SAMPADA 2.0 जानकारी" value="पूरी ✅" />;
+  return (
+    <Field
+      label="SAMPADA के लिए बाकी"
+      value={<span className="status-pill bad">{missing.map((f) => PARTY_FIELD_LABEL[f]).join(", ")}</span>}
+    />
+  );
+}
+
 /** A required paper of a बंधक पत्र. */
 const docStateLabel = (v: "received" | "later" | null) =>
   v === "received" ? "मिला ✅" : v === "later" ? "ग्राहक बाद में भेजेगा" : "नहीं मिला";
@@ -76,6 +138,7 @@ export function WhatsappRequestDetailPage() {
   const [staffNote, setStaffNote] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const r = query.data;
   useEffect(() => {
@@ -175,6 +238,7 @@ export function WhatsappRequestDetailPage() {
     );
   }
 
+  const draftText = officeDraftText(r, revealed);
   const reg = r.registry;
   const p = reg?.property;
   const place = p ? [p.locality, p.village, p.tehsil, p.district].filter(Boolean).join(", ") : "";
@@ -217,6 +281,40 @@ export function WhatsappRequestDetailPage() {
           <Field label="अनुरोध की तारीख" value={formatDate(r.createdAt)} />
           <Field label="बातचीत की स्थिति" value={INTAKE_STATUS_LABEL[r.status]} />
         </Card>
+
+        {draftText && (
+          <Card
+            title="ड्राफ्ट टेक्स्ट (ऑफ़िस प्रारूप)"
+            actions={
+              <button
+                type="button"
+                className="doc-btn"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(draftText);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+              >
+                {copied ? "कॉपी हो गया ✓" : "कॉपी करें"}
+              </button>
+            }
+          >
+            <textarea
+              readOnly
+              value={draftText}
+              rows={Math.min(18, draftText.split("\n").length + 1)}
+              style={{ width: "100%", fontFamily: "inherit", fontSize: 14, lineHeight: 1.6 }}
+            />
+            <p className="doc-sub" style={{ marginTop: 6 }}>
+              "____" वाली जगहें (चतुःसीमा, भुजाएँ, विक्रेता का आधार आदि) स्टाफ भरें।
+              {r.canReveal && !revealed && " पूरा आधार/PAN \"आधार दिखाएँ\" के बाद आएगा।"}
+            </p>
+          </Card>
+        )}
 
         {r.deedType === "other" && (
           <Card title="अनुरोधित दस्तावेज़">
@@ -272,6 +370,17 @@ export function WhatsappRequestDetailPage() {
                   label="आधार"
                   value={revealed ? orDash(revealed.people[i]?.aadhaar) : orDash(person.aadhaarMasked)}
                 />
+                <SampadaMissing
+                  party={{
+                    name: person.name,
+                    guardian: person.fatherName,
+                    motherName: person.motherName,
+                    aadhaar: person.aadhaarMasked,
+                    mobile: person.mobile,
+                    email: person.email,
+                    address: person.address,
+                  }}
+                />
               </div>
             ))}
           </Card>
@@ -303,6 +412,17 @@ export function WhatsappRequestDetailPage() {
             <Field label="आधार" value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
             <Field label="PAN" value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
             <Field label="विक्रेता PAN (TDS)" value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
+            <SampadaMissing
+              party={{
+                name: r.buyer.name,
+                guardian: r.buyer.fatherName,
+                motherName: r.buyer.motherName,
+                aadhaar: r.buyer.aadhaarMasked,
+                mobile: r.buyer.mobile,
+                email: r.buyer.email,
+                address: r.buyer.address,
+              }}
+            />
           </Card>
         )}
 

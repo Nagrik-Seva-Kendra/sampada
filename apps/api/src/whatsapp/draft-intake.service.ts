@@ -1,4 +1,14 @@
 import { Injectable, Logger } from "@nestjs/common";
+import {
+  formatParty,
+  parseRelation,
+  type PartyField,
+  plotAreaShort,
+  type Relation,
+  SAMPADA_REQUIRED_PARTY_FIELDS,
+  splitNameRelation,
+  stripHonorific,
+} from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service.js";
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -78,14 +88,71 @@ export function isPlotDeed(deed: DeedExtract | null | undefined): boolean {
 }
 const yesNoLabel = (v: unknown) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
 
+// ---------- SAMPADA-required fields ----------
+// SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
+// address to create each party's ID (SAMPADA_REQUIRED_PARTY_FIELDS in
+// @sampada/shared), so none of those questions can be skipped. Email is never
+// printed in the deed text.
+/** "नहीं", "ईमेल नहीं है", "no email", "nahi hai" ... -- a negation and no "@". */
+const saysNoEmail = (v: string) => !v.includes("@") && /(नहीं|नही|nahi|nahin|nhi|\bno\b|none|not)/i.test(v);
+const NO_EMAIL_REPLY =
+  "SAMPADA 2.0 पर पक्षकार की ID बनाने के लिए ईमेल ID ज़रूरी है। " +
+  "अपनी ईमेल न हो तो परिवार के किसी सदस्य की ईमेल ID भी चलेगी। कृपया ईमेल ID लिखें।\n" +
+  "(हमारा स्टाफ भी इस बारे में आपसे संपर्क कर सकता है।)";
+
+/** Question key for each SAMPADA-required field of a person ("buyer", "mortgagor", ...). */
+const FIELD_STEP: Record<PartyField, string> = {
+  name: "Name",
+  guardian: "FatherName",
+  motherName: "MotherName",
+  aadhaar: "Aadhaar",
+  mobile: "Mobile",
+  email: "Email",
+  address: "Address",
+};
+/** The first unanswered SAMPADA-required question for the parties of this deed, or null. */
+function firstMissingSampadaStep(d: any): string | null {
+  const parties = d.deedType === "mortgage" ? ["mortgagor", "witness1", "witness2"] : d.deedType === "other" ? [] : ["buyer"];
+  for (const p of parties) {
+    for (const f of SAMPADA_REQUIRED_PARTY_FIELDS) {
+      const key = `${p}${FIELD_STEP[f]}`;
+      if (!String(d[key] ?? "").trim()) return key;
+    }
+  }
+  return null;
+}
+
+// ---------- how a person is written in the deed (docs/nsk-deed-drafting-pattern.md) ----------
+// "श्री [नाम] पुत्र श्री [पिता]" / "श्रीमती [नाम] पत्नी श्री [पति]": the relation decides
+// both the word and the honorific, so it is asked right after the name.
+function relationAsk(who: string): string {
+  return `${who} का संबंध चुनें — नंबर लिखें:\n1. पुत्र (पिता का नाम आगे पूछा जाएगा)\n2. पुत्री (पिता का नाम)\n3. पत्नी (पति का नाम)`;
+}
+/** Person name steps ("buyerName", "mortgagorName", ...) -- not FatherName/MotherName. */
+const personPrefix = (key: string): string | null =>
+  /(Father|Mother)Name$/.test(key) ? null : (key.match(/^(buyer|mortgagor|witness1|witness2)Name$/)?.[1] ?? null);
+/** The person's line in office form, Aadhaar masked -- shown to the customer to check. */
+function officeLine(d: any, prefix: string): string | null {
+  if (!d[`${prefix}Name`]) return null;
+  const aad = d[`${prefix}Aadhaar`];
+  let masked: string | null = null;
+  try {
+    masked = aad ? mask(decrypt(aad)) : null;
+  } catch {
+    masked = null;
+  }
+  return formatParty({ name: d[`${prefix}Name`], relation: (d[`${prefix}Relation`] as Relation) ?? null, guardian: d[`${prefix}FatherName`] ?? null, aadhaar: masked });
+}
+
 // ---------- questions asked before the amount (order = conversation order) ----------
 const BUYER_STEPS: Step[] = [
-  { key: "buyerName", label: "खरीदार", ask: "खरीदार (क्रेता) का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता का नाम अगले सवाल में पूछा जाएगा।", validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+  { key: "buyerName", label: "खरीदार", ask: "खरीदार (क्रेता) का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता/पति का नाम आगे पूछा जाएगा।", validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+  { key: "buyerRelation", label: "संबंध", ask: relationAsk("खरीदार"), validate: parseRelation, err: "कृपया 1, 2 या 3 लिखें।" },
   { key: "buyerFatherName", label: "पिता/पति का नाम", ask: "खरीदार के पिता या पति का नाम लिखें।", validate: validText() },
   { key: "buyerMotherName", label: "माता का नाम", ask: "खरीदार की माता का नाम लिखें।", validate: validText() },
   { key: "buyerAadhaar", label: "आधार", ask: "खरीदार का 12 अंकों का आधार नंबर लिखें।", validate: validAadhaar, secret: true, err: "आधार नंबर सही नहीं लग रहा। कृपया जाँचकर दोबारा लिखें।" },
   { key: "buyerMobile", label: "मोबाइल", ask: "खरीदार का 10 अंकों का मोबाइल नंबर लिखें।", validate: validMobile, err: "मोबाइल नंबर सही नहीं है। 10 अंकों का नंबर लिखें।" },
-  { key: "buyerEmail", label: "ईमेल", ask: "खरीदार की ईमेल ID लिखें। न हो तो \"नहीं\" लिखें।", validate: validEmail, optional: true, err: "ईमेल सही नहीं है। न हो तो \"नहीं\" लिखें।" },
+  { key: "buyerEmail", label: "ईमेल", ask: "खरीदार की ईमेल ID लिखें (SAMPADA 2.0 पर पक्षकार की ID के लिए ज़रूरी)।", validate: validEmail, err: "ईमेल सही नहीं है। कृपया सही ईमेल ID लिखें (जैसे naam@gmail.com)।" },
   { key: "buyerAddress", label: "पता", ask: "खरीदार का पूरा पता लिखें।", validate: validText(8), err: "कृपया पूरा पता लिखें।" },
 ];
 const PAN_STEP: Step = { key: "buyerPan", label: "खरीदार PAN", ask: "खरीदार का PAN नंबर लिखें।", validate: validPan, secret: true, err: "PAN सही नहीं है (जैसे ABCDE1234F)।" };
@@ -96,12 +163,13 @@ const ALL_STEPS = [...BUYER_STEPS, PAN_STEP, SELLER_PAN_STEP];
 /** Same details for every person on a mortgage deed; `who` is used in the questions. */
 function personSteps(prefix: string, who: string, heading: string): Step[] {
   return [
-    { key: `${prefix}Name`, label: `${heading} — नाम`, ask: `${who} का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता का नाम अगले सवाल में पूछा जाएगा।`, validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+    { key: `${prefix}Name`, label: `${heading} — नाम`, ask: `${who} का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता/पति का नाम आगे पूछा जाएगा।`, validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+    { key: `${prefix}Relation`, label: `${heading} — संबंध`, ask: relationAsk(who), validate: parseRelation, err: "कृपया 1, 2 या 3 लिखें।" },
     { key: `${prefix}FatherName`, label: `${heading} — पिता/पति का नाम`, ask: `${who} के पिता या पति का नाम लिखें।`, validate: validText() },
     { key: `${prefix}MotherName`, label: `${heading} — माता का नाम`, ask: `${who} की माता का नाम लिखें।`, validate: validText() },
     { key: `${prefix}Aadhaar`, label: `${heading} — आधार`, ask: `${who} का 12 अंकों का आधार नंबर लिखें।`, validate: validAadhaar, secret: true, err: "आधार नंबर सही नहीं लग रहा। कृपया जाँचकर दोबारा लिखें।" },
     { key: `${prefix}Mobile`, label: `${heading} — मोबाइल`, ask: `${who} का 10 अंकों का मोबाइल नंबर लिखें।`, validate: validMobile, err: "मोबाइल नंबर सही नहीं है। 10 अंकों का नंबर लिखें।" },
-    { key: `${prefix}Email`, label: `${heading} — ईमेल`, ask: `${who} की ईमेल ID लिखें। न हो तो "नहीं" लिखें।`, validate: validEmail, optional: true, err: 'ईमेल सही नहीं है। न हो तो "नहीं" लिखें।' },
+    { key: `${prefix}Email`, label: `${heading} — ईमेल`, ask: `${who} की ईमेल ID लिखें (SAMPADA 2.0 पर पक्षकार की ID के लिए ज़रूरी)।`, validate: validEmail, err: "ईमेल सही नहीं है। कृपया सही ईमेल ID लिखें (जैसे naam@gmail.com)।" },
     { key: `${prefix}Address`, label: `${heading} — पता`, ask: `${who} का पूरा पता लिखें।`, validate: validText(8), err: "कृपया पूरा पता लिखें।" },
   ];
 }
@@ -310,7 +378,12 @@ export class DraftIntakeService {
         return this.handleAmount(cur, data, v);
 
       case "FINAL":
-        if (YES.test(v)) return this.submit(cur);
+        if (YES.test(v)) {
+          // Nothing SAMPADA needs may be missing (e.g. an email skipped before it was required).
+          const missing = firstMissingSampadaStep(data);
+          if (missing) return this.goto(cur.id, data, missing, "SAMPADA 2.0 के लिए एक जानकारी बाकी है।");
+          return this.submit(cur);
+        }
         if (/बदल|change|edit/i.test(v)) {
           // Re-collect the people's details; the deed type and plot answers stay.
           const keep = Object.fromEntries(
@@ -327,10 +400,29 @@ export class DraftIntakeService {
         const step = ANY_STEPS.find((s) => s.key === cur.step);
         if (!step) return null;
         const optional = step.optional || (step === PAN_STEP && !data.tax?.panRequired);
-        const val = optional && SKIP.test(v) ? "" : step.validate(v);
-        if (val === null) return [step.err ?? "कृपया सही जानकारी भेजें।"];
-        data[step.key] = step.secret && val ? encrypt(val) : val;
-        return this.goto(cur.id, data, this.nextStep(step.key, data));
+        if (/Email$/.test(step.key) && (SKIP.test(v) || saysNoEmail(v))) {
+          // Email is SAMPADA-required for every party: never skipped. Explain, flag
+          // the request for staff, and keep asking.
+          await this.save(cur.id, { needsStaff: true });
+          return [NO_EMAIL_REPLY];
+        }
+        const prefix = personPrefix(step.key);
+        const split = prefix ? splitNameRelation(raw) : null;
+        if (prefix && split) {
+          // "अमित शर्मा पुत्र श्री राजेश शर्मा" → name, relation and father in one go.
+          data[step.key] = split.name;
+          data[`${prefix}Relation`] = split.relation;
+          data[`${prefix}FatherName`] = split.guardian;
+        } else {
+          const val = optional && SKIP.test(v) ? "" : step.validate(v);
+          if (val === null) return [step.err ?? "कृपया सही जानकारी भेजें।"];
+          const clean = prefix || /FatherName$|MotherName$/.test(step.key) ? stripHonorific(val) : val;
+          data[step.key] = step.secret && clean ? encrypt(clean) : clean;
+        }
+        // Skip questions already answered (e.g. by the split above).
+        let next = this.nextStep(step.key, data);
+        while (ANY_STEPS.some((x) => x.key === next) && data[next] !== undefined) next = this.nextStep(next, data);
+        return this.goto(cur.id, data, next);
       }
     }
   }
@@ -508,6 +600,8 @@ export class DraftIntakeService {
       if (d.ownerIsCurrent === false) lines.push(`वसीयत/नामांतरण दस्तावेज़: ${got("transfer")}`);
       for (const m of MORTGAGE_PEOPLE) {
         lines.push("", `*${m.heading}*`);
+        const line = officeLine(d, m.prefix);
+        if (line) lines.push(`ड्राफ्ट में: ${line}`);
         for (const s of MORTGAGE_STEPS.filter((x) => x.key.startsWith(m.prefix))) {
           if (d[s.key] !== undefined) lines.push(`${s.label.split(" — ")[1]}: ${shownValue(s)}`);
         }
@@ -524,6 +618,8 @@ export class DraftIntakeService {
       const shown = d[s.key] ? (s.secret ? mask(decrypt(d[s.key])) : d[s.key]) : "—";
       lines.push(`${s.label}: ${shown}`);
     }
+    const buyerLine = officeLine(d, "buyer");
+    if (buyerLine) lines.push("", `ड्राफ्ट में ऐसे लिखा जाएगा:\nक्रेता पक्ष - ${buyerLine}`);
     const amt =
       d.amount != null
         ? `₹${inr(d.amount)}${d.amountMode === "GUIDELINE" ? " (गाइडलाइन)" : ""}`
@@ -551,7 +647,7 @@ export class DraftIntakeService {
     const lines = ["रजिस्ट्री मिल गई ✅"];
     if (place) lines.push(`संपत्ति: ${place}`);
     if (p.khasraOrPlotNo) lines.push(`खसरा/प्लॉट: ${p.khasraOrPlotNo}`);
-    if (p.areaValue) lines.push(`क्षेत्रफल: ${p.areaValue} ${p.areaUnit ?? ""}`.trim());
+    if (p.areaValue) lines.push(`क्षेत्रफल: ${plotAreaShort(p.areaValue, p.areaUnit) ?? `${p.areaValue} ${p.areaUnit ?? ""}`.trim()}`);
     if (deed.buyers?.length) lines.push(`वर्तमान मालिक (विक्रेता): ${deed.buyers.map((b) => b.name).join(", ")}`);
     if (deed.registrationNo)
       lines.push(`पिछली रजिस्ट्री: ${deed.registrationNo}${deed.registrationDate ? ", " + deed.registrationDate : ""}`);
@@ -594,6 +690,12 @@ export class DraftIntakeService {
     const plot = PLOT_STEPS.find((s) => s.key === step);
     if (plot) return plot.ask;
     if (step === PAN_STEP.key && !data.tax?.panRequired) return PAN_STEP.ask + " PAN न हो तो \"नहीं\" लिखें।";
+    const fm = step.match(/^(.*)FatherName$/);
+    if (fm) {
+      const who = ANY_STEPS.find((s) => s.key === `${fm[1]}Name`)?.ask.split(" का पूरा नाम")[0] ?? "";
+      const wife = data[`${fm[1]}Relation`] === "पत्नी";
+      return `${who} के ${wife ? "पति" : "पिता"} का नाम लिखें।`;
+    }
     return ANY_STEPS.find((s) => s.key === step)?.ask ?? "";
   }
 }

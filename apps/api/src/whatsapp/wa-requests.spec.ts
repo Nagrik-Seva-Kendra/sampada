@@ -495,13 +495,23 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     expect(afterTransfer).toContain("✅ वसीयत/नामांतरण/उत्तराधिकार का दस्तावेज़ मिल गया");
     expect(afterTransfer).toContain("बंधककर्ता (जो संपत्ति बंधक रख रहे हैं) का पूरा नाम");
     expect(c.cur.data.docs).toEqual({ sanction: "wa/first.pdf", registry: "wa/registry.pdf", transfer: "wa/vasiyat.pdf" });
+    // mortgagor: relation menu "1" (पुत्र); witness 1 types the relation inside the name
+    // (split → relation + father questions skipped); witness 2 is पत्नी → asked "पति का नाम".
     const people = [
-      ["राम प्रसाद", "श्याम प्रसाद", "सीता देवी", aadhaar("23456789012"), "9876543210", "ram@example.com", "वार्ड 12, लश्कर, ग्वालियर"],
-      ["गवाह एक", "पिता एक", "माता एक", aadhaar("34567890123"), "9812345678", "नहीं", "मुरार, ग्वालियर 474006"],
-      ["गवाह दो", "पिता दो", "माता दो", aadhaar("45678901234"), "9898989898", "w2@example.com", "थाटीपुर, ग्वालियर"],
+      ["श्री राम प्रसाद", "1", "श्याम प्रसाद", "सीता देवी", aadhaar("23456789012"), "9876543210", "ram@example.com", "वार्ड 12, लश्कर, ग्वालियर"],
+      ["गवाह एक पुत्र श्री पिता एक", "माता एक", aadhaar("34567890123"), "9812345678", "w1@example.com", "मुरार, ग्वालियर 474006"],
+      ["सुनीता देवी", "3", "महेश गुप्ता", "माता दो", aadhaar("45678901234"), "9898989898", "w2@example.com", "थाटीपुर, ग्वालियर"],
     ];
     let last: string[] | null = null;
-    for (const person of people) for (const answer of person) last = await c.say(answer);
+    const asked: string[] = [];
+    for (const person of people) for (const answer of person) {
+      last = await c.say(answer);
+      asked.push(last!.join("\n"));
+    }
+    expect(asked[1]).toContain("पिता का नाम लिखें"); // after "1" (पुत्र)
+    expect(asked[8]).toContain("पहले गवाह की माता का नाम"); // split skipped relation + father
+    expect(asked[15]).toContain("पति का नाम लिखें"); // after "3" (पत्नी)
+    expect(c.cur.data).toMatchObject({ mortgagorName: "राम प्रसाद", witness1Relation: "पुत्र", witness1FatherName: "पिता एक", witness2Relation: "पत्नी" });
     expect(c.cur.step).toBe("FINAL");
     const summary = last!.join("\n");
     expect(summary).toContain("दस्तावेज़: बंधक पत्र");
@@ -512,9 +522,12 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     expect(summary).toContain("*पहला गवाह*");
     expect(summary).toContain("*दूसरा गवाह*");
     expect(summary).toContain("माता का नाम: सीता देवी");
-    expect(summary).not.toContain(people[0]![3]); // Aadhaar masked in the chat
+    const tail = people[0]![4]!.slice(-4);
+    expect(summary).toContain(`ड्राफ्ट में: श्री राम प्रसाद पुत्र श्री श्याम प्रसाद (आधार नं. XXXX XXXX ${tail})`);
+    expect(summary).toContain("ड्राफ्ट में: श्रीमती सुनीता देवी पत्नी श्री महेश गुप्ता");
+    expect(summary).not.toContain(people[0]![4]); // Aadhaar masked in the chat
     expect(c.cur.data.mortgagorAadhaar).toMatch(/^enc:/); // and encrypted at rest
-    expect(c.cur.data.witness1Email).toBe("");
+    expect(c.cur.data.witness1Email).toBe("w1@example.com");
 
     expect((await c.say("हाँ"))!.join()).toContain("अनुरोध नंबर: XYZ123");
     expect(c.cur).toMatchObject({ status: "SUBMITTED", workStatus: "NEW" });
@@ -548,6 +561,43 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     await c.say("1");
     expect(c.cur.data.docs).toEqual({ sanction: "wa/first.pdf" });
     expect(c.cur.step).toBe("M_REGISTRY");
+  });
+
+  it("email is SAMPADA-required: 'नहीं' is not accepted, explains, flags स्टाफ जाँच, asks again", async () => {
+    const c = conversation("witness1Email", sanctionLetter, { deedType: "mortgage" });
+    for (const answer of ["नहीं", "ईमेल नहीं है", "nahi"]) {
+      const reply = (await c.say(answer))!.join();
+      expect(reply).toContain("SAMPADA 2.0 पर पक्षकार की ID बनाने के लिए ईमेल ID ज़रूरी है");
+      expect(reply).toContain("परिवार के किसी सदस्य की ईमेल ID भी चलेगी");
+      expect(c.cur.step).toBe("witness1Email");
+    }
+    expect(c.cur.needsStaff).toBe(true);
+    expect(c.cur.data.witness1Email).toBeUndefined();
+    await c.say("parivar@example.com");
+    expect(c.cur.data.witness1Email).toBe("parivar@example.com");
+    expect(c.cur.step).toBe("witness1Address");
+  });
+
+  it("confirming with a SAMPADA field missing (e.g. an email skipped earlier) asks for it first", async () => {
+    const full = (p: string, email: string) => ({
+      [`${p}Name`]: "नाम",
+      [`${p}Relation`]: "पुत्र",
+      [`${p}FatherName`]: "पिता",
+      [`${p}MotherName`]: "माता",
+      [`${p}Aadhaar`]: "enc:x",
+      [`${p}Mobile`]: "9876543210",
+      [`${p}Email`]: email,
+      [`${p}Address`]: "ग्वालियर 474001",
+    });
+    const c = conversation("FINAL", sanctionLetter, {
+      deedType: "mortgage",
+      ...full("mortgagor", "a@b.com"),
+      ...full("witness1", ""), // skipped under the old rule
+      ...full("witness2", "c@d.com"),
+    });
+    expect((await c.say("हाँ"))!.join()).toContain("SAMPADA 2.0 के लिए एक जानकारी बाकी है");
+    expect(c.cur.step).toBe("witness1Email");
+    expect(c.cur.status).toBe("ACTIVE");
   });
 
   it("re-asks a wrong witness Aadhaar", async () => {
@@ -627,9 +677,64 @@ describe("mapper: mortgage requests", () => {
   });
 });
 
+describe("office drafting style in the sale flow", () => {
+  function convo(step: string, deed: unknown, data: Record<string, unknown> = {}) {
+    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data, deed, needsStaff: false };
+    const prisma = {
+      draftIntake: {
+        findFirst: vi.fn(async () => (cur.status === "ACTIVE" ? cur : null)),
+        update: vi.fn(async ({ data }: any) => Object.assign(cur, data)),
+        create: vi.fn(async ({ data }: any) => Object.assign(cur, data, { status: "ACTIVE" })),
+      },
+    };
+    const plotDeed = {
+      isSaleDeed: true,
+      buyers: [{ name: "रमेश", relation: null }],
+      sellers: [],
+      property: { district: "ग्वालियर", propertyType: "residential_plot", khasraOrPlotNo: "45", areaValue: 1500, areaUnit: "वर्ग फुट" },
+    };
+    const extractor = { extract: vi.fn(async () => plotDeed) };
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any);
+    return { cur, svc, say: (t: string) => svc.handleText({ phone: "919876543210", name: "अ" }, t) };
+  }
+
+  it("the registry summary gives a plot's area in sqft and sqm", async () => {
+    const c = convo("NONE", null);
+    c.cur.status = "NONE";
+    const out = await c.svc.handleDocument({ phone: "919876543210", name: "अ" }, { key: "k", buf: Buffer.from(""), mime: "application/pdf" });
+    expect(out[0]).toContain("क्षेत्रफल: 1500 वर्गफुट यानी 139.35 वर्गमीटर");
+  });
+
+  it("a buyer name typed with 'पुत्र श्री' is split, and the summary shows the office line", async () => {
+    const c = convo("buyerName", null, { deedType: "sale" });
+    expect((await c.say("श्री अमित शर्मा पुत्र श्री राजेश कुमार शर्मा"))!.join()).toContain("माता का नाम");
+    expect(c.cur.data).toMatchObject({ buyerName: "अमित शर्मा", buyerRelation: "पुत्र", buyerFatherName: "राजेश कुमार शर्मा" });
+    const summary = (c.svc as any).finalSummary({ ...c.cur.data, amount: 1500000, amountMode: "CUSTOM" }) as string;
+    expect(summary).toContain("क्रेता पक्ष - श्री अमित शर्मा पुत्र श्री राजेश कुमार शर्मा (आधार नं. ____ ____ ____)");
+  });
+
+  it("the relation menu re-asks on a wrong answer and then asks पिता or पति", async () => {
+    const c = convo("buyerRelation", null, { deedType: "sale", buyerName: "सीता" });
+    expect((await c.say("हाँ"))!.join()).toContain("1, 2 या 3");
+    expect((await c.say("3"))!.join()).toContain("पति का नाम");
+    expect(c.cur.data.buyerRelation).toBe("पत्नी");
+  });
+});
+
 describe("DraftIntakeService", () => {
   it("submitting the draft marks it NEW for the office", async () => {
-    const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data: {}, needsStaff: false };
+    // A complete sale-deed buyer (all SAMPADA-required fields answered).
+    const data = {
+      buyerName: "श्याम",
+      buyerRelation: "पुत्र",
+      buyerFatherName: "मोहन",
+      buyerMotherName: "सीता",
+      buyerAadhaar: "enc:x",
+      buyerMobile: "9876543210",
+      buyerEmail: "shyam@example.com",
+      buyerAddress: "लश्कर, ग्वालियर",
+    };
+    const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update } };
     const svc = new DraftIntakeService(prisma as any, {} as any, {} as any);
@@ -643,6 +748,6 @@ describe("DraftIntakeService", () => {
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update: vi.fn(async () => ({})) } };
     const replies = await new DraftIntakeService(prisma as any, {} as any, {} as any).handleText({ phone: "1", name: "" }, "हाँ");
     expect(replies?.[0]).toContain("सिर्फ़ नाम लिखें");
-    expect(replies?.[0]).toContain("पिता का नाम अगले सवाल में");
+    expect(replies?.[0]).toContain("पिता/पति का नाम आगे पूछा जाएगा");
   });
 });
