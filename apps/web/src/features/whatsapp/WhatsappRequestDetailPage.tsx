@@ -3,6 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import type { WaRevealResult, WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "../../lib/api";
+import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
 import {
   useRevealWaRequest,
@@ -12,6 +13,7 @@ import {
   useWaRequest,
 } from "./useWhatsappRequests";
 import {
+  DEED_TYPE_LABEL,
   formatAmount,
   formatDate,
   INTAKE_STATUS_LABEL,
@@ -52,6 +54,9 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+/** A required paper of a बंधक पत्र. */
+const docStateLabel = (v: "received" | "later" | null) =>
+  v === "received" ? "मिला ✅" : v === "later" ? "ग्राहक बाद में भेजेगा" : "नहीं मिला";
 /** Customer's plot answer: true/false, null = they said "पता नहीं". */
 const yesNo = (v: boolean | null) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
 
@@ -151,16 +156,17 @@ export function WhatsappRequestDetailPage() {
   }
 
   function onCreateDeed() {
-    // TODO: prefill parties (buyer from this request, sellers = registry's current
-    // owners) and the property detail once the editor supports seeding them.
-    // For now: a blank sale deed titled with the request number and buyer.
+    // TODO: prefill parties (buyer / mortgagor + witnesses, sellers = registry's
+    // current owners) and the property detail once the editor supports seeding them.
+    // For now: a blank deed of the requested type, titled with the request number and name.
+    const type = r!.deedType === "mortgage" ? "equitable-mortgage-deed" : "sale-deed";
     const title = `WhatsApp अनुरोध ${r!.ref}${r!.buyerName ? ` — ${r!.buyerName}` : ""}`;
     createDeed.mutate(
-      { type: "sale-deed", title, content: "" },
+      { type, title, content: "" },
       {
         onSuccess: (item) => {
           const sample = item.content.trim() ? "&sample=1" : "";
-          const url = `/deeds/sale-deed/edit/${item.id}?new=1${sample}`;
+          const url = `/deeds/${type}/edit/${item.id}?new=1${sample}`;
           const tab = window.open(url, "_blank");
           if (!tab) window.location.assign(url);
         },
@@ -188,10 +194,16 @@ export function WhatsappRequestDetailPage() {
               <span className="status-pill neutral">{INTAKE_STATUS_LABEL[r.status]}</span>
             )}
             {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच ज़रूरी</span>}
+            <span className="status-pill good">{DEED_TYPE_LABEL[r.deedType]}</span>
           </h2>
-          <button type="button" className="btn-calc" onClick={onCreateDeed} disabled={createDeed.isPending}>
-            {createDeed.isPending ? "बनाया जा रहा है…" : "इससे नया डीड बनाएँ"}
-          </button>
+          {r.deedType === "other" ? (
+            // The bot doesn't know which deed type this is -- staff pick it.
+            <CreateDeedMenu triggerLabel="नया डीड बनाएँ (प्रकार चुनें)" />
+          ) : (
+            <button type="button" className="btn-calc" onClick={onCreateDeed} disabled={createDeed.isPending}>
+              {createDeed.isPending ? "बनाया जा रहा है…" : "इससे नया डीड बनाएँ"}
+            </button>
+          )}
         </div>
         {message && (
           <p className="doc-sub" style={{ fontSize: 13 }} role="status">
@@ -206,50 +218,113 @@ export function WhatsappRequestDetailPage() {
           <Field label="बातचीत की स्थिति" value={INTAKE_STATUS_LABEL[r.status]} />
         </Card>
 
-        <Card
-          title="खरीदार का विवरण"
-          actions={
-            r.canReveal &&
-            (r.buyer.aadhaarMasked || r.buyer.panMasked || r.sellerPanMasked) &&
-            (revealed ? (
-              <button type="button" className="doc-btn" onClick={() => setRevealed(null)}>
-                छिपाएँ
-              </button>
-            ) : (
-              <button type="button" className="doc-btn" onClick={onReveal} disabled={reveal.isPending}>
-                {reveal.isPending ? "लोड हो रहा है…" : "आधार/PAN दिखाएँ"}
-              </button>
-            ))
-          }
-        >
-          <Field label="नाम" value={orDash(r.buyer.name)} />
-          <Field label="पिता/पति का नाम" value={orDash(r.buyer.fatherName)} />
-          <Field label="माता का नाम" value={orDash(r.buyer.motherName)} />
-          <Field label="मोबाइल" value={orDash(r.buyer.mobile)} />
-          <Field label="ईमेल" value={orDash(r.buyer.email)} />
-          <Field label="पता" value={orDash(r.buyer.address)} />
-          <Field label="आधार" value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
-          <Field label="PAN" value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
-          <Field label="विक्रेता PAN (TDS)" value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
-        </Card>
+        {r.deedType === "other" && (
+          <Card title="अनुरोधित दस्तावेज़">
+            <Field label="ग्राहक ने लिखा" value={orDash(r.requestedDeed)} />
+            <p className="doc-sub" style={{ marginTop: 6 }}>
+              इस दस्तावेज़ के लिए bot ने विवरण नहीं लिया है — ग्राहक से संपर्क करें।
+            </p>
+          </Card>
+        )}
 
-        <Card title="राशि और आयकर">
-          <Field label="रजिस्ट्री राशि" value={formatAmount(r.amount, r.amountMode)} />
-          {r.tax && (
-            <Field
-              label="आयकर नियम"
-              value={
-                [
-                  r.tax.panRequired && "PAN अनिवार्य",
-                  r.tax.sftReported && "SFT रिपोर्टिंग",
-                  r.tax.tdsApplies && "1% TDS लागू",
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "कोई विशेष नियम नहीं"
-              }
-            />
-          )}
-        </Card>
+        {r.mortgage && (
+          <Card
+            title="बंधक पत्र — बंधककर्ता और गवाह"
+            actions={
+              r.canReveal &&
+              r.mortgage.people.some((x) => x.aadhaarMasked) &&
+              (revealed ? (
+                <button type="button" className="doc-btn" onClick={() => setRevealed(null)}>
+                  छिपाएँ
+                </button>
+              ) : (
+                <button type="button" className="doc-btn" onClick={onReveal} disabled={reveal.isPending}>
+                  {reveal.isPending ? "लोड हो रहा है…" : "आधार दिखाएँ"}
+                </button>
+              ))
+            }
+          >
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>ज़रूरी दस्तावेज़</div>
+              <Field label="बैंक सैंक्शन लेटर" value={docStateLabel(r.mortgage.docs.sanction)} />
+              <Field label="संपत्ति की रजिस्ट्री" value={docStateLabel(r.mortgage.docs.registry)} />
+              {r.mortgage.registryOwners.length > 0 && (
+                <Field label="रजिस्ट्री के अनुसार मालिक" value={r.mortgage.registryOwners.join(", ")} />
+              )}
+              <Field
+                label="रजिस्ट्री वाले मालिक ही वर्तमान मालिक"
+                value={r.mortgage.ownerIsCurrent === undefined ? "— (अभी पूछा नहीं)" : yesNo(r.mortgage.ownerIsCurrent)}
+              />
+              {r.mortgage.ownerIsCurrent === false && (
+                <Field label="वसीयत/नामांतरण दस्तावेज़" value={docStateLabel(r.mortgage.docs.transfer)} />
+              )}
+            </div>
+            {r.mortgage.people.map((person, i) => (
+              <div key={person.role} style={{ marginTop: i ? 14 : 0 }}>
+                <div style={{ fontWeight: 800, marginBottom: 4 }}>{person.role}</div>
+                <Field label="नाम" value={orDash(person.name)} />
+                <Field label="पिता/पति का नाम" value={orDash(person.fatherName)} />
+                <Field label="माता का नाम" value={orDash(person.motherName)} />
+                <Field label="मोबाइल" value={orDash(person.mobile)} />
+                <Field label="ईमेल" value={orDash(person.email)} />
+                <Field label="पता" value={orDash(person.address)} />
+                <Field
+                  label="आधार"
+                  value={revealed ? orDash(revealed.people[i]?.aadhaar) : orDash(person.aadhaarMasked)}
+                />
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {r.deedType === "sale" && (
+          <Card
+            title="खरीदार का विवरण"
+            actions={
+              r.canReveal &&
+              (r.buyer.aadhaarMasked || r.buyer.panMasked || r.sellerPanMasked) &&
+              (revealed ? (
+                <button type="button" className="doc-btn" onClick={() => setRevealed(null)}>
+                  छिपाएँ
+                </button>
+              ) : (
+                <button type="button" className="doc-btn" onClick={onReveal} disabled={reveal.isPending}>
+                  {reveal.isPending ? "लोड हो रहा है…" : "आधार/PAN दिखाएँ"}
+                </button>
+              ))
+            }
+          >
+            <Field label="नाम" value={orDash(r.buyer.name)} />
+            <Field label="पिता/पति का नाम" value={orDash(r.buyer.fatherName)} />
+            <Field label="माता का नाम" value={orDash(r.buyer.motherName)} />
+            <Field label="मोबाइल" value={orDash(r.buyer.mobile)} />
+            <Field label="ईमेल" value={orDash(r.buyer.email)} />
+            <Field label="पता" value={orDash(r.buyer.address)} />
+            <Field label="आधार" value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
+            <Field label="PAN" value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
+            <Field label="विक्रेता PAN (TDS)" value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
+          </Card>
+        )}
+
+        {r.deedType === "sale" && (
+          <Card title="राशि और आयकर">
+            <Field label="रजिस्ट्री राशि" value={formatAmount(r.amount, r.amountMode)} />
+            {r.tax && (
+              <Field
+                label="आयकर नियम"
+                value={
+                  [
+                    r.tax.panRequired && "PAN अनिवार्य",
+                    r.tax.sftReported && "SFT रिपोर्टिंग",
+                    r.tax.tdsApplies && "1% TDS लागू",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "कोई विशेष नियम नहीं"
+                }
+              />
+            )}
+          </Card>
+        )}
 
         <Card title="पुरानी रजिस्ट्री से निकाला विवरण">
           {!reg ? (

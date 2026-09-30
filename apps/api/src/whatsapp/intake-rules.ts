@@ -109,3 +109,39 @@ export function taxNotice(f: TaxFlags): string {
   );
   return lines.join("\n");
 }
+
+// ---------- what the customer wants made ----------
+export type DeedIntent = "sale" | "mortgage" | "other";
+
+/**
+ * Reads the kind of deed from the customer's own words (Hindi/English/Hinglish).
+ * Mortgage is checked first: "बैंक का सैंक्शन लेटर है बंधक बनाना है" must not
+ * fall through to anything else. Returns null when nothing is recognisable.
+ */
+export function detectDeedIntent(text: string): DeedIntent | null {
+  const s = normDigits(text).toLowerCase();
+  if (/बंधक|गिरवी|रहन|रेहन|mortgage|bandhak|girvi|सैंक्शन|सेंक्शन|sanction|होम लोन|बैंक लोन|लोन|loan/.test(s)) return "mortgage";
+  if (/दान|गिफ्ट|gift|वसीयत|\bwill\b|बंटवारा|बँटवारा|partition|मुख्तार|पावर|power of attorney|\bpoa\b|किराया|लीज़|लीज|lease|रिलीज|release|हक ?त्याग|अनुबंध|इकरार|agreement|संशोधन|amendment/.test(s))
+    return "other";
+  if (/विक्रय|बेचना|बेचनी|बेचने|बेच|खरीद|बैनामा|sale|becha|kharid|रजिस्ट्री|registry/.test(s)) return "sale";
+  return null;
+}
+
+/** Answer to "which document?": 1/2/3 or words. */
+export function parseDeedChoice(text: string): DeedIntent | null {
+  const s = normDigits(text).trim();
+  if (/^1\b/.test(s)) return "sale";
+  if (/^2\b/.test(s)) return "mortgage";
+  if (/^3\b/.test(s)) return "other";
+  return detectDeedIntent(s);
+}
+
+/**
+ * People on a बंधक पत्र, in question order. `prefix` names the answers in
+ * DraftIntake.data (e.g. mortgagorName, witness1Aadhaar).
+ */
+export const MORTGAGE_PEOPLE = [
+  { prefix: "mortgagor", heading: "बंधककर्ता", who: "बंधककर्ता (जो संपत्ति बंधक रख रहे हैं)" },
+  { prefix: "witness1", heading: "पहला गवाह", who: "पहले गवाह" },
+  { prefix: "witness2", heading: "दूसरा गवाह", who: "दूसरे गवाह" },
+] as const;

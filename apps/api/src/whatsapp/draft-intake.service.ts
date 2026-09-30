@@ -4,9 +4,12 @@ import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
+  detectDeedIntent,
   inr,
+  MORTGAGE_PEOPLE,
   normDigits,
   parseAmount,
+  parseDeedChoice,
   taxFlags,
   taxNotice,
   validAadhaar,
@@ -88,6 +91,82 @@ const BUYER_STEPS: Step[] = [
 const PAN_STEP: Step = { key: "buyerPan", label: "खरीदार PAN", ask: "खरीदार का PAN नंबर लिखें।", validate: validPan, secret: true, err: "PAN सही नहीं है (जैसे ABCDE1234F)।" };
 const SELLER_PAN_STEP: Step = { key: "sellerPan", label: "विक्रेता PAN", ask: "TDS के लिए विक्रेता का PAN नंबर लिखें।", validate: validPan, secret: true, err: "PAN सही नहीं है (जैसे ABCDE1234F)।" };
 const ALL_STEPS = [...BUYER_STEPS, PAN_STEP, SELLER_PAN_STEP];
+
+// ---------- बंधक पत्र (mortgage deed): the mortgagor + two witnesses ----------
+/** Same details for every person on a mortgage deed; `who` is used in the questions. */
+function personSteps(prefix: string, who: string, heading: string): Step[] {
+  return [
+    { key: `${prefix}Name`, label: `${heading} — नाम`, ask: `${who} का पूरा नाम लिखें। सिर्फ़ नाम लिखें — पिता का नाम अगले सवाल में पूछा जाएगा।`, validate: validText(), err: "कृपया पूरा नाम लिखें।" },
+    { key: `${prefix}FatherName`, label: `${heading} — पिता/पति का नाम`, ask: `${who} के पिता या पति का नाम लिखें।`, validate: validText() },
+    { key: `${prefix}MotherName`, label: `${heading} — माता का नाम`, ask: `${who} की माता का नाम लिखें।`, validate: validText() },
+    { key: `${prefix}Aadhaar`, label: `${heading} — आधार`, ask: `${who} का 12 अंकों का आधार नंबर लिखें।`, validate: validAadhaar, secret: true, err: "आधार नंबर सही नहीं लग रहा। कृपया जाँचकर दोबारा लिखें।" },
+    { key: `${prefix}Mobile`, label: `${heading} — मोबाइल`, ask: `${who} का 10 अंकों का मोबाइल नंबर लिखें।`, validate: validMobile, err: "मोबाइल नंबर सही नहीं है। 10 अंकों का नंबर लिखें।" },
+    { key: `${prefix}Email`, label: `${heading} — ईमेल`, ask: `${who} की ईमेल ID लिखें। न हो तो "नहीं" लिखें।`, validate: validEmail, optional: true, err: 'ईमेल सही नहीं है। न हो तो "नहीं" लिखें।' },
+    { key: `${prefix}Address`, label: `${heading} — पता`, ask: `${who} का पूरा पता लिखें।`, validate: validText(8), err: "कृपया पूरा पता लिखें।" },
+  ];
+}
+const MORTGAGE_STEPS: Step[] = MORTGAGE_PEOPLE.flatMap((m) => personSteps(m.prefix, m.who, m.heading));
+/** Every free-text question, whichever deed it belongs to. */
+const ANY_STEPS = [...ALL_STEPS, ...MORTGAGE_STEPS];
+
+const CHOOSE_DEED_ASK =
+  "आपको कौन सा दस्तावेज़ बनवाना है? नंबर या नाम लिखें:\n" +
+  "1. विक्रय पत्र (रजिस्ट्री — संपत्ति बेचना/खरीदना)\n" +
+  "2. बंधक पत्र (बैंक लोन के लिए संपत्ति बंधक रखना)\n" +
+  "3. कोई और दस्तावेज़ (दान पत्र, वसीयत, मुख्तारनामा आदि)\n" +
+  '(बंद करने के लिए "रद्द" लिखें।)';
+const OTHER_ASK = "कौन सा दस्तावेज़ बनवाना है? संक्षेप में लिखें (जैसे दान पत्र, वसीयत, मुख्तारनामा)।";
+
+// ---------- बंधक पत्र: documents first ----------
+// Staff read the bank, branch and loan amount from the sanction letter, so the bot
+// only collects the papers: sanction letter + registry of the mortgaged property,
+// and -- when the registry's owner is no longer the owner (death, will, mutation,
+// partition, gift ...) -- the legal document by which the present owner got it,
+// without which they cannot mortgage (equitable mortgage) the property.
+const SANCTION_RE = /sanction|सैंक्शन|सेंक्शन|स्वीकृति पत्र|ऋण|loan|लोन/i;
+const LATER = /^(बाद में|बाद मे|बादमें|later|baad me|baad mein|abhi nahi|अभी नहीं)$/i;
+type MortgageDoc = "sanction" | "registry" | "transfer";
+const MORTGAGE_DOC_LABEL: Record<MortgageDoc, string> = {
+  sanction: "बैंक का सैंक्शन लेटर",
+  registry: "संपत्ति की रजिस्ट्री",
+  transfer: "वसीयत/नामांतरण/उत्तराधिकार का दस्तावेज़",
+};
+/** "✅ … मिल गया/गई" -- रजिस्ट्री is feminine. */
+const MORTGAGE_DOC_RECEIVED: Record<MortgageDoc, string> = {
+  sanction: "✅ बैंक का सैंक्शन लेटर मिल गया।",
+  registry: "✅ संपत्ति की रजिस्ट्री मिल गई।",
+  transfer: "✅ वसीयत/नामांतरण/उत्तराधिकार का दस्तावेज़ मिल गया।",
+};
+const DOC_STEP: Record<string, MortgageDoc> = { M_SANCTION: "sanction", M_REGISTRY: "registry", M_TRANSFER: "transfer" };
+const M_FIRST_DOC_ASK =
+  "आपने जो दस्तावेज़ भेजा है वह क्या है? नंबर लिखें:\n1. बैंक का सैंक्शन लेटर\n2. संपत्ति की रजिस्ट्री\n3. कुछ और";
+const M_SANCTION_ASK = 'कृपया बैंक का सैंक्शन लेटर (PDF या सभी पन्नों की साफ़ फ़ोटो) भेजें। अभी न हो तो "बाद में" लिखें।';
+const M_REGISTRY_ASK =
+  'कृपया जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री (PDF या सभी पन्नों की साफ़ फ़ोटो) भेजें। अभी न हो तो "बाद में" लिखें।';
+const M_TRANSFER_ASK =
+  "संपत्ति वर्तमान मालिक के नाम कैसे आई, उसका कानूनी दस्तावेज़ भेजें — जैसे वसीयत, नामांतरण (mutation) आदेश, " +
+  "उत्तराधिकार प्रमाण पत्र, बँटवारा या दान पत्र। इसी के आधार पर वर्तमान मालिक संपत्ति बंधक (equitable mortgage) रख सकते हैं।\n" +
+  'अभी न हो तो "बाद में" लिखें।';
+function ownerAsk(data: any): string {
+  const owners: string[] = Array.isArray(data.registryOwners) ? data.registryOwners : [];
+  return (
+    (owners.length ? `रजिस्ट्री के अनुसार संपत्ति के मालिक: ${owners.join(", ")}\n` : "") +
+    'क्या रजिस्ट्री में लिखे मालिक ही अभी संपत्ति के मालिक हैं और वही बंधक रख रहे हैं? "हाँ" या "नहीं" लिखें।\n' +
+    '(अगर रजिस्ट्री वाले मालिक की मृत्यु हो चुकी है, या संपत्ति वसीयत, नामांतरण, बँटवारे आदि से किसी और के नाम आई है, तो "नहीं" लिखें।)'
+  );
+}
+/** Next step of a बंधक पत्र: missing papers → owner check → transfer paper → people → FINAL. */
+function mortgageNext(data: any): string {
+  const docs = data.docs ?? {};
+  if (!docs.sanction) return "M_SANCTION";
+  if (!docs.registry) return "M_REGISTRY";
+  if (!("ownerIsCurrent" in data)) return "M_OWNER";
+  if (data.ownerIsCurrent === false && !docs.transfer) return "M_TRANSFER";
+  return MORTGAGE_STEPS.find((s) => data[s.key] === undefined)?.key ?? "FINAL";
+}
+const ownerNames = (deed: DeedExtract | null | undefined) =>
+  (deed?.buyers ?? []).map((b) => b?.name).filter((n): n is string => !!n);
+const DEED_LABEL: Record<string, string> = { sale: "विक्रय पत्र", mortgage: "बंधक पत्र", other: "अन्य दस्तावेज़" };
 const AMOUNT_ASK = "रजिस्ट्री कितनी राशि पर बनानी है? राशि लिखें (जैसे 1500000 या 15 लाख), या \"गाइडलाइन\" लिखें।";
 
 @Injectable()
@@ -107,6 +186,7 @@ export class DraftIntakeService {
     if (cur) {
       const data: any = { ...(cur.data as any) };
       data.extraDocs = [...(data.extraDocs ?? []), file.key];
+      if (data.deedType === "mortgage" && cur.step in DOC_STEP) return this.receiveMortgageDoc(cur, data, file);
       await this.save(cur.id, { data });
       return ["अतिरिक्त दस्तावेज़ मिल गया ✅", this.question(cur.step, data)];
     }
@@ -116,19 +196,22 @@ export class DraftIntakeService {
       return null;
     });
 
+    // A sale deed → "draft for this property?"; anything else (a bank sanction
+    // letter, an unreadable scan, ...) → ask which document they want made.
+    const isSale = !!deed?.isSaleDeed && !!deed.property;
     await this.prisma.draftIntake.create({
       data: {
         organizationId: this.orgId,
         phone: ctx.phone,
         customerName: ctx.name,
-        step: "CONFIRM_PROPERTY",
+        step: isSale ? "CONFIRM_PROPERTY" : "CHOOSE_DEED",
         data: {},
         deed: (deed ?? undefined) as any,
         documentKey: file.key,
-        needsStaff: !deed?.isSaleDeed,
+        needsStaff: !deed,
       },
     });
-    return [this.deedSummary(deed)];
+    return [isSale ? this.deedSummary(deed) : "दस्तावेज़ मिल गया ✅\n\n" + CHOOSE_DEED_ASK];
   }
 
   // ================= text received =================
@@ -138,7 +221,10 @@ export class DraftIntakeService {
     const cur = await this.active(ctx.phone);
 
     if (!cur) {
-      if (/ड्राफ्ट|draft|रजिस्ट्री|registry/i.test(v)) {
+      if (detectDeedIntent(v) === "mortgage") {
+        return ["बंधक पत्र के लिए कृपया बैंक का सैंक्शन लेटर और जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री की PDF या साफ़ फ़ोटो भेजें।"];
+      }
+      if (/ड्राफ्ट|draft|रजिस्ट्री|registry/i.test(v) || detectDeedIntent(v)) {
         return ["ड्राफ्ट के लिए कृपया पुरानी रजिस्ट्री की PDF या सभी पन्नों की साफ़ फ़ोटो भेजें।"];
       }
       return null;
@@ -150,15 +236,24 @@ export class DraftIntakeService {
 
     const data: any = { ...(cur.data as any) };
     switch (cur.step) {
-      case "CONFIRM_PROPERTY":
-        if (YES.test(v)) {
-          return this.goto(cur.id, data, isPlotDeed(cur.deed as DeedExtract | null) ? PLOT_STEPS[0].key : BUYER_STEPS[0]!.key);
-        }
-        if (NO.test(v)) {
-          await this.save(cur.id, { status: "CANCELLED", needsStaff: true });
-          return ["ठीक है। हमारा स्टाफ आपसे जल्द संपर्क करेगा।"];
-        }
-        return ["कृपया \"हाँ\" या \"नहीं\" लिखें।"];
+      case "CONFIRM_PROPERTY": {
+        // Answer what the customer actually said: "बंधक बनाना है" is not a yes/no.
+        const intent = YES.test(v) ? "sale" : NO.test(v) ? null : detectDeedIntent(v);
+        if (intent) return this.startDeed(cur, data, intent, raw);
+        if (NO.test(v)) return this.goto(cur.id, data, "CHOOSE_DEED", "ठीक है।");
+        return ['कृपया "हाँ" या "नहीं" लिखें, या बताएँ कौन सा दस्तावेज़ बनवाना है (जैसे बंधक पत्र)।'];
+      }
+
+      case "CHOOSE_DEED": {
+        const intent = parseDeedChoice(v);
+        if (!intent) return ["कृपया 1, 2 या 3 लिखें।\n\n" + CHOOSE_DEED_ASK];
+        // "3" alone doesn't say which document -- ask; words like "दान पत्र" already do.
+        if (intent === "other" && /^3\b/.test(v)) return this.goto(cur.id, data, "OTHER_DESC");
+        return this.startDeed(cur, data, intent, raw);
+      }
+
+      case "OTHER_DESC":
+        return this.startDeed(cur, data, "other", raw);
 
       case "PLOT_BUILDING":
       case "PLOT_CORNER":
@@ -180,20 +275,56 @@ export class DraftIntakeService {
         return this.goto(cur.id, data, next);
       }
 
+      case "M_FIRST_DOC": {
+        const n = normDigits(v).trim();
+        const role: MortgageDoc | null | undefined = /^1\b/.test(n) ? "sanction" : /^2\b/.test(n) ? "registry" : /^3\b/.test(n) ? null : undefined;
+        if (role === undefined) return ["कृपया 1, 2 या 3 लिखें।\n\n" + M_FIRST_DOC_ASK];
+        data.docs = { ...(data.docs ?? {}) };
+        if (role) data.docs[role] = cur.documentKey;
+        // Not recognised as a sale deed by the reader: staff should look at it.
+        if (role === "registry") await this.save(cur.id, { needsStaff: true });
+        return this.goto(cur.id, data, mortgageNext(data));
+      }
+
+      case "M_SANCTION":
+      case "M_REGISTRY":
+      case "M_TRANSFER": {
+        const role = DOC_STEP[cur.step]!;
+        if (!LATER.test(v)) return [this.question(cur.step, data)];
+        data.docs = { ...(data.docs ?? {}), [role]: "later" };
+        await this.save(cur.id, { data, needsStaff: true });
+        const next = mortgageNext(data);
+        return this.goto(cur.id, data, next, `ठीक है, ${MORTGAGE_DOC_LABEL[role]} बाद में भेज दें।`);
+      }
+
+      case "M_OWNER": {
+        const answer = yesNoUnknown(v);
+        if (answer === undefined) return ['कृपया "हाँ", "नहीं" या "पता नहीं" लिखें।'];
+        data.ownerIsCurrent = answer;
+        if (answer === null) await this.save(cur.id, { needsStaff: true });
+        const next = mortgageNext(data);
+        return this.goto(cur.id, data, next, next === MORTGAGE_STEPS[0]!.key ? "अब बंधककर्ता और दो गवाहों की जानकारी लेते हैं।" : undefined);
+      }
+
       case "AMOUNT":
         return this.handleAmount(cur, data, v);
 
       case "FINAL":
         if (YES.test(v)) return this.submit(cur);
         if (/बदल|change|edit/i.test(v)) {
-          // Re-collect the buyer details; the plot answers are about the property and stay.
-          const keep = Object.fromEntries(PLOT_FIELDS.filter((f) => f in data).map((f) => [f, data[f]]));
-          return this.goto(cur.id, keep, BUYER_STEPS[0]!.key, "ठीक है, विवरण दोबारा लेते हैं।");
+          // Re-collect the people's details; the deed type and plot answers stay.
+          const keep = Object.fromEntries(
+            ["deedType", "docs", "ownerIsCurrent", "registryOwners", "extraDocs", ...PLOT_FIELDS]
+              .filter((f) => f in data)
+              .map((f) => [f, data[f]]),
+          );
+          const first = data.deedType === "mortgage" ? MORTGAGE_STEPS[0]!.key : BUYER_STEPS[0]!.key;
+          return this.goto(cur.id, keep, first, "ठीक है, विवरण दोबारा लेते हैं।");
         }
         return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
 
       default: {
-        const step = ALL_STEPS.find((s) => s.key === cur.step);
+        const step = ANY_STEPS.find((s) => s.key === cur.step);
         if (!step) return null;
         const optional = step.optional || (step === PAN_STEP && !data.tax?.panRequired);
         const val = optional && SKIP.test(v) ? "" : step.validate(v);
@@ -204,8 +335,87 @@ export class DraftIntakeService {
     }
   }
 
-  /** Buyer steps → AMOUNT → buyer PAN → seller PAN (only if TDS) → FINAL. */
+  /**
+   * Starts the chosen document's questions.
+   * sale → plot questions (plots only) → buyer; mortgage → mortgagor + 2 witnesses;
+   * other → recorded for staff and submitted (the bot has no questions for it yet).
+   */
+  private async startDeed(cur: any, data: any, intent: "sale" | "mortgage" | "other", said?: string): Promise<string[]> {
+    const deed = cur.deed as DeedExtract | null;
+    if (intent === "sale") {
+      data.deedType = "sale";
+      if (!deed?.isSaleDeed) {
+        // No sale deed to read the property from -- staff will need the registry.
+        await this.save(cur.id, { needsStaff: true });
+      }
+      return this.goto(cur.id, data, isPlotDeed(deed) ? PLOT_STEPS[0].key : BUYER_STEPS[0]!.key);
+    }
+    if (intent === "mortgage") {
+      data.deedType = "mortgage";
+      data.docs = { ...(data.docs ?? {}) };
+      const intro = [
+        "ठीक है, बंधक पत्र बनाते हैं। इसके लिए ये दस्तावेज़ ज़रूरी हैं:",
+        "1. बैंक का सैंक्शन लेटर (बैंक और लोन का विवरण स्टाफ इसी से देख लेगा)",
+        "2. जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री",
+      ];
+      // What was the document they already sent?
+      let next: string;
+      if (deed?.isSaleDeed && cur.documentKey) {
+        data.docs.registry = cur.documentKey;
+        data.registryOwners = ownerNames(deed);
+        intro.push("", MORTGAGE_DOC_RECEIVED.registry);
+        next = mortgageNext(data);
+      } else if (cur.documentKey && (SANCTION_RE.test(deed?.documentType ?? "") || SANCTION_RE.test(said ?? ""))) {
+        data.docs.sanction = cur.documentKey;
+        intro.push("", MORTGAGE_DOC_RECEIVED.sanction);
+        next = mortgageNext(data);
+      } else {
+        next = cur.documentKey ? "M_FIRST_DOC" : mortgageNext(data);
+      }
+      return this.goto(cur.id, data, next, intro.join("\n"));
+    }
+    data.deedType = "other";
+    data.requestedDeed = (said ?? "").trim().slice(0, 200) || null;
+    await this.save(cur.id, { data, step: "FINAL", status: "SUBMITTED", workStatus: "NEW", needsStaff: true });
+    const ref = String(cur.id).slice(-6).toUpperCase();
+    return [`✅ आपका अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nइस दस्तावेज़ के लिए हमारा स्टाफ आपसे जल्द संपर्क करेगा।`];
+  }
+
+  /**
+   * A file sent while the बंधक पत्र flow is waiting for a document. It is taken
+   * as the document asked for -- except that a sale deed sent when the sanction
+   * letter was asked for is the registry (read by the extractor).
+   */
+  private async receiveMortgageDoc(cur: any, data: any, file: IncomingFile): Promise<string[]> {
+    let role = DOC_STEP[cur.step]!;
+    const read =
+      role === "transfer"
+        ? null
+        : await this.extractor.extract(file.buf, file.mime).catch((e) => {
+            this.log.error(`mortgage doc extract failed: ${e?.message}`);
+            return null;
+          });
+    if (role === "sanction" && read?.isSaleDeed) role = "registry";
+    data.docs = { ...(data.docs ?? {}), [role]: file.key };
+    const patch: Record<string, unknown> = {};
+    if (role === "registry") {
+      data.registryOwners = ownerNames(read);
+      // The property details on the office page come from the registry.
+      if (read?.isSaleDeed) patch.deed = read;
+      else patch.needsStaff = true;
+    }
+    const next = mortgageNext(data);
+    await this.save(cur.id, { ...patch, data, step: next });
+    const reply = [MORTGAGE_DOC_RECEIVED[role]];
+    if (next === MORTGAGE_STEPS[0]!.key) reply.push("अब बंधककर्ता और दो गवाहों की जानकारी लेते हैं।");
+    reply.push(this.question(next, data));
+    return reply;
+  }
+
+  /** Buyer steps → AMOUNT → buyer PAN → seller PAN (only if TDS) → FINAL; mortgage: people in order → FINAL. */
   private nextStep(after: string, data: any): string {
+    const m = MORTGAGE_STEPS.findIndex((s) => s.key === after);
+    if (m >= 0) return MORTGAGE_STEPS[m + 1]?.key ?? "FINAL";
     const i = BUYER_STEPS.findIndex((s) => s.key === after);
     if (i >= 0) return BUYER_STEPS[i + 1]?.key ?? "AMOUNT";
     if (after === "AMOUNT") return PAN_STEP.key;
@@ -284,6 +494,27 @@ export class DraftIntakeService {
 
   // ================= summary / submit =================
   private finalSummary(d: any): string {
+    const shownValue = (s: Step) => (d[s.key] ? (s.secret ? mask(decrypt(d[s.key])) : d[s.key]) : "—");
+    if (d.deedType === "mortgage") {
+      const docs = d.docs ?? {};
+      const got = (k: MortgageDoc) => (docs[k] === "later" ? "बाद में भेजेंगे" : docs[k] ? "मिला ✅" : "—");
+      const lines = [
+        "कृपया विवरण जाँचें:",
+        `दस्तावेज़: ${DEED_LABEL.mortgage}`,
+        `सैंक्शन लेटर: ${got("sanction")}`,
+        `रजिस्ट्री: ${got("registry")}`,
+      ];
+      if ("ownerIsCurrent" in d) lines.push(`रजिस्ट्री वाले मालिक ही वर्तमान मालिक: ${yesNoLabel(d.ownerIsCurrent)}`);
+      if (d.ownerIsCurrent === false) lines.push(`वसीयत/नामांतरण दस्तावेज़: ${got("transfer")}`);
+      for (const m of MORTGAGE_PEOPLE) {
+        lines.push("", `*${m.heading}*`);
+        for (const s of MORTGAGE_STEPS.filter((x) => x.key.startsWith(m.prefix))) {
+          if (d[s.key] !== undefined) lines.push(`${s.label.split(" — ")[1]}: ${shownValue(s)}`);
+        }
+      }
+      lines.push("", 'सही है तो "हाँ" लिखें। दोबारा भरने के लिए "बदलें" लिखें।');
+      return lines.join("\n");
+    }
     const lines = ["कृपया विवरण जाँचें:"];
     for (const s of PLOT_STEPS) {
       if (d[s.field] !== undefined) lines.push(`${s.label}: ${yesNoLabel(d[s.field])}`);
@@ -311,7 +542,8 @@ export class DraftIntakeService {
 
   private deedSummary(deed: DeedExtract | null): string {
     const tail =
-      "\n\nक्या इसी संपत्ति का नया रजिस्ट्री ड्राफ्ट बनवाना है? \"हाँ\" या \"नहीं\" लिखें।" +
+      "\n\nक्या इसी संपत्ति का नया रजिस्ट्री (विक्रय पत्र) ड्राफ्ट बनवाना है? \"हाँ\" या \"नहीं\" लिखें।" +
+      "\nकोई और दस्तावेज़ बनवाना हो तो उसका नाम लिखें (जैसे बंधक पत्र)।" +
       "\n(आपकी जानकारी सिर्फ़ ड्राफ्ट बनाने में उपयोग होगी। कभी भी \"रद्द\" लिखकर बंद कर सकते हैं।)";
     if (!deed?.isSaleDeed || !deed.property) return "दस्तावेज़ मिल गया ✅ इसका विवरण स्टाफ जाँचेगा।" + tail;
     const p = deed.property;
@@ -352,9 +584,16 @@ export class DraftIntakeService {
     if (step === "AMOUNT") return AMOUNT_ASK;
     if (step === "CONFIRM_PROPERTY") return "कृपया \"हाँ\" या \"नहीं\" लिखें।";
     if (step === "FINAL") return this.finalSummary(data);
+    if (step === "CHOOSE_DEED") return CHOOSE_DEED_ASK;
+    if (step === "OTHER_DESC") return OTHER_ASK;
+    if (step === "M_FIRST_DOC") return M_FIRST_DOC_ASK;
+    if (step === "M_SANCTION") return M_SANCTION_ASK;
+    if (step === "M_REGISTRY") return M_REGISTRY_ASK;
+    if (step === "M_TRANSFER") return M_TRANSFER_ASK;
+    if (step === "M_OWNER") return ownerAsk(data);
     const plot = PLOT_STEPS.find((s) => s.key === step);
     if (plot) return plot.ask;
     if (step === PAN_STEP.key && !data.tax?.panRequired) return PAN_STEP.ask + " PAN न हो तो \"नहीं\" लिखें।";
-    return ALL_STEPS.find((s) => s.key === step)?.ask ?? "";
+    return ANY_STEPS.find((s) => s.key === step)?.ask ?? "";
   }
 }

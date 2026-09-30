@@ -4,6 +4,7 @@ import type { WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWaRequests } from "./useWhatsappRequests";
 import {
+  DEED_TYPE_LABEL,
   formatAmount,
   formatDate,
   INTAKE_STATUS_LABEL,
@@ -84,7 +85,7 @@ export function WhatsappRequestsPage() {
               <tr>
                 <th>अनुरोध नं.</th>
                 <th>ग्राहक</th>
-                <th>खरीदार</th>
+                <th>खरीदार / बंधककर्ता</th>
                 <th>संपत्ति</th>
                 <th>राशि</th>
                 <th>स्थिति</th>
@@ -132,6 +133,7 @@ export function WhatsappRequestsPage() {
                     <div className="wa-clamp-2" title={r.buyerName ?? undefined}>
                       {r.buyerName || "—"}
                     </div>
+                    <div className="doc-sub wa-nowrap">{DEED_TYPE_LABEL[r.deedType]}</div>
                   </td>
                   <td>
                     <div className="wa-clamp-2" title={r.propertySummary ?? undefined}>
