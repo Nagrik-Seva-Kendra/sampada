@@ -17,6 +17,7 @@ import type { TenantContext } from "../tenant/tenant-context.js";
 import {
   documentKeyAt,
   type DraftIntakeRow,
+  idPhotoKeyAt,
   localMediaPath,
   mimeForKey,
   requestRef,
@@ -40,6 +41,13 @@ export function visibleWhere(tenant: Pick<TenantContext, "organizationId" | "use
   return isManagerRole(tenant.role)
     ? { organizationId: tenant.organizationId }
     : { organizationId: tenant.organizationId, assigneeId: tenant.userId };
+}
+
+/** closedAt for a status change: set when it becomes DONE/REJECTED, kept if already closed, cleared on reopen. */
+export function closedAtFor(row: { workStatus: string | null; closedAt?: Date | null }, next: string, now = new Date()): Date | null {
+  const closed = (s: string | null) => s === "DONE" || s === "REJECTED";
+  if (!closed(next)) return null;
+  return closed(row.workStatus) && row.closedAt ? row.closedAt : now;
 }
 
 /** Badge count: NEW for managers; an employee's own open work (NEW + IN_PROGRESS). */
@@ -116,7 +124,7 @@ export class WaRequestsService {
    */
   async update(id: string, input: WaRequestUpdateInput): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
-    await this.find(id, tenant);
+    const before = await this.find(id, tenant);
     if (input.assigneeId !== undefined && !isManagerRole(tenant.role)) {
       throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध किसी को सौंप सकते हैं।");
     }
@@ -130,7 +138,7 @@ export class WaRequestsService {
     await this.prisma.draftIntake.updateMany({
       where: { id, ...visibleWhere(tenant) },
       data: {
-        ...(input.workStatus !== undefined ? { workStatus: input.workStatus } : {}),
+        ...(input.workStatus !== undefined ? { workStatus: input.workStatus, closedAt: closedAtFor(before, input.workStatus) } : {}),
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
         ...(input.staffNote !== undefined ? { staffNote: input.staffNote?.trim() || null } : {}),
       },
@@ -152,6 +160,32 @@ export class WaRequestsService {
     return members
       .map((m) => ({ id: m.user.id, name: `${m.user.fname} ${m.user.lname}`.trim() }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * One ID-card photo (Aadhaar/PAN/passport photo). Same visibility as the
+   * request itself: OWNER/ADMIN, or the employee it is assigned to (find() 404s
+   * for anyone else). Logs who viewed which request's photo, never its content.
+   */
+  async idPhoto(id: string, party: string, kind: string): Promise<{ data: Buffer; mimeType: string; fileName: string }> {
+    const tenant = requireTenantContext(this.cls);
+    const row = await this.find(id, tenant);
+    const key = idPhotoKeyAt(row, party, kind);
+    if (!key) throw new NotFoundException("फ़ोटो उपलब्ध नहीं है।");
+    const data = await this.readMedia(key).catch((e: any) => {
+      this.log.warn(`ID photo for request ${requestRef(row.id)} unavailable: ${e?.code ?? e?.name ?? "error"}`);
+      throw new NotFoundException("फ़ोटो उपलब्ध नहीं है।");
+    });
+    this.log.log(`request ${requestRef(row.id)} (${row.id}): ID photo ${party}/${kind} viewed by user ${tenant.userId} role=${tenant.role}`);
+    const ext = key.includes(".") ? key.slice(key.lastIndexOf(".")) : "";
+    return { data, mimeType: mimeForKey(key), fileName: `whatsapp-${requestRef(row.id)}-${party}-${kind}${ext}` };
+  }
+
+  private async readMedia(key: string): Promise<Buffer> {
+    if (r2Configured()) return r2Get(key);
+    const path = localMediaPath(key);
+    if (!path) throw new Error("invalid media path");
+    return readFile(path);
   }
 
   /** The customer's original file: from R2 when configured, else the local media dir. */

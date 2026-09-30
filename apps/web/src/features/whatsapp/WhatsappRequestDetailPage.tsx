@@ -21,6 +21,7 @@ import {
   useUpdateWaRequest,
   useWaAssignees,
   useWaDocumentOpener,
+  useWaIdPhotoOpener,
   useWaRequest,
 } from "./useWhatsappRequests";
 import {
@@ -105,6 +106,70 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
  * SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
  * address for every party's ID. Shows what this party is still missing.
  */
+const ID_PHOTO_STATE: Record<string, string> = { later: "ग्राहक बाद में भेजेगा", deleted: "हटा दी गई (अवधि पूरी)" };
+
+/**
+ * ID-card photos per person, the cross-check warnings, and whether the Aadhaar/PAN
+ * fields came from the card. The photos open only for OWNER/ADMIN and the
+ * request's assignee (the API 404s for anyone else).
+ */
+function IdCardsCard({ r }: { r: WaRequestDetail }) {
+  const openPhoto = useWaIdPhotoOpener();
+  const [error, setError] = useState<string | null>(null);
+  if (!r.idCards.length) return null;
+  async function onView(party: string, kind: string) {
+    setError(null);
+    const tab = window.open("", "_blank");
+    try {
+      const url = await openPhoto(r.id, party, kind);
+      if (tab) tab.location.href = url;
+      else window.location.assign(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      tab?.close();
+      setError(await apiErrorMessage(err, "फ़ोटो नहीं खुल सकी।"));
+    }
+  }
+  return (
+    <Card title="पहचान पत्र (ID) की फ़ोटो">
+      {r.idPhotosPurgedAt && (
+        <p className="doc-sub" style={{ marginBottom: 8 }}>
+          काम पूरा होने के बाद तय अवधि बीतने पर ये फ़ोटो {formatDate(r.idPhotosPurgedAt)} को अपने-आप हटा दी गईं।
+        </p>
+      )}
+      {r.idCards.map((c, i) => (
+        <div key={c.party} style={{ marginTop: i ? 14 : 0 }}>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{c.heading}</div>
+          {c.warnings.map((w) => (
+            <p key={w} className="status-pill warn" style={{ margin: "4px 0" }}>
+              ⚠️ {w} — स्टाफ जाँच करें
+            </p>
+          ))}
+          <Field
+            label="कार्ड से भरी जानकारी"
+            value={[c.aadhaarFromCard && "आधार (ग्राहक ने पुष्टि की)", c.panFromCard && "PAN (ग्राहक ने पुष्टि की)"].filter(Boolean).join(" · ") || "नहीं — ग्राहक ने लिखकर दी"}
+          />
+          {c.photos.map((p) => (
+            <div key={p.kind} style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, minWidth: 160 }}>{p.label}</span>
+              {p.state === "received" ? (
+                <button type="button" className="doc-btn" onClick={() => onView(c.party, p.kind)}>
+                  देखें
+                </button>
+              ) : (
+                <span className="doc-sub" style={{ marginTop: 0 }}>
+                  {p.state ? ID_PHOTO_STATE[p.state] : "— नहीं मिली"}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      {error && <p className="modal-error">{error}</p>}
+    </Card>
+  );
+}
+
 function SampadaMissing({ party }: { party: Partial<Record<PartyField, string | null>> }) {
   const missing = missingSampadaFields(party);
   if (!missing.length) return <Field label="SAMPADA 2.0 जानकारी" value="पूरी ✅" />;
@@ -258,6 +323,9 @@ export function WhatsappRequestDetailPage() {
               <span className="status-pill neutral">{INTAKE_STATUS_LABEL[r.status]}</span>
             )}
             {r.needsStaff && <span className="status-pill bad">स्टाफ जाँच ज़रूरी</span>}
+            {r.idCards.some((c) => c.warnings.length > 0) && (
+              <span className="status-pill warn">⚠️ ID कार्ड मिलान में अंतर — नीचे देखें</span>
+            )}
             <span className="status-pill good">{DEED_TYPE_LABEL[r.deedType]}</span>
           </h2>
           {r.deedType === "other" ? (
@@ -370,6 +438,10 @@ export function WhatsappRequestDetailPage() {
                   label="आधार"
                   value={revealed ? orDash(revealed.people[i]?.aadhaar) : orDash(person.aadhaarMasked)}
                 />
+                {person.panMasked && <Field label="PAN" value={person.panMasked} />}
+                {(person.dob || person.gender) && (
+                  <Field label="जन्म तिथि / लिंग (आधार से)" value={[person.dob, person.gender].filter(Boolean).join(" · ")} />
+                )}
                 <SampadaMissing
                   party={{
                     name: person.name,
@@ -411,6 +483,9 @@ export function WhatsappRequestDetailPage() {
             <Field label="पता" value={orDash(r.buyer.address)} />
             <Field label="आधार" value={revealed ? orDash(revealed.aadhaar) : orDash(r.buyer.aadhaarMasked)} />
             <Field label="PAN" value={revealed ? orDash(revealed.pan) : orDash(r.buyer.panMasked)} />
+            {(r.buyer.dob || r.buyer.gender) && (
+              <Field label="जन्म तिथि / लिंग (आधार से)" value={[r.buyer.dob, r.buyer.gender].filter(Boolean).join(" · ")} />
+            )}
             <Field label="विक्रेता PAN (TDS)" value={revealed ? orDash(revealed.sellerPan) : orDash(r.sellerPanMasked)} />
             <SampadaMissing
               party={{
@@ -489,6 +564,8 @@ export function WhatsappRequestDetailPage() {
             </>
           )}
         </Card>
+
+        <IdCardsCard r={r} />
 
         <Card title="दस्तावेज़">
           {r.documents.length === 0 ? (

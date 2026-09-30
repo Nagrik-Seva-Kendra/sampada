@@ -51,7 +51,7 @@ function signingKey(dateStamp: string): Buffer {
 }
 
 async function signedRequest(
-  method: "PUT" | "GET",
+  method: "PUT" | "GET" | "DELETE",
   key: string,
   body: Buffer,
   contentType?: string,
@@ -131,6 +131,12 @@ export async function r2Get(key: string): Promise<Buffer> {
     throw new Error(`R2 GET ${key} failed: HTTP ${res.status} ${t.slice(0, 300)}`);
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+/** Delete an object from R2 (a missing object is fine: S3 DELETE is idempotent). Throws on other non-2xx. */
+export async function r2Delete(key: string): Promise<void> {
+  const res = await signedRequest("DELETE", key, Buffer.alloc(0));
+  if (!res.ok && res.status !== 404) throw new Error(`R2 DELETE failed: HTTP ${res.status}`);
 }
 
 /** A fresh object key for a guideline PDF. */

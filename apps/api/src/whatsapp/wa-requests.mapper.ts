@@ -4,18 +4,25 @@
  * the one exception is revealSecrets(), used by the OWNER/ADMIN-only endpoint.
  */
 import { isAbsolute, join, relative, resolve } from "node:path";
-import type {
-  WaDeedParty,
+import {
+  ID_PHOTO_LABEL,
+  ID_WARNING_TEXT,
+  type IdPhotoKind,
+  SAMPADA_REQUIRED_PARTY_PHOTOS,
+  type WaIdCards,
+  type WaIdPhotoState,
+  type WaDeedParty,
   WaDeedType,
-  WaDocState,
-  WaPerson,
-  WaIntakeStatus,
-  WaPropertySummary,
-  WaRequestDetail,
-  WaRequestListItem,
-  WaRevealResult,
-  WaWorkStatus,
+  type WaDocState,
+  type WaPerson,
+  type WaIntakeStatus,
+  type WaPropertySummary,
+  type WaRequestDetail,
+  type WaRequestListItem,
+  type WaRevealResult,
+  type WaWorkStatus,
 } from "@sampada/shared";
+import { idWarningsFor } from "./id-cards.js";
 import { MORTGAGE_PEOPLE } from "./intake-rules.js";
 import { decrypt, mask } from "./pii-crypto.js";
 import { maskPhone } from "./webhook-diagnostics.js";
@@ -34,6 +41,8 @@ export interface DraftIntakeRow {
   workStatus: string | null;
   assigneeId: string | null;
   staffNote: string | null;
+  closedAt?: Date | null;
+  idPhotosPurgedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -150,6 +159,8 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
       address: str(d.buyerAddress),
       aadhaarMasked: maskSecret(d.buyerAadhaar),
       panMasked: maskSecret(d.buyerPan),
+      dob: str(d.buyerDob),
+      gender: str(d.buyerGender),
     },
     sellerPanMasked: maskSecret(d.sellerPan),
     tax: tax
@@ -179,6 +190,8 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
     plot: plotAsked
       ? { hasBuilding: tri(d.plotHasBuilding), corner: tri(d.plotCorner), boundaryWall: tri(d.plotBoundary) }
       : null,
+    idCards: idCards(d),
+    idPhotosPurgedAt: row.idPhotosPurgedAt ? row.idPhotosPurgedAt.toISOString() : null,
     documents,
     canReveal: canManage,
     canAssign: canManage,
@@ -217,7 +230,43 @@ function mortgagePeople(d: Record<string, unknown>): WaPerson[] {
     email: str(d[`${m.prefix}Email`]),
     address: str(d[`${m.prefix}Address`]),
     aadhaarMasked: maskSecret(d[`${m.prefix}Aadhaar`]),
+    dob: str(d[`${m.prefix}Dob`]),
+    gender: str(d[`${m.prefix}Gender`]),
+    panMasked: maskSecret(d[`${m.prefix}Pan`]),
   }));
+}
+
+const ID_PARTIES: { prefix: string; heading: string }[] = [
+  { prefix: "buyer", heading: "खरीदार" },
+  ...MORTGAGE_PEOPLE.map((m) => ({ prefix: m.prefix, heading: m.heading })),
+];
+const photoState = (v: unknown): WaIdPhotoState =>
+  v === "later" ? "later" : v === "deleted" ? "deleted" : typeof v === "string" ? "received" : null;
+
+/** Each person asked for ID photos: photo states, whether card data was used, and cross-check warnings. */
+export function idCards(d: Record<string, unknown>): WaIdCards[] {
+  const photos = (d.idPhotos ?? {}) as Record<string, Record<string, unknown>>;
+  const pending = (d.idPending ?? {}) as Record<string, Record<string, unknown>>;
+  const read = (d.idRead ?? {}) as Record<string, any>;
+  return ID_PARTIES.filter((p) => photos[p.prefix] || read[p.prefix]).map((p) => {
+    const mine = photos[p.prefix] ?? {};
+    const kinds = [...new Set([...SAMPADA_REQUIRED_PARTY_PHOTOS, ...(Object.keys(mine) as IdPhotoKind[])])].filter((k) => k in ID_PHOTO_LABEL);
+    return {
+      party: p.prefix,
+      heading: p.heading,
+      photos: kinds.map((kind) => ({ kind, label: ID_PHOTO_LABEL[kind], state: photoState(mine[kind]) })),
+      aadhaarFromCard: pending[p.prefix]?.aadhaarOk === true || !!read[p.prefix]?.aadhaarName,
+      panFromCard: pending[p.prefix]?.panOk === true || !!read[p.prefix]?.panName,
+      warnings: idWarningsFor(read[p.prefix], { fatherName: d[`${p.prefix}FatherName`], relation: d[`${p.prefix}Relation`] }).map((w) => ID_WARNING_TEXT[w]),
+    };
+  });
+}
+
+/** Storage key of one ID photo, or null (not received, "later", deleted, bad input). Keys only come from the row. */
+export function idPhotoKeyAt(row: DraftIntakeRow, party: string, kind: string): string | null {
+  if (!ID_PARTIES.some((p) => p.prefix === party) || !(kind in ID_PHOTO_LABEL)) return null;
+  const k = ((row.data as any)?.idPhotos?.[party] ?? {})[kind];
+  return typeof k === "string" && k.startsWith("whatsapp/") ? k : null;
 }
 
 /** Storage key of the index-th file (0 = registry, 1.. = extras), or null. Keys only ever come from the row. */

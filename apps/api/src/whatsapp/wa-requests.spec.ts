@@ -21,6 +21,8 @@ import {
 import { WaRequestsService } from "./wa-requests.service.js";
 
 const KEY = "a".repeat(64); // test-only key
+/** The typed-question tests start after the ID photos (covered in id-photos.spec.ts). */
+const PHOTOS_DONE = { idDone: { buyer: true, mortgagor: true, witness1: true, witness2: true } };
 const AADHAAR = "234567890124";
 const PAN = "ABCDE1234F";
 
@@ -351,7 +353,7 @@ describe("DraftIntakeService plot questions", () => {
   };
   /** In-memory conversation: one DraftIntake row the service reads and updates. */
   function conversation(deed: unknown) {
-    const cur: any = { id: "cmg1abcdefxyz123", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: {}, deed, needsStaff: false };
+    const cur: any = { id: "cmg1abcdefxyz123", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: { ...PHOTOS_DONE }, deed, needsStaff: false };
     const prisma = {
       draftIntake: {
         findFirst: vi.fn(async () => cur),
@@ -359,7 +361,7 @@ describe("DraftIntakeService plot questions", () => {
       },
     };
     const lookup = vi.fn(async () => null);
-    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup } as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup } as any, {} as any);
     const say = (text: string) => svc.handleText({ phone: "919876543210", name: "राम" }, text);
     return { cur, say, lookup };
   }
@@ -405,11 +407,11 @@ describe("DraftIntakeService plot questions", () => {
     expect(c.lookup).toHaveBeenCalledWith(plotDeed.property, { owners: 1, plot: { hasBuilding: false, corner: true } });
 
     c.cur.step = "FINAL";
-    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: false, buyerName: "श्याम", amount: 1500000, amountMode: "CUSTOM" };
+    c.cur.data = { ...PHOTOS_DONE, plotHasBuilding: false, plotCorner: true, plotBoundary: false, buyerName: "श्याम", amount: 1500000, amountMode: "CUSTOM" };
     const summary = await c.say("कुछ और"); // unclear answer → re-prompt with the options
     expect(summary!.join()).toContain("बदलें");
     await c.say("बदलें");
-    expect(c.cur.data).toEqual({ plotHasBuilding: false, plotCorner: true, plotBoundary: false });
+    expect(c.cur.data).toEqual({ ...PHOTOS_DONE, plotHasBuilding: false, plotCorner: true, plotBoundary: false });
     expect(c.cur.step).toBe("buyerName");
   });
 
@@ -443,7 +445,7 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
   const file = (key: string) => ({ key, buf: Buffer.from("x"), mime: "application/pdf" });
 
   function conversation(step: string, deed: unknown, data: Record<string, unknown> = {}) {
-    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data, deed, needsStaff: false, documentKey: "wa/first.pdf" };
+    const cur: any = { id: "cmg1abcdefxyz123", step, status: "ACTIVE", data: { ...PHOTOS_DONE, ...data }, deed, needsStaff: false, documentKey: "wa/first.pdf" };
     const prisma = {
       draftIntake: {
         findFirst: vi.fn(async () => (cur.status === "ACTIVE" ? cur : null)),
@@ -452,7 +454,7 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
       },
     };
     const extractor = { extract: vi.fn(async (): Promise<unknown> => sanctionLetter) };
-    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any);
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any);
     const say = (text: string) => svc.handleText({ phone: "919876543210", name: "अनुज" }, text);
     const send = (key: string) => svc.handleDocument({ phone: "919876543210", name: "अनुज" }, file(key));
     return { cur, say, send, svc, prisma, extractor };
@@ -610,7 +612,7 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     const c = conversation("FINAL", sanctionLetter, { deedType: "mortgage", mortgagorName: "राम" });
     await c.say("बदलें");
     expect(c.cur.step).toBe("mortgagorName");
-    expect(c.cur.data).toEqual({ deedType: "mortgage" });
+    expect(c.cur.data).toEqual({ ...PHOTOS_DONE, deedType: "mortgage" });
   });
 
   it("another document: '3' asks which, then records it for staff", async () => {
@@ -694,7 +696,7 @@ describe("office drafting style in the sale flow", () => {
       property: { district: "ग्वालियर", propertyType: "residential_plot", khasraOrPlotNo: "45", areaValue: 1500, areaUnit: "वर्ग फुट" },
     };
     const extractor = { extract: vi.fn(async () => plotDeed) };
-    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any);
+    const svc = new DraftIntakeService(prisma as any, extractor as any, { lookup: vi.fn(async () => null) } as any, {} as any);
     return { cur, svc, say: (t: string) => svc.handleText({ phone: "919876543210", name: "अ" }, t) };
   }
 
@@ -737,16 +739,16 @@ describe("DraftIntakeService", () => {
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update } };
-    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any);
     const replies = await svc.handleText({ phone: "919876543210", name: "राम" }, "हाँ");
     expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW" } });
     expect(replies?.[0]).toContain("XYZ123");
   });
 
   it("the buyer-name question says to write only the name", async () => {
-    const cur = { id: "x", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: {}, needsStaff: false };
+    const cur = { id: "x", step: "CONFIRM_PROPERTY", status: "ACTIVE", data: { ...PHOTOS_DONE }, needsStaff: false };
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update: vi.fn(async () => ({})) } };
-    const replies = await new DraftIntakeService(prisma as any, {} as any, {} as any).handleText({ phone: "1", name: "" }, "हाँ");
+    const replies = await new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any).handleText({ phone: "1", name: "" }, "हाँ");
     expect(replies?.[0]).toContain("सिर्फ़ नाम लिखें");
     expect(replies?.[0]).toContain("पिता/पति का नाम आगे पूछा जाएगा");
   });

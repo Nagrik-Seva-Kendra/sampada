@@ -636,10 +636,15 @@ model DraftIntake {
   /// Staff member (User.id, an ACTIVE member of organizationId) handling it.
   assigneeId     String?
   staffNote      String?
+  /// When workStatus last became DONE or REJECTED (null while open). ID photos are deleted WA_ID_PHOTO_RETENTION_DAYS after this.
+  closedAt         DateTime?
+  /// When the ID-card photos of this request were deleted by the retention job.
+  idPhotosPurgedAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([organizationId, phone, status])
+  @@index([closedAt])
   @@index([organizationId, workStatus])
 }
 
