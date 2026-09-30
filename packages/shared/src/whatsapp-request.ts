@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { IdPhotoKind } from "./id-photos.js";
 
 /**
  * API contract for the web "WhatsApp अनुरोध" pages: draft requests collected
@@ -60,6 +61,26 @@ export interface WaPerson {
   email: string | null;
   address: string | null;
   aadhaarMasked: string | null;
+  /** Read from the Aadhaar/PAN card when the customer confirmed it. */
+  dob?: string | null;
+  gender?: string | null;
+  panMasked?: string | null;
+}
+
+/** State of one ID photo: received (viewable), customer will send later, deleted by retention, or not yet. */
+export type WaIdPhotoState = "received" | "later" | "deleted" | null;
+
+/** One person's ID-card photos and the checks made on them. */
+export interface WaIdCards {
+  /** "buyer" | "mortgagor" | "witness1" | "witness2" -- used by GET /:id/id-photo?party=. */
+  party: string;
+  heading: string;
+  photos: { kind: IdPhotoKind; label: string; state: WaIdPhotoState }[];
+  /** Filled from the card after the customer said "हाँ" (else typed). */
+  aadhaarFromCard: boolean;
+  panFromCard: boolean;
+  /** Hindi warnings ("आधार और PAN कार्ड पर नाम मेल नहीं खाता" ...). */
+  warnings: string[];
 }
 
 export interface WaRequestList {
@@ -100,6 +121,8 @@ export interface WaRequestDetail extends WaRequestListItem {
     address: string | null;
     aadhaarMasked: string | null;
     panMasked: string | null;
+    dob?: string | null;
+    gender?: string | null;
   };
   sellerPanMasked: string | null;
   tax: { panRequired: boolean; sftReported: boolean; tdsApplies: boolean } | null;
@@ -131,6 +154,10 @@ export interface WaRequestDetail extends WaRequestListItem {
   } | null;
   /** "कोई और दस्तावेज़": what the customer wrote they want (e.g. "दान पत्र"). */
   requestedDeed: string | null;
+  /** ID-card photos per person (empty when none were asked). */
+  idCards: WaIdCards[];
+  /** When the ID photos were deleted by the retention job (ISO), else null. */
+  idPhotosPurgedAt: string | null;
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: { index: number; label: string }[];
   /** Whether the caller may use POST /reveal. */

@@ -1,17 +1,22 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   formatParty,
+  ID_PHOTO_LABEL,
+  type IdPhotoKind,
   parseRelation,
   type PartyField,
   plotAreaShort,
   type Relation,
   SAMPADA_REQUIRED_PARTY_FIELDS,
+  SAMPADA_REQUIRED_PARTY_PHOTOS,
   splitNameRelation,
   stripHonorific,
 } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service.js";
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
+import { IdCardExtractorService } from "./id-card-extractor.service.js";
+import { idWarningsFor, mapIdRead } from "./id-cards.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
   detectDeedIntent,
@@ -80,6 +85,8 @@ const PLOT_STEPS = [
   },
 ] as const;
 const PLOT_FIELDS = PLOT_STEPS.map((s) => s.field);
+/** ID-photo bookkeeping kept when the customer re-enters their details ("बदलें"). */
+const ID_KEEP = ["idPhotos", "idFiles", "idTries", "idDone", "idNoticeShown", "idRead"];
 
 /** Plot deeds (residential or commercial plot) get the plot questions. */
 export function isPlotDeed(deed: DeedExtract | null | undefined): boolean {
@@ -112,12 +119,57 @@ const FIELD_STEP: Record<PartyField, string> = {
 };
 /** The first unanswered SAMPADA-required question for the parties of this deed, or null. */
 function firstMissingSampadaStep(d: any): string | null {
-  const parties = d.deedType === "mortgage" ? ["mortgagor", "witness1", "witness2"] : d.deedType === "other" ? [] : ["buyer"];
-  for (const p of parties) {
+  for (const p of partyPrefixes(d)) {
     for (const f of SAMPADA_REQUIRED_PARTY_FIELDS) {
       const key = `${p}${FIELD_STEP[f]}`;
       if (!String(d[key] ?? "").trim()) return key;
     }
+  }
+  return null;
+}
+
+/** The people whose details the bot collects for this deed. */
+export function partyPrefixes(d: any): string[] {
+  return d.deedType === "mortgage" ? MORTGAGE_PEOPLE.map((m) => m.prefix) : d.deedType === "other" ? [] : ["buyer"];
+}
+
+// ---------- ID-card photos (before each person's typed questions) ----------
+// Each person first sends Aadhaar front/back, PAN and a passport photo
+// (SAMPADA_REQUIRED_PARTY_PHOTOS). Aadhaar and PAN are read by the vision
+// reader and shown back masked; "हाँ" fills the fields, "बदलें" leaves them
+// to be typed. An unreadable photo is asked again once; after two failures the
+// details are typed and the request gets "स्टाफ जाँच". The photos are stored
+// (R2) only for this request and deleted after it is closed (IdPhotoRetentionService).
+const ID_NOTICE =
+  "टाइपिंग की गलती न हो, इसलिए पहचान पत्रों की फ़ोटो से जानकारी पढ़ी जाएगी।\n" +
+  "🔒 आपके दस्तावेज़ सिर्फ़ रजिस्ट्री के काम के लिए रखे जाएंगे और काम पूरा होने के बाद हटा दिए जाएंगे।";
+const ID_LATER_HINT = '(फ़ोटो अभी न हो तो "बाद में" लिखें।)';
+const partyWho = (prefix: string) =>
+  prefix === "buyer" ? "खरीदार" : (MORTGAGE_PEOPLE.find((m) => m.prefix === prefix)?.heading ?? "पक्षकार");
+const ID_ASK: Record<IdPhotoKind, (who: string) => string> = {
+  aadhaarFront: (who) => `${who} के आधार कार्ड के आगे वाले हिस्से (फ़ोटो, नाम और आधार नंबर वाला) की साफ़ फ़ोटो भेजें।`,
+  aadhaarBack: (who) => `अब ${who} के आधार कार्ड के पीछे वाले हिस्से (पते वाला) की साफ़ फ़ोटो भेजें।`,
+  pan: (who) => `${who} के PAN कार्ड की साफ़ फ़ोटो भेजें।`,
+  passportPhoto: (who) => `${who} की एक पासपोर्ट साइज़ फ़ोटो भेजें (सामने से, चेहरा साफ़ दिखे)। SAMPADA 2.0 पर पक्षकार की फ़ोटो लगती है।`,
+};
+const ID_RETRY = "फ़ोटो साफ़ नहीं पढ़ी जा सकी। कृपया अच्छी रोशनी में, पूरा कार्ड दिखाते हुए, बिना चमक के साफ़ फ़ोटो दोबारा भेजें।";
+const ID_GAVE_UP = "फ़ोटो फिर भी नहीं पढ़ी जा सकी। कोई बात नहीं — यह जानकारी आगे लिखकर भेज दें, हमारा स्टाफ फ़ोटो से मिलान कर लेगा।";
+const AADHAAR_KINDS: IdPhotoKind[] = ["aadhaarFront", "aadhaarBack"];
+const idStepRe = /^ID_PHOTO:(buyer|mortgagor|witness1|witness2):(aadhaarFront|aadhaarBack|pan|passportPhoto)$/;
+const idOkRe = /^ID_OK:(buyer|mortgagor|witness1|witness2):(aadhaar|pan)$/;
+const personNameRe = /^(buyer|mortgagor|witness1|witness2)Name$/;
+const aadhaarSpaced = (masked: string) => masked.replace(/^X{4}(\d{4})$/, "XXXX XXXX $1");
+
+/** Next ID step for this person, or null when their photos are done. */
+export function idNext(prefix: string, d: any): string | null {
+  const photos = d.idPhotos?.[prefix] ?? {};
+  const pend = d.idPending?.[prefix] ?? {};
+  const kinds = SAMPADA_REQUIRED_PARTY_PHOTOS;
+  const lastAadhaar = [...kinds].reverse().find((k) => AADHAAR_KINDS.includes(k));
+  for (const k of kinds) {
+    if (photos[k] === undefined) return `ID_PHOTO:${prefix}:${k}`;
+    if (k === lastAadhaar && pend.aadhaar && pend.aadhaarOk === undefined) return `ID_OK:${prefix}:aadhaar`;
+    if (k === "pan" && pend.pan && pend.panOk === undefined) return `ID_OK:${prefix}:pan`;
   }
   return null;
 }
@@ -246,6 +298,7 @@ export class DraftIntakeService {
     private readonly prisma: PrismaService,
     private readonly extractor: DeedExtractorService,
     private readonly guideline: GuidelineLookupService,
+    private readonly idReader: IdCardExtractorService,
   ) {}
 
   // ================= document received =================
@@ -253,6 +306,13 @@ export class DraftIntakeService {
     const cur = await this.active(ctx.phone);
     if (cur) {
       const data: any = { ...(cur.data as any) };
+      if (idStepRe.test(cur.step)) return this.receiveIdPhoto(cur, data, file);
+      if (idOkRe.test(cur.step)) {
+        // Probably a card photo again: keep it with the ID files (deleted on retention), not the documents.
+        data.idFiles = [...(data.idFiles ?? []), file.key];
+        await this.save(cur.id, { data });
+        return ['कृपया पहले ऊपर पढ़ी गई जानकारी के लिए "हाँ" या "बदलें" लिखें।\n\n' + this.question(cur.step, data)];
+      }
       data.extraDocs = [...(data.extraDocs ?? []), file.key];
       if (data.deedType === "mortgage" && cur.step in DOC_STEP) return this.receiveMortgageDoc(cur, data, file);
       await this.save(cur.id, { data });
@@ -334,11 +394,8 @@ export class DraftIntakeService {
         const next = PLOT_STEPS[i + 1]?.key ?? BUYER_STEPS[0]!.key;
         if (step.key === "PLOT_BUILDING" && answer !== false) {
           // A house (or not knowing) means the value needs construction details.
-          await this.save(cur.id, { data, step: next, needsStaff: true });
-          return [
-            "ठीक है। मकान/निर्माण वाली संपत्ति का मूल्य स्टाफ निर्माण का विवरण लेकर तय करेगा।",
-            this.question(next, data),
-          ];
+          await this.save(cur.id, { needsStaff: true });
+          return this.goto(cur.id, data, next, "ठीक है। मकान/निर्माण वाली संपत्ति का मूल्य स्टाफ निर्माण का विवरण लेकर तय करेगा।");
         }
         return this.goto(cur.id, data, next);
       }
@@ -387,7 +444,7 @@ export class DraftIntakeService {
         if (/बदल|change|edit/i.test(v)) {
           // Re-collect the people's details; the deed type and plot answers stay.
           const keep = Object.fromEntries(
-            ["deedType", "docs", "ownerIsCurrent", "registryOwners", "extraDocs", ...PLOT_FIELDS]
+            ["deedType", "docs", "ownerIsCurrent", "registryOwners", "extraDocs", ...PLOT_FIELDS, ...ID_KEEP]
               .filter((f) => f in data)
               .map((f) => [f, data[f]]),
           );
@@ -397,6 +454,8 @@ export class DraftIntakeService {
         return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
 
       default: {
+        if (idStepRe.test(cur.step)) return this.idPhotoText(cur, data, v);
+        if (idOkRe.test(cur.step)) return this.idConfirm(cur, data, v);
         const step = ANY_STEPS.find((s) => s.key === cur.step);
         if (!step) return null;
         const optional = step.optional || (step === PAN_STEP && !data.tax?.panRequired);
@@ -419,10 +478,8 @@ export class DraftIntakeService {
           const clean = prefix || /FatherName$|MotherName$/.test(step.key) ? stripHonorific(val) : val;
           data[step.key] = step.secret && clean ? encrypt(clean) : clean;
         }
-        // Skip questions already answered (e.g. by the split above).
-        let next = this.nextStep(step.key, data);
-        while (ANY_STEPS.some((x) => x.key === next) && data[next] !== undefined) next = this.nextStep(next, data);
-        return this.goto(cur.id, data, next);
+        // Skip questions already answered (e.g. by the split above or an ID card).
+        return this.goto(cur.id, data, this.advance(step.key, data));
       }
     }
   }
@@ -497,11 +554,10 @@ export class DraftIntakeService {
       else patch.needsStaff = true;
     }
     const next = mortgageNext(data);
-    await this.save(cur.id, { ...patch, data, step: next });
+    if (Object.keys(patch).length) await this.save(cur.id, patch);
     const reply = [MORTGAGE_DOC_RECEIVED[role]];
     if (next === MORTGAGE_STEPS[0]!.key) reply.push("अब बंधककर्ता और दो गवाहों की जानकारी लेते हैं।");
-    reply.push(this.question(next, data));
-    return reply;
+    return [...reply, ...(await this.goto(cur.id, data, next))];
   }
 
   /** Buyer steps → AMOUNT → buyer PAN → seller PAN (only if TDS) → FINAL; mortgage: people in order → FINAL. */
@@ -562,10 +618,9 @@ export class DraftIntakeService {
     data.tax = flags;
     out.push(taxNotice(flags));
 
-    const next = this.nextStep("AMOUNT", data);
-    await this.save(cur.id, { data, step: next, needsStaff });
-    out.push(this.question(next, data));
-    return out;
+    const next = this.advance("AMOUNT", data);
+    await this.save(cur.id, { needsStaff });
+    return [...out, ...(await this.goto(cur.id, data, next))];
   }
 
   private guidelineMsg(g: GuidelineResult): string {
@@ -629,7 +684,12 @@ export class DraftIntakeService {
   }
 
   private async submit(cur: any): Promise<string[]> {
-    await this.save(cur.id, { status: "SUBMITTED", workStatus: "NEW" });
+    const d = (cur.data ?? {}) as any;
+    // Aadhaar vs PAN name, PAN father vs typed father, unreadable cards → staff check.
+    const idWarn = partyPrefixes(d).some(
+      (p) => idWarningsFor(d.idRead?.[p], { fatherName: d[`${p}FatherName`], relation: d[`${p}Relation`] }).length > 0,
+    );
+    await this.save(cur.id, { status: "SUBMITTED", workStatus: "NEW", ...(idWarn ? { needsStaff: true } : {}) });
     // workStatus NEW puts it on the office's "WhatsApp अनुरोध" page.
     // TODO: notify staff (e.g. push/email) when a new request arrives.
     const ref = String(cur.id).slice(-6).toUpperCase();
@@ -671,9 +731,165 @@ export class DraftIntakeService {
     return this.prisma.draftIntake.update({ where: { id }, data });
   }
 
+  /** Saves and asks `step` -- or, before a person's first question, their ID photos. */
   private async goto(id: string, data: any, step: string, prefix?: string): Promise<string[]> {
+    const person = step.match(personNameRe)?.[1];
+    if (person && !data.idDone?.[person]) {
+      const id0 = idNext(person, data);
+      if (id0) step = id0;
+      else data.idDone = { ...(data.idDone ?? {}), [person]: true };
+    }
+    const out = prefix ? [prefix] : [];
+    if (step.startsWith("ID_PHOTO:") && !data.idNoticeShown) {
+      data.idNoticeShown = true;
+      out.push(ID_NOTICE);
+    }
     await this.save(id, { data, step });
-    return [...(prefix ? [prefix] : []), this.question(step, data)];
+    return [...out, this.question(step, data)];
+  }
+
+  /** The question after `from`, skipping ones already answered (typed or from an ID card). */
+  private advance(from: string, data: any): string {
+    let next = this.nextStep(from, data);
+    while (ANY_STEPS.some((x) => x.key === next) && data[next] !== undefined) next = this.nextStep(next, data);
+    return next;
+  }
+
+  // ================= ID-card photos =================
+  /** After the person's photos: their first unanswered typed question. */
+  private afterId(prefix: string, data: any): string {
+    data.idDone = { ...(data.idDone ?? {}), [prefix]: true };
+    const first = `${prefix}Name`;
+    return data[first] === undefined ? first : this.advance(first, data);
+  }
+
+  private nextAfterPhoto(prefix: string, data: any): string {
+    return idNext(prefix, data) ?? this.afterId(prefix, data);
+  }
+
+  private async receiveIdPhoto(cur: any, data: any, file: IncomingFile): Promise<string[]> {
+    const [, prefix, kind] = cur.step.match(idStepRe) as [string, string, IdPhotoKind];
+    // Every ID file is listed for deletion after the request closes, even a rejected blurry one.
+    data.idFiles = [...(data.idFiles ?? []), file.key];
+    const setPhoto = () => {
+      data.idPhotos = { ...(data.idPhotos ?? {}), [prefix]: { ...(data.idPhotos?.[prefix] ?? {}), [kind]: file.key } };
+    };
+    if (kind === "passportPhoto") {
+      setPhoto();
+      return this.goto(cur.id, data, this.nextAfterPhoto(prefix, data), `✅ ${ID_PHOTO_LABEL[kind]} मिल गई।`);
+    }
+    const raw = await this.idReader.read(file.buf, file.mime).catch((e) => {
+      this.log.error(`ID card read failed: ${e?.name ?? "error"}`);
+      return null;
+    });
+    const pend = { ...(data.idPending?.[prefix] ?? {}) };
+    let ok = false;
+    let wrongCard = false;
+    if (kind === "pan") {
+      const r = mapIdRead("pan", raw);
+      if (r.ok) {
+        ok = true;
+        pend.pan = { pan: encrypt(r.value.pan), nameEn: r.value.nameEn, fatherEn: r.value.fatherEn, dob: r.value.dob };
+      } else wrongCard = r.reason === "wrongCard";
+    } else if (kind === "aadhaarFront") {
+      const r = mapIdRead("aadhaarFront", raw);
+      if (r.ok) {
+        ok = true;
+        const v = r.value;
+        pend.aadhaar = { ...(pend.aadhaar ?? {}), aadhaar: encrypt(v.aadhaar), name: v.name, nameEn: v.nameEn, dob: v.dob, gender: v.gender, ...(v.address ? { address: v.address } : {}) };
+      } else wrongCard = r.reason === "wrongCard";
+    } else {
+      const r = mapIdRead("aadhaarBack", raw);
+      if (r.ok) {
+        ok = true;
+        pend.aadhaar = { ...(pend.aadhaar ?? {}), address: r.value.address };
+      } else wrongCard = r.reason === "wrongCard";
+    }
+    const tries = (data.idTries?.[prefix]?.[kind] ?? 0) + 1;
+    data.idTries = { ...(data.idTries ?? {}), [prefix]: { ...(data.idTries?.[prefix] ?? {}), [kind]: tries } };
+    if (!ok && tries < 2) {
+      await this.save(cur.id, { data });
+      return [wrongCard ? `यह ${ID_PHOTO_LABEL[kind]} नहीं लग रहा। कृपया ${ID_PHOTO_LABEL[kind]} की साफ़ फ़ोटो भेजें।` : ID_RETRY];
+    }
+    setPhoto(); // the latest photo is kept for staff even when unreadable
+    data.idPending = { ...(data.idPending ?? {}), [prefix]: pend };
+    if (!ok) {
+      data.idRead = { ...(data.idRead ?? {}), [prefix]: { ...(data.idRead?.[prefix] ?? {}), unreadable: true } };
+      await this.save(cur.id, { needsStaff: true });
+      return this.goto(cur.id, data, this.nextAfterPhoto(prefix, data), ID_GAVE_UP);
+    }
+    return this.goto(cur.id, data, this.nextAfterPhoto(prefix, data), `✅ ${ID_PHOTO_LABEL[kind]} मिल गया।`);
+  }
+
+  /** Text while a photo is expected: "बाद में" skips it (staff check), anything else asks again. */
+  private async idPhotoText(cur: any, data: any, v: string): Promise<string[]> {
+    const [, prefix, kind] = cur.step.match(idStepRe) as [string, string, IdPhotoKind];
+    if (!(LATER.test(v) || SKIP.test(v) || /नहीं है|नही है|nahi hai|not available/i.test(v))) {
+      return [`कृपया ${ID_PHOTO_LABEL[kind]} की फ़ोटो भेजें। ${ID_LATER_HINT}`];
+    }
+    data.idPhotos = { ...(data.idPhotos ?? {}), [prefix]: { ...(data.idPhotos?.[prefix] ?? {}), [kind]: "later" } };
+    await this.save(cur.id, { needsStaff: true });
+    return this.goto(cur.id, data, this.nextAfterPhoto(prefix, data), `ठीक है, ${ID_PHOTO_LABEL[kind]} बाद में भेज दें।`);
+  }
+
+  /** "ये सही है?" after reading a card: हाँ fills the fields, बदलें leaves them to be typed. */
+  private async idConfirm(cur: any, data: any, v: string): Promise<string[]> {
+    const [, prefix, card] = cur.step.match(idOkRe) as [string, string, "aadhaar" | "pan"];
+    const yes = YES.test(v);
+    if (!yes && !(/बदल|change|edit|गलत|galat|wrong/i.test(v) || NO.test(v))) {
+      return ['कृपया "हाँ" या "बदलें" लिखें।\n\n' + this.question(cur.step, data)];
+    }
+    const pend = { ...(data.idPending?.[prefix] ?? {}) };
+    const read = { ...(data.idRead?.[prefix] ?? {}) };
+    if (card === "aadhaar") {
+      pend.aadhaarOk = yes;
+      if (yes && pend.aadhaar) {
+        const a = pend.aadhaar;
+        if (a.name) data[`${prefix}Name`] = stripHonorific(a.name);
+        if (a.aadhaar) data[`${prefix}Aadhaar`] = a.aadhaar; // already encrypted
+        if (a.address) data[`${prefix}Address`] = a.address;
+        if (a.dob) data[`${prefix}Dob`] = a.dob;
+        if (a.gender) data[`${prefix}Gender`] = a.gender;
+        read.aadhaarName = a.name ?? null;
+        read.aadhaarNameEn = a.nameEn ?? null;
+      }
+    } else {
+      pend.panOk = yes;
+      if (yes && pend.pan) {
+        const p = pend.pan;
+        data[`${prefix}Pan`] = p.pan; // already encrypted
+        if (p.dob && !data[`${prefix}Dob`]) data[`${prefix}Dob`] = p.dob;
+        read.panName = p.nameEn ?? null;
+        read.panFather = p.fatherEn ?? null;
+      }
+    }
+    data.idPending = { ...(data.idPending ?? {}), [prefix]: pend };
+    data.idRead = { ...(data.idRead ?? {}), [prefix]: read };
+    return this.goto(cur.id, data, this.nextAfterPhoto(prefix, data), yes ? "✅ ठीक है, यही जानकारी भर दी गई।" : "ठीक है, यह जानकारी आगे लिखकर भेजें।");
+  }
+
+  private idConfirmAsk(step: string, data: any): string {
+    const [, prefix, card] = step.match(idOkRe) as [string, string, "aadhaar" | "pan"];
+    const pend = data.idPending?.[prefix] ?? {};
+    const lines: string[] = [];
+    if (card === "aadhaar") {
+      const a = pend.aadhaar ?? {};
+      lines.push(`${partyWho(prefix)} के आधार कार्ड से यह जानकारी पढ़ी गई:`);
+      if (a.name) lines.push(`नाम: ${a.name}`);
+      if (a.dob) lines.push(`जन्म तिथि: ${a.dob}`);
+      if (a.gender) lines.push(`लिंग: ${a.gender}`);
+      if (a.aadhaar) lines.push(`आधार: ${aadhaarSpaced(mask(decrypt(a.aadhaar)))}`);
+      if (a.address) lines.push(`पता: ${a.address}`);
+    } else {
+      const p = pend.pan ?? {};
+      lines.push(`${partyWho(prefix)} के PAN कार्ड से यह जानकारी पढ़ी गई:`);
+      if (p.nameEn) lines.push(`नाम: ${p.nameEn}`);
+      if (p.fatherEn) lines.push(`पिता का नाम: ${p.fatherEn}`);
+      if (p.dob) lines.push(`जन्म तिथि: ${p.dob}`);
+      if (p.pan) lines.push(`PAN: ${mask(decrypt(p.pan))}`);
+    }
+    lines.push("", 'क्या यह सही है? सही है तो "हाँ" लिखें, नहीं तो "बदलें" लिखें (तब जानकारी लिखकर भेजनी होगी)।');
+    return lines.join("\n");
   }
 
   private question(step: string, data: any): string {
@@ -687,6 +903,12 @@ export class DraftIntakeService {
     if (step === "M_REGISTRY") return M_REGISTRY_ASK;
     if (step === "M_TRANSFER") return M_TRANSFER_ASK;
     if (step === "M_OWNER") return ownerAsk(data);
+    const idm = step.match(idStepRe);
+    if (idm) {
+      const tries = data.idTries?.[idm[1]!]?.[idm[2]!] ?? 0;
+      return (tries ? ID_RETRY : ID_ASK[idm[2] as IdPhotoKind](partyWho(idm[1]!))) + "\n" + ID_LATER_HINT;
+    }
+    if (idOkRe.test(step)) return this.idConfirmAsk(step, data);
     const plot = PLOT_STEPS.find((s) => s.key === step);
     if (plot) return plot.ask;
     if (step === PAN_STEP.key && !data.tax?.panRequired) return PAN_STEP.ask + " PAN न हो तो \"नहीं\" लिखें।";

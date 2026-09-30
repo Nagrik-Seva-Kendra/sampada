@@ -51,6 +51,23 @@ export class WaRequestsController {
     return this.service.update(id, WaRequestUpdateInput.parse(body));
   }
 
+  /** One ID-card photo (?party=buyer|mortgagor|witness1|witness2&kind=aadhaarFront|aadhaarBack|pan|passportPhoto), inline only. */
+  @Get(":id/id-photo")
+  async idPhoto(
+    @Param("id") id: string,
+    @Query("party") party: string | undefined,
+    @Query("kind") kind: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const f = await this.service.idPhoto(id, String(party ?? ""), String(kind ?? ""));
+    res.set({
+      "Content-Type": f.mimeType,
+      "Content-Disposition": "inline; filename=" + JSON.stringify(f.fileName),
+      "Cache-Control": "private, no-store",
+    });
+    return new StreamableFile(f.data);
+  }
+
   /** Original file the customer sent (?i=0 registry, 1.. extras). ?view=1 previews inline. */
   @Get(":id/document")
   async document(

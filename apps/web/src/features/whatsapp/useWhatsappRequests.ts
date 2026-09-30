@@ -104,3 +104,13 @@ export function useWaDocumentOpener() {
       .blob()
       .then((b) => URL.createObjectURL(b));
 }
+
+/** One ID-card photo as an object URL (same access as the request: OWNER/ADMIN or its assignee). */
+export function useWaIdPhotoOpener() {
+  const token = useAuthStore((s) => s.token);
+  return (id: string, party: string, kind: string) =>
+    api
+      .get(`whatsapp/requests/${id}/id-photo`, { headers: authHeaders(token), searchParams: { party, kind } })
+      .blob()
+      .then((b) => URL.createObjectURL(b));
+}
