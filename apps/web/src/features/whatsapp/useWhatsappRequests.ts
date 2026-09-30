@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   WaAssignee,
+  WaDraftForCustomer,
   WaNotification,
   WaTemplateStatus,
   WaRequestDetail,
@@ -105,6 +106,26 @@ export function useWaDocumentOpener() {
       .get(`whatsapp/requests/${id}/document`, { headers: authHeaders(token), searchParams: { i: String(index) } })
       .blob()
       .then((b) => URL.createObjectURL(b));
+}
+
+/** OWNER/ADMIN: the linked deed's customer-copy text (Aadhaar/PAN cut to the last 4 by the API). */
+export function useDraftForCustomer() {
+  const token = useAuthStore((s) => s.token);
+  return (id: string) =>
+    api.get(`whatsapp/requests/${id}/draft-for-customer`, { headers: authHeaders(token) }).json<WaDraftForCustomer>();
+}
+
+/** OWNER/ADMIN: send the customer-copy PDF on WhatsApp. */
+export function useSendWaDraft(id: string) {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<WaRequestDetail, Error, string>({
+    mutationFn: (pdfBase64) =>
+      api
+        .post(`whatsapp/requests/${id}/send-draft`, { headers: authHeaders(token), json: { pdfBase64 }, timeout: 120_000 })
+        .json<WaRequestDetail>(),
+    onSuccess: (detail) => qc.setQueryData(["wa-requests", "detail", id], detail),
+  });
 }
 
 /** Resend a PENDING WhatsApp message of this request, then refresh the request. */

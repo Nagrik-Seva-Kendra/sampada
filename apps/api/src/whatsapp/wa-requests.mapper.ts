@@ -97,7 +97,7 @@ export function propertySummary(p: WaPropertySummary | null): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-const WORK_STATUSES = new Set(["NEW", "IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"]);
+const WORK_STATUSES = new Set(["NEW", "IN_PROGRESS", "DRAFT_READY", "CUSTOMER_APPROVED", "CORRECTION_REQUESTED", "DONE", "REJECTED"]);
 const INTAKE_STATUSES = new Set(["ACTIVE", "SUBMITTED", "CANCELLED"]);
 
 export function toListItem(row: DraftIntakeRow, assigneeName: string | null): WaRequestListItem {
@@ -303,4 +303,17 @@ export function localMediaPath(key: string, mediaDir = process.env.WA_MEDIA_DIR 
   const full = resolve(join(root, key.replace(/^whatsapp\/[^/]+\//, "whatsapp/")));
   const rel = relative(root, full);
   return rel && !rel.startsWith("..") && !isAbsolute(rel) ? full : null;
+}
+
+/** Draft state for the detail page, from DraftIntake.data.draftReview. */
+export function draftReviewOf(d: any): WaRequestDetail["draftReview"] {
+  const r = d?.draftReview;
+  if (!r || typeof r !== "object") return null;
+  const state = r.result === "approved" ? "approved" : r.result === "correction" ? "correction" : r.awaiting ? "sent" : "pending";
+  return {
+    state,
+    sentAt: typeof r.sentAt === "string" ? r.sentAt : null,
+    reply: typeof r.reply?.text === "string" ? r.reply.text : null,
+    replyAt: typeof r.reply?.at === "string" ? r.reply.at : null,
+  };
 }

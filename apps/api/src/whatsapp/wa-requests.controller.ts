@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { WaRequestUpdateInput, WaWorkStatus } from "@sampada/shared";
+import { WaRequestUpdateInput, WaSendDraftInput, WaWorkStatus } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
+import { DraftReviewService } from "./draft-review.service.js";
 import { WaRequestsService } from "./wa-requests.service.js";
 
 /**
@@ -12,7 +13,10 @@ import { WaRequestsService } from "./wa-requests.service.js";
 @Controller("whatsapp/requests")
 @UseGuards(JwtStaffGuard)
 export class WaRequestsController {
-  constructor(private readonly service: WaRequestsService) {}
+  constructor(
+    private readonly service: WaRequestsService,
+    private readonly drafts: DraftReviewService,
+  ) {}
 
   @Get()
   list(@Query("workStatus") workStatus?: string, @Query("needsStaff") needsStaff?: string) {
@@ -49,6 +53,20 @@ export class WaRequestsController {
   @Patch(":id")
   update(@Param("id") id: string, @Body() body: unknown) {
     return this.service.update(id, WaRequestUpdateInput.parse(body));
+  }
+
+  /** OWNER/ADMIN: the linked deed's text for the customer copy (Aadhaar/PAN only last 4). Never cached. */
+  @Get(":id/draft-for-customer")
+  async draftForCustomer(@Param("id") id: string, @Res({ passthrough: true }) res: Response) {
+    res.set("Cache-Control", "no-store");
+    return this.drafts.forCustomer(id);
+  }
+
+  /** OWNER/ADMIN: send the customer-copy PDF (built in the browser from draft-for-customer) on WhatsApp. */
+  @Post(":id/send-draft")
+  async sendDraft(@Param("id") id: string, @Body() body: unknown) {
+    await this.drafts.send(id, WaSendDraftInput.parse(body).pdfBase64);
+    return this.service.detail(id);
   }
 
   /** Resend a message that is still PENDING ("ग्राहक को संदेश बाकी"). */

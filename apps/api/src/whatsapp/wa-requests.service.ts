@@ -22,6 +22,7 @@ import type { TenantContext } from "../tenant/tenant-context.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   documentKeyAt,
+  draftReviewOf,
   type DraftIntakeRow,
   idPhotoKeyAt,
   localMediaPath,
@@ -109,10 +110,21 @@ export class WaRequestsService {
   async detail(id: string): Promise<WaRequestDetail> {
     const tenant = requireTenantContext(this.cls);
     const row = await this.find(id, tenant);
-    const [names, notifications] = await Promise.all([this.userNames([row.assigneeId]), this.outbox.list(row.id)]);
+    const deedId = (row as { deedTemplateId?: string | null }).deedTemplateId ?? null;
+    const [names, notifications, deed] = await Promise.all([
+      this.userNames([row.assigneeId]),
+      this.outbox.list(row.id),
+      deedId
+        ? this.prisma.deedTemplate.findFirst({ where: { id: deedId, organizationId: tenant.organizationId }, select: { id: true, type: true, title: true } })
+        : Promise.resolve(null),
+    ]);
+    const canManage = isManagerRole(tenant.role);
     return {
-      ...toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, isManagerRole(tenant.role)),
+      ...toDetail(row, row.assigneeId ? (names.get(row.assigneeId) ?? null) : null, canManage),
       notifications,
+      deed: deed ?? null,
+      draftReview: draftReviewOf(row.data),
+      canSendDraft: canManage && !!deed && row.workStatus === "DRAFT_READY",
     };
   }
 
@@ -146,12 +158,20 @@ export class WaRequestsService {
       });
       if (!member) throw new BadRequestException("यह व्यक्ति इस संस्था का सक्रिय सदस्य नहीं है।");
     }
+    if (input.deedTemplateId) {
+      const deed = await this.prisma.deedTemplate.findFirst({
+        where: { id: input.deedTemplateId, organizationId: tenant.organizationId },
+        select: { id: true },
+      });
+      if (!deed) throw new BadRequestException("यह डीड इस संस्था में नहीं मिली।");
+    }
     await this.prisma.draftIntake.updateMany({
       where: { id, ...visibleWhere(tenant) },
       data: {
         ...(input.workStatus !== undefined ? { workStatus: input.workStatus, closedAt: closedAtFor(before, input.workStatus) } : {}),
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
         ...(input.staffNote !== undefined ? { staffNote: input.staffNote?.trim() || null } : {}),
+        ...(input.deedTemplateId !== undefined ? { deedTemplateId: input.deedTemplateId } : {}),
       },
     });
     if (input.workStatus !== undefined && input.workStatus !== prevStatus && before.status === "SUBMITTED") {

@@ -631,7 +631,7 @@ model DraftIntake {
   deed           Json?
   documentKey    String?
   needsStaff     Boolean  @default(false)
-  /// Office workflow once submitted: NEW | IN_PROGRESS | DRAFT_READY | DONE | REJECTED (null before submit).
+  /// Office workflow once submitted: NEW | IN_PROGRESS | DRAFT_READY | CUSTOMER_APPROVED | CORRECTION_REQUESTED | DONE | REJECTED (null before submit).
   workStatus     String?
   /// Staff member (User.id, an ACTIVE member of organizationId) handling it.
   assigneeId     String?
@@ -640,6 +640,8 @@ model DraftIntake {
   closedAt         DateTime?
   /// When the ID-card photos of this request were deleted by the retention job.
   idPhotosPurgedAt DateTime?
+  /// The deed (DeedTemplate.id, same organization) drafted for this request.
+  deedTemplateId String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

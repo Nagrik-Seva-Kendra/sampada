@@ -15,9 +15,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "../../lib/api";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
+import { deedPdfBase64 } from "../deeds/deedPdf";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
 import {
+  useDraftForCustomer,
   useResendWaNotification,
+  useSendWaDraft,
   useRevealWaRequest,
   useUpdateWaRequest,
   useWaAssignees,
@@ -107,6 +110,108 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
  * SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
  * address for every party's ID. Shows what this party is still missing.
  */
+const DRAFT_STATE: Record<string, string> = {
+  pending: "अभी ग्राहक तक नहीं पहुँचा — कारण नीचे संदेशों में; विंडो बंद हो तो ग्राहक का संदेश आते ही अपने-आप जाएगा",
+  sent: "भेजा गया — ग्राहक के जवाब का इंतज़ार",
+  approved: "ग्राहक ने सही बताया ✅",
+  correction: "ग्राहक ने सुधार माँगा ✏️",
+};
+const WATERMARK = "DRAFT - केवल जाँच हेतु";
+
+/** "/deeds/sale-deed/edit/<id>" or a bare id → the id. */
+function deedIdFrom(input: string): string | null {
+  const t = input.trim();
+  const m = t.match(/\/edit\/([^/?#\s]+)/);
+  const id = m ? m[1]! : t;
+  return /^[\w-]{6,64}$/.test(id) ? id : null;
+}
+
+/**
+ * The deed linked to this request, and (OWNER/ADMIN, status DRAFT_READY) the
+ * button that sends the customer a watermarked PDF with Aadhaar/PAN cut to the
+ * last 4, plus their "SAHI HAI" / correction answer.
+ */
+function DraftCard({ r }: { r: WaRequestDetail }) {
+  const update = useUpdateWaRequest(r.id);
+  const send = useSendWaDraft(r.id);
+  const loadDraft = useDraftForCustomer();
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function onLink() {
+    setMsg(null);
+    const id = deedIdFrom(link);
+    if (!id) return setMsg("डीड का लिंक या ID सही नहीं है।");
+    try {
+      await update.mutateAsync({ deedTemplateId: id });
+      setLink("");
+    } catch (err) {
+      setMsg(await apiErrorMessage(err, "डीड नहीं जुड़ सकी।"));
+    }
+  }
+  async function onSend() {
+    setMsg(null);
+    if (!window.confirm("ग्राहक को WhatsApp पर ड्राफ्ट (वॉटरमार्क, आधार/PAN के सिर्फ़ आखिरी 4 अंक) भेजें?")) return;
+    setBusy(true);
+    try {
+      const d = await loadDraft(r.id);
+      const pdf = await deedPdfBase64(d.title, d.content, WATERMARK);
+      const detail = await send.mutateAsync(pdf);
+      setMsg(detail.draftReview?.state === "sent" ? "ड्राफ्ट भेज दिया गया।" : "ड्राफ्ट अभी नहीं पहुँचा — नीचे संदेशों में कारण देखें।");
+    } catch (err) {
+      setMsg(await apiErrorMessage(err, "ड्राफ्ट नहीं भेजा जा सका।"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const review = r.draftReview;
+  return (
+    <Card title="ड्राफ्ट और ग्राहक की जाँच">
+      <Field
+        label="जुड़ी हुई डीड"
+        value={
+          r.deed ? (
+            <a href={`/deeds/${r.deed.type}/edit/${r.deed.id}`} target="_blank" rel="noreferrer">
+              {r.deed.title}
+            </a>
+          ) : (
+            "— कोई नहीं"
+          )
+        }
+      />
+      {!r.deed && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "6px 0" }}>
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="मौजूदा डीड का लिंक या ID"
+            style={{ flex: "1 1 240px" }}
+          />
+          <button type="button" className="doc-btn" onClick={onLink} disabled={update.isPending || !link.trim()}>
+            डीड जोड़ें
+          </button>
+        </div>
+      )}
+      {review && (
+        <>
+          <Field label="ड्राफ्ट की स्थिति" value={DRAFT_STATE[review.state]} />
+          {review.reply && <Field label="ग्राहक का जवाब" value={<span style={{ whiteSpace: "pre-wrap" }}>{review.reply}</span>} />}
+        </>
+      )}
+      {r.canSendDraft && (
+        <button type="button" className="btn-calc" style={{ marginTop: 8 }} onClick={onSend} disabled={busy}>
+          {busy ? "PDF बनाकर भेज रहे हैं…" : review ? "ग्राहक को ड्राफ्ट दोबारा भेजें" : "ग्राहक को ड्राफ्ट भेजें"}
+        </button>
+      )}
+      {!r.canSendDraft && r.canAssign && r.deed && r.workStatus !== "DRAFT_READY" && (
+        <p className="doc-sub">ग्राहक को ड्राफ्ट भेजने के लिए स्थिति "ड्राफ्ट तैयार" करें।</p>
+      )}
+      {msg && <p className="doc-sub" role="status">{msg}</p>}
+    </Card>
+  );
+}
+
 const NOTIFICATION_KIND: Record<string, string> = { STATUS: "स्थिति सूचना", ALERT: "मालिक को अलर्ट", DRAFT: "ड्राफ्ट जाँच" };
 
 /** WhatsApp messages sent for this request; PENDING ones get a resend button. */
@@ -339,6 +444,8 @@ export function WhatsappRequestDetailPage() {
       { type, title, content: "" },
       {
         onSuccess: (item) => {
+          // Link the new deed to this request (for "ग्राहक को ड्राफ्ट भेजें").
+          update.mutate({ deedTemplateId: item.id });
           const sample = item.content.trim() ? "&sample=1" : "";
           const url = `/deeds/${type}/edit/${item.id}?new=1${sample}`;
           const tab = window.open(url, "_blank");
@@ -616,6 +723,8 @@ export function WhatsappRequestDetailPage() {
             </>
           )}
         </Card>
+
+        <DraftCard r={r} />
 
         <MessagesCard r={r} />
 

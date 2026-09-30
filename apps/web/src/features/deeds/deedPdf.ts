@@ -59,8 +59,32 @@ export async function downloadDeedPdf(title: string, content: string): Promise<v
   pdf.save(`${sanitizeFilename(title)}.pdf`);
 }
 
+/**
+ * The same PDF as a base64 string, with an optional diagonal watermark on every
+ * page (drawn on the page image, so Devanagari is shaped by the browser).
+ */
+export async function deedPdfBase64(title: string, content: string, watermark?: string): Promise<string> {
+  const pdf = await buildDeedPdf(title, content, watermark);
+  const dataUri = pdf.output("datauristring");
+  return dataUri.slice(dataUri.indexOf(",") + 1);
+}
+
+/** Big translucent diagonal text across a page slice. */
+function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number, text: string): void {
+  ctx.save();
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-Math.atan2(height, width));
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(200, 30, 30, 0.16)";
+  const size = Math.round(width / 11);
+  ctx.font = `700 ${size}px "Noto Sans Devanagari","Public Sans",sans-serif`;
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
 /** Lays the deed out across A4 pages and returns the jsPDF document. */
-async function buildDeedPdf(title: string, content: string) {
+async function buildDeedPdf(title: string, content: string, watermark?: string) {
   const [{ jsPDF }, { canvas, lineBreaks }] = await Promise.all([
     import("jspdf"),
     renderDeedCanvas(title, content),
@@ -86,6 +110,7 @@ async function buildDeedPdf(title: string, content: string) {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, slice.width, slice.height);
     ctx.drawImage(canvas, 0, top, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+    if (watermark) drawWatermark(ctx, slice.width, slice.height, watermark);
 
     if (index > 0) pdf.addPage();
     // JPEG, not PNG: a page of black-on-white text is ~250KB instead of ~2MB,
