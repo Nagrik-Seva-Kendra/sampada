@@ -372,6 +372,9 @@ export function WhatsappRequestDetailPage() {
             {(r.notifications ?? []).some((n) => n.status === "PENDING" && n.kind !== "ALERT") && (
               <span className="status-pill bad">ग्राहक को संदेश बाकी</span>
             )}
+            {(r.reusedFrom ?? []).length > 0 && (
+              <span className="status-pill warn">पिछले अनुरोध {r.reusedFrom!.join(", ")} की जानकारी दोबारा उपयोग की गई</span>
+            )}
             {r.idCards.some((c) => c.warnings.length > 0) && (
               <span className="status-pill warn">⚠️ ID कार्ड मिलान में अंतर — नीचे देखें</span>
             )}
