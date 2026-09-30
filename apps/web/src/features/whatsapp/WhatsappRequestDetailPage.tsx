@@ -52,6 +52,8 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 const orDash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+/** Customer's plot answer: true/false, null = they said "पता नहीं". */
+const yesNo = (v: boolean | null) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
 
 /** Staff: one WhatsApp draft request -- customer, buyer, registry details, files and office workflow. */
 export function WhatsappRequestDetailPage() {
@@ -278,6 +280,13 @@ export function WhatsappRequestDetailPage() {
                 label="पिछले विक्रेता"
                 value={reg.previousSellers.length ? reg.previousSellers.map((o) => o.name).join(", ") : "—"}
               />
+              {r.plot && (
+                <>
+                  <Field label="प्लॉट पर मकान/निर्माण" value={yesNo(r.plot.hasBuilding)} />
+                  <Field label="कॉर्नर प्लॉट" value={yesNo(r.plot.corner)} />
+                  <Field label="बाउंड्री वॉल" value={yesNo(r.plot.boundaryWall)} />
+                </>
+              )}
               <Field
                 label="पिछला प्रतिफल"
                 value={reg.consideration != null ? `₹${reg.consideration.toLocaleString("en-IN")}` : "—"}

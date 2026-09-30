@@ -67,3 +67,28 @@ describe("GuidelineLookupService", () => {
     expect(await svc.lookup({ ...base, district: "भिंड", irrigation: "irrigated", diverted: false })).toBeNull();
   });
 });
+
+describe("plot answers from the customer (corner / house)", () => {
+  const svc = new GuidelineLookupService();
+  const plot: DeedProperty = { ...base, propertyType: "residential_plot", areaValue: 1500, areaUnit: "वर्ग फुट" };
+
+  it("corner = yes adds the office calculator's +10%", async () => {
+    const plain = await svc.lookup(plot, { plot: { hasBuilding: false, corner: false } });
+    const corner = await svc.lookup(plot, { plot: { hasBuilding: false, corner: true } });
+    expect(plain?.marketValue).toBe(1741931); // same golden value as without answers
+    expect(corner!.marketValue).toBeCloseTo(plain!.marketValue * 1.1, -1);
+    expect(corner!.lines[0]).toContain("कॉर्नर +10%");
+    expect(corner!.assumptions.join(" ")).not.toContain("कॉर्नर प्रीमियम नहीं");
+  });
+
+  it("corner unknown → no premium, and says so", async () => {
+    const r = await svc.lookup(plot, { plot: { hasBuilding: false, corner: null } });
+    expect(r?.marketValue).toBe(1741931);
+    expect(r!.assumptions).toContain("कॉर्नर प्रीमियम नहीं जोड़ा गया (कॉर्नर की जानकारी नहीं)");
+  });
+
+  it("house built, or not known → staff (null)", async () => {
+    expect(await svc.lookup(plot, { plot: { hasBuilding: true, corner: false } })).toBeNull();
+    expect(await svc.lookup(plot, { plot: { hasBuilding: null, corner: false } })).toBeNull();
+  });
+});

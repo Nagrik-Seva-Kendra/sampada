@@ -32,6 +32,48 @@ const YES = /^(हाँ|हां|हा|ha|haan|han|yes|y|1|ok|ठीक ह�
 const NO = /^(नहीं|नही|no|n|2|nahi|nahin)$/i;
 const SKIP = /^(नहीं|नही|no|na|nahi|nahin|-|none)$/i;
 const CANCEL = /^(रद्द|cancel|stop|बंद)$/i;
+const UNKNOWN = /^(पता नहीं|पता नही|नहीं पता|नही पता|pata nahi|pata nahin|nahi pata|nahin pata|don'?t know|unknown|3)$/i;
+
+/** हाँ → true, नहीं → false, पता नहीं → null, anything else → undefined (ask again). */
+function yesNoUnknown(v: string): boolean | null | undefined {
+  if (UNKNOWN.test(v)) return null;
+  if (YES.test(v)) return true;
+  if (NO.test(v)) return false;
+  return undefined;
+}
+
+// ---------- plot questions (asked right after the property is confirmed, only for plots) ----------
+// Why: the office guideline calculator adds +10% for a corner plot (rule 2.2); a plot with a
+// house/construction is valued as a building (needs floor details → staff). A boundary wall has
+// no rule in the calculator -- it is recorded for staff only.
+const PLOT_STEPS = [
+  {
+    key: "PLOT_BUILDING",
+    field: "plotHasBuilding",
+    label: "प्लॉट पर मकान/निर्माण",
+    ask: "क्या इस प्लॉट पर मकान या कोई निर्माण बना हुआ है? \"हाँ\", \"नहीं\" या \"पता नहीं\" लिखें।",
+  },
+  {
+    key: "PLOT_CORNER",
+    field: "plotCorner",
+    label: "कॉर्नर प्लॉट",
+    ask: "क्या यह कॉर्नर प्लॉट है (दो सड़कों के कोने पर)? \"हाँ\", \"नहीं\" या \"पता नहीं\" लिखें।",
+  },
+  {
+    key: "PLOT_BOUNDARY",
+    field: "plotBoundary",
+    label: "बाउंड्री वॉल",
+    ask: "क्या प्लॉट पर बाउंड्री वॉल बनी हुई है? \"हाँ\", \"नहीं\" या \"पता नहीं\" लिखें।",
+  },
+] as const;
+const PLOT_FIELDS = PLOT_STEPS.map((s) => s.field);
+
+/** Plot deeds (residential or commercial plot) get the plot questions. */
+export function isPlotDeed(deed: DeedExtract | null | undefined): boolean {
+  const t = deed?.property?.propertyType;
+  return t === "residential_plot" || t === "commercial";
+}
+const yesNoLabel = (v: unknown) => (v === true ? "हाँ" : v === false ? "नहीं" : "पता नहीं");
 
 // ---------- questions asked before the amount (order = conversation order) ----------
 const BUYER_STEPS: Step[] = [
@@ -109,19 +151,45 @@ export class DraftIntakeService {
     const data: any = { ...(cur.data as any) };
     switch (cur.step) {
       case "CONFIRM_PROPERTY":
-        if (YES.test(v)) return this.goto(cur.id, data, BUYER_STEPS[0]!.key);
+        if (YES.test(v)) {
+          return this.goto(cur.id, data, isPlotDeed(cur.deed as DeedExtract | null) ? PLOT_STEPS[0].key : BUYER_STEPS[0]!.key);
+        }
         if (NO.test(v)) {
           await this.save(cur.id, { status: "CANCELLED", needsStaff: true });
           return ["ठीक है। हमारा स्टाफ आपसे जल्द संपर्क करेगा।"];
         }
         return ["कृपया \"हाँ\" या \"नहीं\" लिखें।"];
 
+      case "PLOT_BUILDING":
+      case "PLOT_CORNER":
+      case "PLOT_BOUNDARY": {
+        const i = PLOT_STEPS.findIndex((s) => s.key === cur.step);
+        const step = PLOT_STEPS[i]!;
+        const answer = yesNoUnknown(v);
+        if (answer === undefined) return ["कृपया \"हाँ\", \"नहीं\" या \"पता नहीं\" लिखें।"];
+        data[step.field] = answer;
+        const next = PLOT_STEPS[i + 1]?.key ?? BUYER_STEPS[0]!.key;
+        if (step.key === "PLOT_BUILDING" && answer !== false) {
+          // A house (or not knowing) means the value needs construction details.
+          await this.save(cur.id, { data, step: next, needsStaff: true });
+          return [
+            "ठीक है। मकान/निर्माण वाली संपत्ति का मूल्य स्टाफ निर्माण का विवरण लेकर तय करेगा।",
+            this.question(next, data),
+          ];
+        }
+        return this.goto(cur.id, data, next);
+      }
+
       case "AMOUNT":
         return this.handleAmount(cur, data, v);
 
       case "FINAL":
         if (YES.test(v)) return this.submit(cur);
-        if (/बदल|change|edit/i.test(v)) return this.goto(cur.id, {}, BUYER_STEPS[0]!.key, "ठीक है, विवरण दोबारा लेते हैं।");
+        if (/बदल|change|edit/i.test(v)) {
+          // Re-collect the buyer details; the plot answers are about the property and stay.
+          const keep = Object.fromEntries(PLOT_FIELDS.filter((f) => f in data).map((f) => [f, data[f]]));
+          return this.goto(cur.id, keep, BUYER_STEPS[0]!.key, "ठीक है, विवरण दोबारा लेते हैं।");
+        }
         return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
 
       default: {
@@ -149,7 +217,12 @@ export class DraftIntakeService {
   private async handleAmount(cur: any, data: any, v: string): Promise<string[]> {
     const deed = cur.deed as DeedExtract | null;
     const g: GuidelineResult | null = deed?.property
-      ? await this.guideline.lookup(deed.property, { owners: deed.buyers?.length }).catch(() => null)
+      ? await this.guideline
+          .lookup(deed.property, {
+            owners: deed.buyers?.length,
+            plot: isPlotDeed(deed) ? { hasBuilding: data.plotHasBuilding, corner: data.plotCorner } : undefined,
+          })
+          .catch(() => null)
       : null;
     const out: string[] = [];
     let needsStaff = cur.needsStaff as boolean;
@@ -212,6 +285,9 @@ export class DraftIntakeService {
   // ================= summary / submit =================
   private finalSummary(d: any): string {
     const lines = ["कृपया विवरण जाँचें:"];
+    for (const s of PLOT_STEPS) {
+      if (d[s.field] !== undefined) lines.push(`${s.label}: ${yesNoLabel(d[s.field])}`);
+    }
     for (const s of ALL_STEPS) {
       if (d[s.key] === undefined) continue;
       const shown = d[s.key] ? (s.secret ? mask(decrypt(d[s.key])) : d[s.key]) : "—";
@@ -276,6 +352,8 @@ export class DraftIntakeService {
     if (step === "AMOUNT") return AMOUNT_ASK;
     if (step === "CONFIRM_PROPERTY") return "कृपया \"हाँ\" या \"नहीं\" लिखें।";
     if (step === "FINAL") return this.finalSummary(data);
+    const plot = PLOT_STEPS.find((s) => s.key === step);
+    if (plot) return plot.ask;
     if (step === PAN_STEP.key && !data.tax?.panRequired) return PAN_STEP.ask + " PAN न हो तो \"नहीं\" लिखें।";
     return ALL_STEPS.find((s) => s.key === step)?.ask ?? "";
   }

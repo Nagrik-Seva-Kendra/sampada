@@ -94,6 +94,11 @@ export interface WaRequestDetail extends WaRequestListItem {
     property: WaPropertySummary | null;
     consideration: number | null;
   } | null;
+  /**
+   * The customer's answers for a plot deed (null when not asked -- not a plot,
+   * or the conversation predates the questions). Each: true/false, null = "पता नहीं".
+   */
+  plot: { hasBuilding: boolean | null; corner: boolean | null; boundaryWall: boolean | null } | null;
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: { index: number; label: string }[];
   /** Whether the caller may use POST /reveal. */
