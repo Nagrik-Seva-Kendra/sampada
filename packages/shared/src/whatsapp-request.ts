@@ -8,7 +8,17 @@ import type { WaNotification } from "./wa-notify.js";
  */
 
 /** Office workflow once the customer has submitted the request. */
-export const WaWorkStatus = z.enum(["NEW", "IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"]);
+export const WaWorkStatus = z.enum([
+  "NEW",
+  "IN_PROGRESS",
+  "DRAFT_READY",
+  /** The customer replied "सही है" to the draft sent on WhatsApp. */
+  "CUSTOMER_APPROVED",
+  /** The customer replied with a correction to the draft. */
+  "CORRECTION_REQUESTED",
+  "DONE",
+  "REJECTED",
+]);
 export type WaWorkStatus = z.infer<typeof WaWorkStatus>;
 
 /** The bot conversation's own state. */
@@ -161,6 +171,18 @@ export interface WaRequestDetail extends WaRequestListItem {
   idPhotosPurgedAt: string | null;
   /** Request number(s) whose details the returning customer chose to reuse (same WhatsApp number). */
   reusedFrom?: string[];
+  /** The deed (in the app) drafted for this request, once linked. */
+  deed?: { id: string; type: string; title: string } | null;
+  /** Draft sent to the customer for checking, and their answer. */
+  draftReview?: {
+    /** pending: not delivered yet (24h window closed); sent: waiting for the answer; approved / correction: answered. */
+    state: "pending" | "sent" | "approved" | "correction";
+    sentAt: string | null;
+    reply: string | null;
+    replyAt: string | null;
+  } | null;
+  /** OWNER/ADMIN, linked deed and status DRAFT_READY: may send the draft to the customer. */
+  canSendDraft?: boolean;
   /** WhatsApp messages sent for this request (status updates ...), oldest first. PENDING ones can be resent. */
   notifications?: WaNotification[];
   /** Files the customer sent: index 0 is the registry, then extras. */
@@ -189,6 +211,33 @@ export const WaRequestUpdateInput = z
     workStatus: WaWorkStatus.optional(),
     assigneeId: z.string().trim().min(1).max(64).nullable().optional(),
     staffNote: z.string().max(2000).nullable().optional(),
+    /** Link (or unlink with null) the deed drafted for this request. */
+    deedTemplateId: z.string().trim().min(1).max(64).nullable().optional(),
   })
   .strict();
 export type WaRequestUpdateInput = z.infer<typeof WaRequestUpdateInput>;
+
+/** POST /whatsapp/requests/:id/send-draft -- the customer-copy PDF built in the browser. */
+export const WaSendDraftInput = z.object({ pdfBase64: z.string().min(10).max(14_000_000) }).strict();
+export type WaSendDraftInput = z.infer<typeof WaSendDraftInput>;
+
+/** GET /whatsapp/requests/:id/draft-for-customer -- deed text with every Aadhaar/PAN cut to its last 4. */
+export interface WaDraftForCustomer {
+  title: string;
+  content: string;
+  fileName: string;
+}
+
+const AADHAAR_IN_TEXT = /(?<![\d०-९])([2-9२-९][\d०-९]{3})[\s-]?([\d०-९]{4})[\s-]?([\d०-९]{4})(?![\d०-९])/g;
+const PAN_IN_TEXT = /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g;
+
+/**
+ * Customer copy of a deed: every Aadhaar number (12 digits, spaced or not,
+ * Devanagari digits too) becomes "XXXX XXXX 1234" and every PAN "XXXXXX234F"
+ * -- only the last 4 characters stay.
+ */
+export function maskIdNumbers(text: string): string {
+  return text
+    .replace(AADHAAR_IN_TEXT, (_m, _a, _b, c: string) => `XXXX XXXX ${c}`)
+    .replace(PAN_IN_TEXT, (p) => `XXXXXX${p.slice(-4)}`);
+}

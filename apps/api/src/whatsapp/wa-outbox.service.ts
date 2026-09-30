@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { WaNotification, WaNotificationKind, WaTemplateDef } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { readMedia } from "./wa-media.js";
 import { requestRef } from "./wa-requests.mapper.js";
 import { graphBase, maskPhone } from "./webhook-diagnostics.js";
 
@@ -22,9 +23,23 @@ export interface OutboundMessage {
   text: string;
   /** Used outside the window; without one the message stays PENDING there. */
   template?: TemplateCall | null;
+  /**
+   * A stored file sent as a WhatsApp document (caption = text). Documents go
+   * only inside the window; outside it `template` is sent as a notice and the
+   * document stays PENDING until the customer writes (flushPendingDocuments).
+   */
+  document?: DocumentRef | null;
 }
 
-type Delivery = { status: "SENT" | "PENDING"; via: "text" | "template" | null; wamid: string | null; reason: string | null };
+export interface DocumentRef {
+  key: string;
+  fileName: string;
+  mime: string;
+}
+/** What WaNotification.template stores: the template call and/or the document. */
+type Stored = (TemplateCall & { document?: DocumentRef }) | { document: DocumentRef } | null;
+
+type Delivery = { status: "SENT" | "PENDING"; via: "text" | "template" | "document" | null; wamid: string | null; reason: string | null };
 
 /** Template body with its parameters filled in (what the customer sees). */
 export function fillTemplate(def: Pick<WaTemplateDef, "body">, params: string[]): string {
@@ -77,7 +92,7 @@ export class WaOutboxService {
   }
 
   async send(m: OutboundMessage): Promise<WaNotification> {
-    const d = await this.deliver(m.to, m.text, m.template ?? null);
+    const d = await this.deliver(m.to, m.text, m.template ?? null, m.document ?? null);
     const row = await this.prisma.waNotification.create({
       data: {
         organizationId: m.organizationId,
@@ -87,7 +102,7 @@ export class WaOutboxService {
         via: d.via,
         toPhone: m.to,
         body: m.text,
-        template: (m.template ?? undefined) as any,
+        template: (m.template || m.document ? { ...(m.template ?? {}), ...(m.document ? { document: m.document } : {}) } : undefined) as any,
         reason: d.reason,
         wamid: d.wamid,
         sentAt: d.status === "SENT" ? new Date() : null,
@@ -102,7 +117,8 @@ export class WaOutboxService {
     const row = await this.prisma.waNotification.findFirst({ where: { id: notificationId, draftIntakeId } });
     if (!row) throw new NotFoundException("संदेश नहीं मिला।");
     if (row.status === "SENT") return toNotification(row);
-    const d = await this.deliver(row.toPhone, row.body, (row.template as TemplateCall | null) ?? null);
+    const stored = (row.template as Stored) ?? null;
+    const d = await this.deliver(row.toPhone, row.body, stored && "name" in stored ? stored : null, stored?.document ?? null);
     const updated = await this.prisma.waNotification.update({
       where: { id: row.id },
       data: { status: d.status, via: d.via, reason: d.reason, wamid: d.wamid, sentAt: d.status === "SENT" ? new Date() : null },
@@ -116,10 +132,28 @@ export class WaOutboxService {
     return rows.map(toNotification);
   }
 
-  private async deliver(to: string, text: string, template: TemplateCall | null): Promise<Delivery> {
+  /**
+   * The customer just wrote (window open): deliver their PENDING documents of
+   * the last 7 days. Returns the notifications that went out.
+   */
+  async flushPendingDocuments(phone: string): Promise<{ id: string; draftIntakeId: string }[]> {
+    const rows = await this.prisma.waNotification.findMany({
+      where: { toPhone: phone, status: "PENDING", kind: "DRAFT", createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
+      orderBy: { createdAt: "asc" },
+    });
+    const sent: { id: string; draftIntakeId: string }[] = [];
+    for (const row of rows) {
+      const n = await this.resend(row.draftIntakeId, row.id);
+      if (n.status === "SENT") sent.push({ id: row.id, draftIntakeId: row.draftIntakeId });
+    }
+    return sent;
+  }
+
+  private async deliver(to: string, text: string, template: TemplateCall | null, document: DocumentRef | null = null): Promise<Delivery> {
     if (!process.env.WA_ACCESS_TOKEN || !process.env.WA_PHONE_NUMBER_ID) {
       return { status: "PENDING", via: null, wamid: null, reason: "WhatsApp कॉन्फ़िगर नहीं (WA_ACCESS_TOKEN)" };
     }
+    if (document) return this.deliverDocument(to, text, template, document);
     let reason: string | null = null;
     if (await this.inWindow(to)) {
       const r = await this.post(to, { type: "text", text: { body: text } });
@@ -132,6 +166,44 @@ export class WaOutboxService {
       reason = reasonFor(r.code, "template");
     }
     return { status: "PENDING", via: null, wamid: null, reason: reason ?? "24 घंटे की विंडो बंद — टेम्पलेट ज़रूरी" };
+  }
+
+  private async deliverDocument(to: string, caption: string, notice: TemplateCall | null, doc: DocumentRef): Promise<Delivery> {
+    if (await this.inWindow(to)) {
+      const buf = await readMedia(doc.key).catch(() => null);
+      if (!buf) return { status: "PENDING", via: null, wamid: null, reason: "PDF फ़ाइल नहीं मिली" };
+      const mediaId = await this.uploadMedia(buf, doc.mime, doc.fileName);
+      if (!mediaId) return { status: "PENDING", via: null, wamid: null, reason: "PDF WhatsApp पर अपलोड नहीं हो सकी" };
+      const r = await this.post(to, { type: "document", document: { id: mediaId, filename: doc.fileName, caption } });
+      if (r.ok) return { status: "SENT", via: "document", wamid: r.wamid, reason: null };
+      return { status: "PENDING", via: null, wamid: null, reason: reasonFor(r.code, "text") };
+    }
+    // Window closed: documents can't go out. Send the notice template so the customer writes back.
+    if (notice) {
+      const r = await this.post(to, { type: "template", template: templatePayload(notice) });
+      if (r.ok) return { status: "PENDING", via: null, wamid: r.wamid, reason: "ग्राहक को सूचना भेजी — जवाब आते ही PDF अपने-आप जाएगी" };
+      return { status: "PENDING", via: null, wamid: null, reason: reasonFor(r.code, "template") };
+    }
+    return { status: "PENDING", via: null, wamid: null, reason: "24 घंटे की विंडो बंद" };
+  }
+
+  /** Graph media upload (the document to send); returns the media id or null. */
+  async uploadMedia(buf: Buffer, mime: string, fileName: string): Promise<string | null> {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", mime);
+    form.append("file", new Blob([new Uint8Array(buf)], { type: mime }), fileName);
+    try {
+      const res = await fetch(`${graphBase()}/${process.env.WA_PHONE_NUMBER_ID}/media`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}` },
+        body: form,
+      });
+      const json: any = await res.json().catch(() => null);
+      return res.ok ? (json?.id ?? null) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** One Graph /messages call; returns only ok / wamid / error code. */
@@ -166,7 +238,7 @@ export function toNotification(row: {
     id: row.id,
     kind: row.kind as WaNotification["kind"],
     status: row.status === "SENT" ? "SENT" : "PENDING",
-    via: row.via === "text" || row.via === "template" ? row.via : null,
+    via: row.via === "text" || row.via === "template" || row.via === "document" ? row.via : null,
     toMasked: maskPhone(row.toPhone),
     body: row.body,
     reason: row.reason,

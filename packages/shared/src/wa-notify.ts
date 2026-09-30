@@ -7,6 +7,9 @@
  */
 import type { WaWorkStatus } from "./whatsapp-request.js";
 
+/** Words the customer uses to approve the draft ("SAHI HAI"); anything else is a correction. */
+export const DRAFT_APPROVE_RE = /^\s*(सही\s*है|सही|sahi(\s*hai)?|sahee(\s*hai)?|correct|ok|okay|ठीक\s*है|हाँ\s*सही\s*है)\s*[।.!]*\s*$/i;
+
 /** Statuses the customer is told about. */
 export const WA_NOTIFY_STATUSES = ["IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"] as const satisfies readonly WaWorkStatus[];
 
@@ -51,6 +54,13 @@ export const WA_TEMPLATES = {
     body: "नया WhatsApp अनुरोध {{1}} — दस्तावेज़: {{2}}, ग्राहक: {{3}} ({{4}}), स्टाफ जाँच: {{5}}। देखें: {{6}} धन्यवाद।",
     example: ["AB12CD", "विक्रय पत्र", "अमित शर्मा", "********3210", "नहीं", "https://app.nsk.mpe-registry.com/whatsapp-requests/abc123"],
   },
+  draft: {
+    name: "draft_review_ready",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते, अनुरोध नंबर {{1}} का ड्राफ्ट जाँच के लिए तैयार है। कृपया इस नंबर पर कोई भी संदेश भेजें, हम ड्राफ्ट की PDF भेज देंगे। धन्यवाद।",
+    example: ["AB12CD"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT";
@@ -62,8 +72,8 @@ export interface WaNotification {
   id: string;
   kind: WaNotificationKind;
   status: WaNotificationStatus;
-  /** "text" inside the 24h window, "template" outside it. */
-  via: "text" | "template" | null;
+  /** "text" inside the 24h window, "template" outside it, "document" for a PDF. */
+  via: "text" | "template" | "document" | null;
   /** Masked recipient ("********3210"). */
   toMasked: string;
   body: string;

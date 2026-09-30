@@ -5,6 +5,8 @@ export const WORK_STATUS_LABEL: Record<WaWorkStatus, string> = {
   NEW: "नया",
   IN_PROGRESS: "काम चल रहा है",
   DRAFT_READY: "ड्राफ्ट तैयार",
+  CUSTOMER_APPROVED: "ग्राहक ने सही बताया",
+  CORRECTION_REQUESTED: "ग्राहक ने सुधार माँगा",
   DONE: "पूर्ण",
   REJECTED: "अस्वीकृत",
 };
@@ -13,6 +15,8 @@ export const WORK_STATUS_PILL: Record<WaWorkStatus, string> = {
   NEW: "warn",
   IN_PROGRESS: "neutral",
   DRAFT_READY: "good",
+  CUSTOMER_APPROVED: "good",
+  CORRECTION_REQUESTED: "warn",
   DONE: "good",
   REJECTED: "bad",
 };
@@ -29,7 +33,15 @@ export const DEED_TYPE_LABEL: Record<WaDeedType, string> = {
   other: "अन्य दस्तावेज़",
 };
 
-export const WORK_STATUSES: WaWorkStatus[] = ["NEW", "IN_PROGRESS", "DRAFT_READY", "DONE", "REJECTED"];
+export const WORK_STATUSES: WaWorkStatus[] = [
+  "NEW",
+  "IN_PROGRESS",
+  "DRAFT_READY",
+  "CUSTOMER_APPROVED",
+  "CORRECTION_REQUESTED",
+  "DONE",
+  "REJECTED",
+];
 
 /**
  * Amount cell text; never blank. GUIDELINE with no value yet → staff will tell;

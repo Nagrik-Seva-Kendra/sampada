@@ -4,6 +4,7 @@ import { extname, join } from "node:path";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { r2Configured, r2Put } from "../guideline/r2.js";
 import { DraftIntakeService, type IncomingFile } from "./draft-intake.service.js";
+import { DraftReviewService } from "./draft-review.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
@@ -22,6 +23,7 @@ export class WhatsappService {
     private readonly prisma: PrismaService,
     private readonly intake: DraftIntakeService,
     private readonly outbox: WaOutboxService,
+    private readonly drafts: DraftReviewService,
   ) {}
 
   // ---------- security ----------
@@ -78,7 +80,9 @@ export class WhatsappService {
 
     switch (msg.type) {
       case "text": {
-        const r = await this.intake.handleText(ctx, msg.text?.body ?? "");
+        // A draft waiting for this customer's "SAHI HAI" / correction comes first.
+        const review = await this.drafts.handleReply(from, msg.text?.body ?? "");
+        const r = review ?? (await this.intake.handleText(ctx, msg.text?.body ?? ""));
         // TODO (next phase): when r is null, answer guideline/act questions via the AI bot.
         replies = r ?? [`नमस्ते ${name}, आपका संदेश मिल गया है। नागरिक सेवा केंद्र जल्द जवाब देगा।`];
         break;
@@ -95,6 +99,8 @@ export class WhatsappService {
     }
     const toSend = replies.filter(Boolean);
     for (const r of toSend) await this.sendText(from, r);
+    // The window is open now: a draft PDF that could not go out earlier is sent after this reply.
+    await this.drafts.flushPending(from).catch((e) => this.log.warn(`pending draft not sent: ${e?.code ?? e?.name ?? "error"}`));
     this.log.log(`handled message ${msg.id} type=${msg.type} replies=${toSend.length}`);
   }
 

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import { DraftIntakeService } from "./draft-intake.service.js";
+import { DraftReviewService } from "./draft-review.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
 import { IdCardExtractorService } from "./id-card-extractor.service.js";
 import { IdPhotoRetentionService } from "./id-photo-retention.service.js";
@@ -26,6 +27,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     IdPhotoRetentionService,
     WaOutboxService,
     WaTemplatesService,
+    DraftReviewService,
   ],
 })
 export class WhatsappModule {}
