@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   WaAssignee,
+  WaBulkDeleteResult,
+  WaDeleteResult,
   WaDraftForCustomer,
   WaNotification,
   WaTemplateStatus,
@@ -106,6 +108,34 @@ export function useWaDocumentOpener() {
       .get(`whatsapp/requests/${id}/document`, { headers: authHeaders(token), searchParams: { i: String(index) } })
       .blob()
       .then((b) => URL.createObjectURL(b));
+}
+
+/** OWNER/ADMIN: permanently delete one request (confirm = its request number). */
+export function useDeleteWaRequest(id: string) {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<WaDeleteResult, Error, string>({
+    mutationFn: (confirm) =>
+      api.delete(`whatsapp/requests/${id}`, { headers: authHeaders(token), json: { confirm } }).json<WaDeleteResult>(),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: ["wa-requests", "detail", id] });
+      qc.invalidateQueries({ queryKey: ["wa-requests", "list"] });
+      qc.invalidateQueries({ queryKey: ["wa-requests", "summary"] });
+    },
+  });
+}
+
+/** OWNER/ADMIN: permanently delete several requests (confirm = "DELETE <count>"). */
+export function useBulkDeleteWaRequests() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<WaBulkDeleteResult, Error, { ids: string[]; confirm: string }>({
+    mutationFn: (input) =>
+      api.post("whatsapp/requests/bulk-delete", { headers: authHeaders(token), json: input, timeout: 120_000 }).json<WaBulkDeleteResult>(),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["wa-requests"] });
+    },
+  });
 }
 
 /** OWNER/ADMIN: the linked deed's customer-copy text (Aadhaar/PAN cut to the last 4 by the API). */

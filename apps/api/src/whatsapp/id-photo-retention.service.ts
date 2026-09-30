@@ -1,9 +1,8 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import { unlink } from "node:fs/promises";
 import { DEFAULT_ID_PHOTO_RETENTION_DAYS } from "@sampada/shared";
-import { r2Configured, r2Delete } from "../guideline/r2.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { localMediaPath, requestRef } from "./wa-requests.mapper.js";
+import { deleteMedia } from "./wa-media.js";
+import { requestRef } from "./wa-requests.mapper.js";
 
 /** WA_ID_PHOTO_RETENTION_DAYS (owner-configurable), default 90; invalid values fall back to the default. */
 export function retentionDays(env: string | undefined = process.env.WA_ID_PHOTO_RETENTION_DAYS): number {
@@ -83,7 +82,7 @@ export class IdPhotoRetentionService implements OnModuleInit, OnModuleDestroy {
       let failed = 0;
       for (const key of keys) {
         try {
-          await this.deleteFile(key);
+          await deleteMedia(key);
         } catch {
           failed++;
         }
@@ -98,14 +97,5 @@ export class IdPhotoRetentionService implements OnModuleInit, OnModuleDestroy {
       done++;
     }
     return done;
-  }
-
-  private async deleteFile(key: string): Promise<void> {
-    if (r2Configured()) return r2Delete(key);
-    const path = localMediaPath(key);
-    if (!path) return;
-    await unlink(path).catch((e) => {
-      if (e?.code !== "ENOENT") throw e;
-    });
   }
 }

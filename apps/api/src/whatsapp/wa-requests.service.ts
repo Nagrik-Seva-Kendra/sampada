@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { readFile } from "node:fs/promises";
 import { ClsService } from "nestjs-cls";
 import {
@@ -7,6 +14,8 @@ import {
   WA_STATUS_PHRASE,
   WA_TEMPLATES,
   type WaAssignee,
+  type WaBulkDeleteResult,
+  type WaDeleteResult,
   type WaNotification,
   type WaRequestDetail,
   type WaRequestList,
@@ -20,6 +29,8 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
+import { deleteMedia } from "./wa-media.js";
+import { requestMediaKeys } from "./wa-request-delete.js";
 import {
   documentKeyAt,
   draftReviewOf,
@@ -205,6 +216,72 @@ export class WaRequestsService {
   async resendNotification(id: string, notificationId: string): Promise<WaNotification> {
     const row = await this.find(id, requireTenantContext(this.cls));
     return this.outbox.resend(row.id, notificationId);
+  }
+
+  /**
+   * Permanently deletes a request: first every stored file (R2 / local), then
+   * -- only if all of them are gone -- its WaNotification rows and the
+   * DraftIntake row, in one transaction. A deed made from it is kept (only the
+   * link goes with the row). WaContact, WaInboundMessage and other requests are
+   * untouched. OWNER/ADMIN only; `confirm` must be the request number.
+   */
+  async remove(id: string, confirm: string): Promise<WaDeleteResult> {
+    const tenant = requireTenantContext(this.cls);
+    if (!isManagerRole(tenant.role)) throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध हटा सकते हैं।");
+    const row = await this.find(id, tenant);
+    if (confirm.trim().toUpperCase() !== requestRef(row.id)) {
+      throw new BadRequestException("अनुरोध नंबर मेल नहीं खाता — अनुरोध नहीं हटाया गया।");
+    }
+    return this.erase(row, tenant);
+  }
+
+  /** Several requests at once; confirm must be "DELETE <count>". Each is deleted (or fails) on its own. */
+  async removeMany(ids: string[], confirm: string): Promise<WaBulkDeleteResult> {
+    const tenant = requireTenantContext(this.cls);
+    if (!isManagerRole(tenant.role)) throw new ForbiddenException("केवल मालिक या एडमिन अनुरोध हटा सकते हैं।");
+    const unique = [...new Set(ids)];
+    if (confirm.trim().replace(/\s+/g, " ").toUpperCase() !== `DELETE ${unique.length}`) {
+      throw new BadRequestException(`पुष्टि के लिए "DELETE ${unique.length}" लिखें — कुछ नहीं हटाया गया।`);
+    }
+    const result: WaBulkDeleteResult = { deleted: [], failed: [] };
+    for (const id of unique) {
+      const row = (await this.prisma.draftIntake.findFirst({ where: { id, ...visibleWhere(tenant) } })) as DraftIntakeRow | null;
+      if (!row) {
+        result.failed.push({ id, ref: requestRef(id), reason: "नहीं मिला" });
+        continue;
+      }
+      try {
+        result.deleted.push(await this.erase(row, tenant));
+      } catch (e: any) {
+        result.failed.push({ id, ref: requestRef(id), reason: e?.message ?? "हटाया नहीं जा सका" });
+      }
+    }
+    return result;
+  }
+
+  private async erase(row: DraftIntakeRow, tenant: TenantContext): Promise<WaDeleteResult> {
+    const ref = requestRef(row.id);
+    const notes = await this.prisma.waNotification.findMany({ where: { draftIntakeId: row.id }, select: { template: true } });
+    const keys = requestMediaKeys(row, notes.map((n) => n.template));
+    // Files first: if any cannot be deleted, keep the row so nothing is left orphaned (retry is safe).
+    const failed: string[] = [];
+    for (const key of keys) {
+      try {
+        await deleteMedia(key);
+      } catch {
+        failed.push(key);
+      }
+    }
+    if (failed.length) {
+      this.log.warn(`request ${ref} org ${tenant.organizationId}: delete stopped, ${failed.length}/${keys.length} files not deleted (user ${tenant.userId})`);
+      throw new ServiceUnavailableException("दस्तावेज़/फ़ोटो की फ़ाइलें नहीं हट सकीं, इसलिए अनुरोध नहीं हटाया गया। कृपया थोड़ी देर बाद फिर कोशिश करें।");
+    }
+    await this.prisma.$transaction([
+      this.prisma.waNotification.deleteMany({ where: { draftIntakeId: row.id } }),
+      this.prisma.draftIntake.deleteMany({ where: { id: row.id, organizationId: tenant.organizationId } }),
+    ]);
+    this.log.log(`request ${ref} deleted from org ${tenant.organizationId} by user ${tenant.userId} role=${tenant.role} (${keys.length} files)`);
+    return { ref, deedTemplateId: (row as { deedTemplateId?: string | null }).deedTemplateId ?? null, filesDeleted: keys.length };
   }
 
   /** OWNER/ADMIN only -- only they assign. */

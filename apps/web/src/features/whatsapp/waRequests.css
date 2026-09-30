@@ -76,3 +76,43 @@
 .wa-nowrap {
   white-space: nowrap;
 }
+
+/* Permanent delete (OWNER/ADMIN): red in both themes. */
+:root {
+  --wa-danger: #b42318;
+}
+.wa-btn-delete {
+  border: 1px solid var(--wa-danger);
+  background: var(--wa-danger);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wa-btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wa-delete-card {
+  border-top-color: var(--wa-danger);
+}
+.wa-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 120;
+  max-width: 420px;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-left: 4px solid #1f8a4c;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  font-weight: 600;
+}
+.wa-col-select {
+  width: 36px;
+}

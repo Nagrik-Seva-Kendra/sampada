@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "../../lib/api";
-import { useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
+import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
+import { useBulkDeleteWaRequests, useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
 import {
   DEED_TYPE_LABEL,
   formatAmount,
@@ -69,6 +70,58 @@ export function WhatsappRequestsPage() {
     needsStaff: needsStaff === "" ? undefined : needsStaff === "true",
   });
   const rows = query.data?.data ?? [];
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const bulk = useBulkDeleteWaRequests();
+  const cols = canManage ? 9 : 8;
+
+  // A message left by a delete (detail page) or set here; hides after a while.
+  useEffect(() => {
+    const m = takeWaToast();
+    if (m) setToast(m);
+  }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  // Keep only rows still on screen (filters change, deleted rows vanish).
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(rows.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+
+  async function onBulkDelete() {
+    setBulkError(null);
+    const ids = [...selected];
+    try {
+      const out = await bulk.mutateAsync({ ids, confirm: `DELETE ${ids.length}` });
+      setBulkOpen(false);
+      setSelected(new Set());
+      const deeds = out.deleted.filter((d) => d.deedTemplateId).length;
+      setToast(
+        `${out.deleted.length} अनुरोध हटाए गए।` +
+          (out.failed.length ? ` ${out.failed.length} नहीं हटे: ${out.failed.map((f) => `${f.ref} (${f.reason})`).join(", ")}।` : "") +
+          (deeds ? ` ${deeds} अनुरोधों से बनी डीड नहीं हटाई गई — ज़रूरत हो तो डीड सूची से अलग से हटाएँ।` : ""),
+      );
+    } catch (err) {
+      setBulkError(await apiErrorMessage(err, "अनुरोध नहीं हटाए जा सके।"));
+    }
+  }
   const newCount = query.data?.newCount ?? 0;
 
   return (
@@ -86,6 +139,18 @@ export function WhatsappRequestsPage() {
         </div>
 
         {canManage && <TemplatesPanel />}
+
+        {canManage && selected.size > 0 && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700 }}>{selected.size} चुने गए</span>
+            <button type="button" className="wa-btn-delete" onClick={() => setBulkOpen(true)}>
+              चुने हुए अनुरोध हटाएँ
+            </button>
+            <button type="button" className="doc-btn" onClick={() => setSelected(new Set())}>
+              चुनाव हटाएँ
+            </button>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
@@ -120,6 +185,7 @@ export function WhatsappRequestsPage() {
         <div className="wa-table-wrap">
           <table className="wa-table">
             <colgroup>
+              {canManage && <col className="wa-col-select" />}
               <col className="wa-col-ref" />
               <col className="wa-col-customer" />
               <col className="wa-col-buyer" />
@@ -131,6 +197,16 @@ export function WhatsappRequestsPage() {
             </colgroup>
             <thead>
               <tr>
+                {canManage && (
+                  <th>
+                    <input
+                      type="checkbox"
+                      aria-label="सभी चुनें"
+                      checked={allSelected}
+                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
+                    />
+                  </th>
+                )}
                 <th>अनुरोध नं.</th>
                 <th>ग्राहक</th>
                 <th>खरीदार / बंधककर्ता</th>
@@ -145,27 +221,32 @@ export function WhatsappRequestsPage() {
               {query.isLoading &&
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={`skeleton-${i}`}>
-                    <td colSpan={8}>
+                    <td colSpan={cols}>
                       <Skeleton className="h-5 w-full" />
                     </td>
                   </tr>
                 ))}
               {query.isError && (
                 <tr>
-                  <td colSpan={8} className="doc-empty">
+                  <td colSpan={cols} className="doc-empty">
                     अनुरोध लोड नहीं हो सके। कृपया दोबारा कोशिश करें।
                   </td>
                 </tr>
               )}
               {!query.isLoading && !query.isError && rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="doc-empty">
+                  <td colSpan={cols} className="doc-empty">
                     कोई अनुरोध नहीं मिला।
                   </td>
                 </tr>
               )}
               {rows.map((r) => (
                 <tr key={r.id}>
+                  {canManage && (
+                    <td>
+                      <input type="checkbox" aria-label={`अनुरोध ${r.ref} चुनें`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                    </td>
+                  )}
                   <td className="wa-nowrap" style={{ fontWeight: 700 }}>
                     <Link to="/whatsapp-requests/$id" params={{ id: r.id }}>
                       {r.ref}
@@ -219,6 +300,26 @@ export function WhatsappRequestsPage() {
           </table>
         </div>
       </div>
+      {bulkOpen && (
+        <DeleteRequestDialog
+          title={`${selected.size} अनुरोध हटाएँ`}
+          expected={`DELETE ${selected.size}`}
+          prompt={`पक्का करने के लिए "DELETE ${selected.size}" लिखें`}
+          note="इन अनुरोधों के सारे दस्तावेज़, ID फ़ोटो, ड्राफ्ट और संदेशों का रिकॉर्ड हट जाएगा। इनसे बनी डीड नहीं हटेगी — उन्हें अलग से हटाना होगा।"
+          busy={bulk.isPending}
+          error={bulkError}
+          onConfirm={onBulkDelete}
+          onClose={() => {
+            setBulkOpen(false);
+            setBulkError(null);
+          }}
+        />
+      )}
+      {toast && (
+        <div className="wa-toast" role="status" onClick={() => setToast(null)}>
+          {toast}
+        </div>
+      )}
     </section>
   );
 }

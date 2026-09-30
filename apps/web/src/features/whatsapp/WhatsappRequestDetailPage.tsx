@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   formatParty,
   formatPartyBlock,
@@ -17,7 +17,10 @@ import { apiErrorMessage } from "../../lib/api";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { deedPdfBase64 } from "../deeds/deedPdf";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
+import { DeleteRequestDialog, setWaToast } from "./DeleteRequestDialog";
+import "./waRequests.css";
 import {
+  useDeleteWaRequest,
   useDraftForCustomer,
   useResendWaNotification,
   useSendWaDraft,
@@ -110,6 +113,49 @@ function officeDraftText(r: WaRequestDetail, revealed: WaRevealResult | null): s
  * SAMPADA 2.0 needs name, father/husband, mother, Aadhaar, mobile, email and
  * address for every party's ID. Shows what this party is still missing.
  */
+/** OWNER/ADMIN: red "अनुरोध हटाएँ" with a type-the-number dialog; back to the list afterwards. */
+function DeleteRequestButton({ r }: { r: WaRequestDetail }) {
+  const del = useDeleteWaRequest(r.id);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function onConfirm() {
+    setError(null);
+    try {
+      const out = await del.mutateAsync(r.ref);
+      setWaToast(
+        `अनुरोध ${out.ref} हटा दिया गया।` +
+          (out.deedTemplateId ? " इससे बनी डीड नहीं हटाई गई — ज़रूरत हो तो उसे डीड सूची से अलग से हटाएँ।" : ""),
+      );
+      navigate({ to: "/whatsapp-requests" });
+    } catch (err) {
+      setError(await apiErrorMessage(err, "अनुरोध नहीं हटाया जा सका।"));
+    }
+  }
+  return (
+    <>
+      <button type="button" className="wa-btn-delete" onClick={() => setOpen(true)}>
+        अनुरोध हटाएँ
+      </button>
+      {open && (
+        <DeleteRequestDialog
+          title={`अनुरोध ${r.ref} हटाएँ`}
+          expected={r.ref}
+          prompt={`पक्का करने के लिए अनुरोध नंबर (${r.ref}) लिखें`}
+          note={
+            "ग्राहक के सारे दस्तावेज़, ID फ़ोटो, भेजे गए ड्राफ्ट और संदेशों का रिकॉर्ड भी हट जाएगा।" +
+            (r.deed ? ` जुड़ी हुई डीड "${r.deed.title}" नहीं हटेगी — उसे अलग से हटाना होगा।` : "")
+          }
+          busy={del.isPending}
+          error={error}
+          onConfirm={onConfirm}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 const DRAFT_STATE: Record<string, string> = {
   pending: "अभी ग्राहक तक नहीं पहुँचा — कारण नीचे संदेशों में; विंडो बंद हो तो ग्राहक का संदेश आते ही अपने-आप जाएगा",
   sent: "भेजा गया — ग्राहक के जवाब का इंतज़ार",
@@ -495,6 +541,7 @@ export function WhatsappRequestDetailPage() {
               {createDeed.isPending ? "बनाया जा रहा है…" : "इससे नया डीड बनाएँ"}
             </button>
           )}
+          {r.canAssign && <DeleteRequestButton r={r} />}
         </div>
         {message && (
           <p className="doc-sub" style={{ fontSize: 13 }} role="status">
