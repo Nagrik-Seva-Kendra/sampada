@@ -676,6 +676,8 @@ model WaContact {
   blockReason     String?
   /// Hashes of recent generic replies, to never repeat one within 10 minutes: [{ h, at }].
   recentReplies   Json?
+  /// Owner numbers only: customer flow for testing until then ("ग्राहक मोड", 30 min).
+  ownerTestUntil  DateTime?
 
   @@index([organizationId, blockedAt])
 }
@@ -712,4 +714,56 @@ model WaNotification {
   sentAt         DateTime?
 
   @@index([draftIntakeId, createdAt])
+}
+
+/// Office to-do item ("मेरे काम"): from the owner's WhatsApp voice notes/texts or the web.
+model Task {
+  id              String    @id @default(cuid())
+  organizationId  String
+  /// Short per-organization number used on WhatsApp ("3 हो गया").
+  number          Int
+  title           String
+  partyName       String?
+  partyPhone      String?
+  /// sale | mortgage | agreement | patta | mutation | copy | call | collect_papers | other
+  workType        String    @default("other")
+  place           String?
+  dueAt           DateTime?
+  note            String?
+  /// voice | text | web | broadcast
+  source          String
+  /// What the owner said (speech-to-text) or wrote.
+  transcript      String?
+  /// OPEN | DONE | CANCELLED
+  status          String    @default("OPEN")
+  assigneeId      String?
+  linkedRequestId String?
+  createdById     String?
+  /// Broadcast tasks: the owner's message these belong to (for "who finished" lists).
+  broadcastId     String?
+  remindedAt      DateTime?
+  /// When the bot asked the party for papers on WhatsApp (owner said हाँ).
+  outreachAt      DateTime?
+  doneAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status, dueAt])
+  @@index([assigneeId, status])
+  @@index([partyPhone])
+}
+
+/// Stored files to delete at a set time (e.g. owner voice notes, 7 days after transcription).
+model WaMediaDeletion {
+  key      String   @id
+  deleteAt DateTime
+
+  @@index([deleteAt])
+}
+
+/// Last run of a once-a-day job (e.g. the owner's morning task list), so a restart doesn't resend it.
+model WaJobRun {
+  name      String   @id
+  lastRunAt DateTime
 }

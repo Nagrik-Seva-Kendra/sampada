@@ -18,3 +18,4 @@ export * from "./deed-format.js";
 export * from "./id-photos.js";
 export * from "./wa-notify.js";
 export * from "./wa-office-fees.js";
+export * from "./task.js";

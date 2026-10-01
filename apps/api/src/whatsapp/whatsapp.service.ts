@@ -7,6 +7,7 @@ import { DraftIntakeService, type IncomingFile } from "./draft-intake.service.js
 import { Debouncer, type DebouncedBatch } from "./debouncer.js";
 import { DraftReviewService } from "./draft-review.service.js";
 import { FrontDoorService } from "./front-door.service.js";
+import { OwnerAssistantService } from "./owner-assistant.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
@@ -27,6 +28,7 @@ export class WhatsappService {
     private readonly outbox: WaOutboxService,
     private readonly drafts: DraftReviewService,
     private readonly front: FrontDoorService,
+    private readonly owner: OwnerAssistantService,
   ) {}
 
   /** Texts from one number within WA_DEBOUNCE_MS (default 10 s) are handled together. */
@@ -94,6 +96,31 @@ export class WhatsappService {
     await this.markRead(msg.id);
     // Opens the 24h window in which the office may send free-form text (status updates ...).
     await this.outbox.touchContact(from).catch((e) => this.log.warn(`window update failed: ${e?.code ?? e?.name ?? "error"}`));
+    // The owner's numbers: a to-do assistant, unless testing the customer flow ("ग्राहक मोड").
+    if (this.owner.isOwner(from)) {
+      const body = msg.type === "text" ? String(msg.text?.body ?? "") : "";
+      const testing = await this.owner.inCustomerTest(from);
+      if (testing && /^(ओनर|owner|मालिक|malik)\s*(मोड|mode)$/i.test(body.trim())) {
+        await this.send(from, await this.owner.endCustomerTest(from));
+        return;
+      }
+      if (!testing && (msg.type === "text" || msg.type === "audio")) {
+        const audio = msg.type === "audio" ? await this.downloadMedia(msg.audio.id) : undefined;
+        const replies = await this.owner.handle(from, { type: msg.type, text: body, audio });
+        await this.send(from, replies);
+        this.log.log(`message ${msg.id} from owner type=${msg.type} route=owner replies=${replies.length}`);
+        return;
+      }
+    }
+    // Staff numbers (Team page mobile): "हो गया" closes their task.
+    if (msg.type === "text") {
+      const staffReply = await this.owner.handleStaff(from, String(msg.text?.body ?? ""));
+      if (staffReply) {
+        await this.send(from, staffReply);
+        this.log.log(`message ${msg.id} from staff ${maskPhone(from)} route=staff-done`);
+        return;
+      }
+    }
     if (!(await this.front.allowInbound(from))) {
       this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=blocked`);
       return;
@@ -116,6 +143,7 @@ export class WhatsappService {
         const file = await this.downloadMedia(media.id, media.filename);
         const viaCost = (await this.intake.hasActive(from)) ? null : await this.front.handleDocument(from, file);
         const replies = viaCost ? viaCost.replies : await this.intake.handleDocument(ctx, file);
+        if (!viaCost) await this.linkTask(from);
         await this.send(from, replies);
         await this.afterReply(from);
         this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=${viaCost ? "cost" : "flow"} replies=${replies.length}`);
@@ -159,6 +187,14 @@ export class WhatsappService {
     await this.send(from, replies);
     if (route !== "abuse" && route !== "blocked") await this.afterReply(from);
     this.log.log(`text batch from ${maskPhone(from)} messages=${batch.texts.length} route=${route} replies=${replies.length}`);
+  }
+
+  /** Papers from a party the owner asked for (task outreach): link the request to that task. */
+  private async linkTask(from: string): Promise<void> {
+    const req = await this.prisma.draftIntake
+      .findFirst({ where: { phone: from, ...(process.env.WA_DEFAULT_ORG_ID ? { organizationId: process.env.WA_DEFAULT_ORG_ID } : {}) }, orderBy: { createdAt: "desc" }, select: { id: true } })
+      .catch(() => null);
+    if (req) await this.owner.linkRequest(from, req.id).catch(() => undefined);
   }
 
   private async send(to: string, replies: string[]): Promise<void> {

@@ -1,4 +1,5 @@
 import type { Language } from "@sampada/shared";
+import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
 /**
@@ -691,6 +692,9 @@ export const strings = {
 
   // WhatsApp Requests pages (i18n/waStrings.ts)
   ...waStrings,
+  // My Tasks page (i18n/taskStrings.ts)
+  ...taskStrings,
+  sidebarTasks: { en: "My Tasks", hi: "मेरे काम" },
 } as const;
 
 export type StringKey = keyof typeof strings;
