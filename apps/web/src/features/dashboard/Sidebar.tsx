@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
+import { BookOpen, CalendarCheck, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
@@ -133,6 +133,9 @@ export function Sidebar({
         )}
         {waEligible && (
           <SidebarLink to="/tasks" icon={<ListTodo size={17} strokeWidth={2.2} />} label={t("sidebarTasks")} collapsed={collapsed} />
+        )}
+        {waEligible && (
+          <SidebarLink to="/attendance" icon={<CalendarCheck size={17} strokeWidth={2.2} />} label={t("sidebarAttendance")} collapsed={collapsed} />
         )}
         {showWhatsapp && (
           <SidebarLink

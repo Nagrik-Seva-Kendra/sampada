@@ -1,5 +1,8 @@
 import { Module } from "@nestjs/common";
+import { AttendanceModule } from "../attendance/attendance.module.js";
+import { StaffModeService } from "./staff-mode.service.js";
 import { TasksModule } from "../tasks/tasks.module.js";
+import { WaMessagingModule } from "./wa-messaging.module.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
 import { TaskJobsService } from "./task-jobs.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
@@ -11,7 +14,6 @@ import { WaAdminController, WaAdminService } from "./wa-admin.controller.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
 import { IdCardExtractorService } from "./id-card-extractor.service.js";
 import { IdPhotoRetentionService } from "./id-photo-retention.service.js";
-import { WaOutboxService } from "./wa-outbox.service.js";
 import { WaRequestsController } from "./wa-requests.controller.js";
 import { WaRequestsService } from "./wa-requests.service.js";
 import { WaTemplatesController } from "./wa-templates.controller.js";
@@ -21,7 +23,7 @@ import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 @Module({
-  imports: [TasksModule],
+  imports: [TasksModule, WaMessagingModule, AttendanceModule],
   controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController],
   providers: [
     WhatsappService,
@@ -32,10 +34,10 @@ import { WhatsappService } from "./whatsapp.service.js";
     GuidelineLookupService,
     IdCardExtractorService,
     IdPhotoRetentionService,
-    WaOutboxService,
     WaTemplatesService,
     DraftReviewService,
     FrontDoorService,
+    StaffModeService,
     IntentClassifierService,
     WaAdminService,
     OwnerAssistantService,
