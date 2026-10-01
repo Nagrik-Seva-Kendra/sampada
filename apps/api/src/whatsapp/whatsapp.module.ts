@@ -1,4 +1,7 @@
 import { Module } from "@nestjs/common";
+import { TasksModule } from "../tasks/tasks.module.js";
+import { OwnerAssistantService } from "./owner-assistant.service.js";
+import { TaskJobsService } from "./task-jobs.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import { DraftIntakeService } from "./draft-intake.service.js";
 import { DraftReviewService } from "./draft-review.service.js";
@@ -18,6 +21,7 @@ import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 @Module({
+  imports: [TasksModule],
   controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController],
   providers: [
     WhatsappService,
@@ -34,6 +38,8 @@ import { WhatsappService } from "./whatsapp.service.js";
     FrontDoorService,
     IntentClassifierService,
     WaAdminService,
+    OwnerAssistantService,
+    TaskJobsService,
   ],
 })
 export class WhatsappModule {}

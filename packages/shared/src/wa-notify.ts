@@ -61,6 +61,27 @@ export const WA_TEMPLATES = {
     body: "नमस्ते, अनुरोध नंबर {{1}} का ड्राफ्ट जाँच के लिए तैयार है। कृपया इस नंबर पर कोई भी संदेश भेजें, हम ड्राफ्ट की PDF भेज देंगे। धन्यवाद।",
     example: ["AB12CD"],
   },
+  partyPapers: {
+    name: "party_papers_request",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से संदेश: आपके {{2}} के ड्राफ्ट के लिए कृपया इस नंबर पर ज़रूरी कागज़ की PDF या साफ़ फ़ोटो भेजें। धन्यवाद।",
+    example: ["रमेश जी", "विक्रय पत्र"],
+  },
+  staffTask: {
+    name: "staff_task",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते {{1}}, ऑफिस से नया काम: {{2}}। पूरा होने पर इसी नंबर पर हो गया लिखें। धन्यवाद।",
+    example: ["राहुल", "कल 10 बजे तहसील जाना है"],
+  },
+  ownerDigest: {
+    name: "owner_task_digest",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते, आज {{1}} काम हैं और {{2}} पुराने काम बाकी हैं। पूरी सूची के लिए काम लिखें। धन्यवाद।",
+    example: ["3", "1"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaReasonCode =

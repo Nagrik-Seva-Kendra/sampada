@@ -208,6 +208,16 @@ export class WaOutboxService {
   }
 
   /**
+   * A message not tied to a request (owner's tasks, staff work, asking a party
+   * for papers): text inside the 24h window, else the template; not recorded.
+   */
+  async deliverDirect(to: string, text: string, template: TemplateCall | null): Promise<{ status: "SENT" | "PENDING"; via: string | null; reason: string | null }> {
+    const d = await this.deliver(to, text, template);
+    this.log.log(`direct message to ${maskPhone(to)}: ${d.status}${d.via ? ` via=${d.via}` : ""}`);
+    return d;
+  }
+
+  /**
    * Plain-text alert to the owner's numbers (WA_ALERT_NUMBERS) that is not about
    * one request (spam blocked, "staff से बात"). Text inside the 24h window only;
    * otherwise it is just logged as not delivered. Never carries message content.

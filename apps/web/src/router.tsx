@@ -20,6 +20,7 @@ import { WelcomePage } from "./features/dashboard/WelcomePage";
 import { PlatformOrganizationsPage } from "./features/platform/PlatformOrganizationsPage";
 import { PlatformOrganizationDetailPage } from "./features/platform/PlatformOrganizationDetailPage";
 import { PropertiesListPage } from "./features/properties/PropertiesListPage";
+import { TasksPage } from "./features/tasks/TasksPage";
 import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
 import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
@@ -253,8 +254,17 @@ const whatsappRequestDetailRoute = createRoute({
   path: "/whatsapp-requests/$id",
   component: GuardedWhatsappRequestDetailPage,
 });
+function GuardedTasksPage() {
+  return useIsStaff() ? <TasksPage /> : <Navigate to="/deeds" />;
+}
+const tasksRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/tasks",
+  component: GuardedTasksPage,
+});
 
 const dashboardRoute = dashboardLayoutRoute.addChildren([
+  tasksRoute,
   dashboardIndexRoute,
   allDeedsRoute,
   allDeedDetailsRedirectRoute,
