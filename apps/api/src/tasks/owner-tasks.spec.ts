@@ -113,7 +113,7 @@ describe("owner routing", () => {
     const w = world();
     const intake = { hasActive: vi.fn(async () => false), handleText: vi.fn(async () => ["customer flow"]) };
     const front = { allowInbound: async () => true, isBlocked: async () => false, checkAbuse: async () => false, handle: vi.fn(async () => ({ replies: ["menu"], route: "menu" })), withoutRepeats: async (_p: string, r: string[]) => r };
-    const wa = new WhatsappService({ waInboundMessage: { create: async () => ({}) } } as any, intake as any, { touchContact: async () => undefined } as any, { handleReply: async () => null, flushPending: async () => undefined } as any, front as any, w.owner);
+    const wa = new WhatsappService({ waInboundMessage: { create: async () => ({}) } } as any, intake as any, { touchContact: async () => undefined } as any, { handleReply: async () => null, flushPending: async () => undefined } as any, front as any, w.owner, { handle: async (p: string, m: any) => (m.type === "text" ? w.owner.handleStaff(p, m.text ?? "") : null), ownerText: async () => null, ownerButton: async () => null } as any);
     const msg = (id: string, from: string, body: string) => ({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { messages: [{ id, from, type: "text", text: { body } }] } }] }] });
 
     await wa.handlePayload(msg("a", OWNER, "रमेश का बैनामा सोमवार तक"));

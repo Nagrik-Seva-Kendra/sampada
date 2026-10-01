@@ -19,3 +19,4 @@ export * from "./id-photos.js";
 export * from "./wa-notify.js";
 export * from "./wa-office-fees.js";
 export * from "./task.js";
+export * from "./attendance.js";

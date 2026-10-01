@@ -8,6 +8,7 @@ import { Debouncer, type DebouncedBatch } from "./debouncer.js";
 import { DraftReviewService } from "./draft-review.service.js";
 import { FrontDoorService } from "./front-door.service.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
+import { StaffModeService } from "./staff-mode.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
@@ -29,6 +30,7 @@ export class WhatsappService {
     private readonly drafts: DraftReviewService,
     private readonly front: FrontDoorService,
     private readonly owner: OwnerAssistantService,
+    private readonly staffMode: StaffModeService,
   ) {}
 
   /** Texts from one number within WA_DEBOUNCE_MS (default 10 s) are handled together. */
@@ -99,6 +101,14 @@ export class WhatsappService {
     // The owner's numbers: a to-do assistant, unless testing the customer flow ("ग्राहक मोड").
     if (this.owner.isOwner(from)) {
       const body = msg.type === "text" ? String(msg.text?.body ?? "") : "";
+      // Leave decisions: the मंज़ूर / नामंज़ूर buttons or "मंज़ूर 5".
+      const buttonId = msg.type === "interactive" ? String(msg.interactive?.button_reply?.id ?? "") : "";
+      const decision = buttonId ? await this.staffMode.ownerButton(from, buttonId) : body ? await this.staffMode.ownerText(from, body) : null;
+      if (decision) {
+        await this.send(from, decision);
+        this.log.log(`message ${msg.id} from owner route=leave-decision`);
+        return;
+      }
       const testing = await this.owner.inCustomerTest(from);
       if (testing && /^(ओनर|owner|मालिक|malik)\s*(मोड|mode)$/i.test(body.trim())) {
         await this.send(from, await this.owner.endCustomerTest(from));
@@ -112,14 +122,16 @@ export class WhatsappService {
         return;
       }
     }
-    // Staff numbers (Team page mobile): "हो गया" closes their task.
-    if (msg.type === "text") {
-      const staffReply = await this.owner.handleStaff(from, String(msg.text?.body ?? ""));
-      if (staffReply) {
-        await this.send(from, staffReply);
-        this.log.log(`message ${msg.id} from staff ${maskPhone(from)} route=staff-done`);
-        return;
-      }
+    // Staff numbers (Team page mobile) never reach the customer flow: attendance, leave, "हो गया".
+    const staffReply = await this.staffMode.handle(from, {
+      type: msg.type,
+      text: msg.type === "text" ? String(msg.text?.body ?? "") : undefined,
+      location: msg.type === "location" ? msg.location : undefined,
+    });
+    if (staffReply) {
+      await this.send(from, staffReply);
+      this.log.log(`message ${msg.id} from staff ${maskPhone(from)} type=${msg.type} route=staff replies=${staffReply.length}`);
+      return;
     }
     if (!(await this.front.allowInbound(from))) {
       this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=blocked`);

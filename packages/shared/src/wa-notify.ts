@@ -82,6 +82,20 @@ export const WA_TEMPLATES = {
     body: "नमस्ते, आज {{1}} काम हैं और {{2}} पुराने काम बाकी हैं। पूरी सूची के लिए काम लिखें। धन्यवाद।",
     example: ["3", "1"],
   },
+  leaveRequest: {
+    name: "leave_request",
+    language: "hi",
+    category: "UTILITY",
+    body: "छुट्टी की अर्ज़ी #{{1}}: {{2}}। जवाब के लिए मंज़ूर या नामंज़ूर के साथ अर्ज़ी नंबर लिखें। धन्यवाद।",
+    example: ["5", "राहुल, 12/10 से 13/10, बीमारी"],
+  },
+  staffNotice: {
+    name: "staff_notice",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से सूचना: {{2}}। धन्यवाद।",
+    example: ["राहुल", "आपकी छुट्टी की अर्ज़ी #5 मंज़ूर हो गई"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaReasonCode =

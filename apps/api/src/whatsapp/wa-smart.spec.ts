@@ -214,6 +214,7 @@ describe("webhook: several quick texts → one answer", () => {
       { handleReply: async () => null, flushPending: async () => undefined } as any,
       w.front,
       { isOwner: () => false, handleStaff: async () => null, linkRequest: async () => undefined } as any,
+      { handle: async () => null, ownerText: async () => null, ownerButton: async () => null } as any,
     );
     const msg = (id: string, body: string) => ({
       object: "whatsapp_business_account",

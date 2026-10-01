@@ -767,3 +767,104 @@ model WaJobRun {
   name      String   @id
   lastRunAt DateTime
 }
+
+/// Attendance rules per organization (AttendanceSettings in @sampada/shared): office location + radius, hours, weekly off, late/half-day, leave quota.
+model AttendanceConfig {
+  organizationId String   @id
+  config         Json
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+}
+
+/// The owner's own holiday list (no government holidays are added automatically).
+model Holiday {
+  id             String @id @default(cuid())
+  organizationId String
+  /// IST day "YYYY-MM-DD"
+  date           String
+  name           String
+
+  @@unique([organizationId, date])
+}
+
+/// One button press: IN / OUT (inside the office radius) or FIELD (बाहर का काम, with a reason).
+/// Location is taken only at that moment -- there is no tracking.
+model AttendanceRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// IST day "YYYY-MM-DD"
+  day            String
+  /// IN | OUT | FIELD
+  kind           String
+  at             DateTime @default(now())
+  lat            Float
+  lng            Float
+  accuracyM      Float?
+  distanceM      Int?
+  inside         Boolean
+  reason         String?
+  /// web | whatsapp
+  source         String   @default("web")
+
+  @@index([organizationId, day])
+  @@index([userId, day])
+}
+
+model LeaveRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// Short per-organization number ("मंज़ूर 5").
+  number         Int
+  userId         String
+  fromDate       String
+  toDate         String
+  halfDay        Boolean   @default(false)
+  /// CASUAL | SICK | OTHER
+  type           String
+  reason         String
+  /// PENDING | APPROVED | REJECTED
+  status         String    @default("PENDING")
+  decidedById    String?
+  decidedAt      DateTime?
+  /// web | whatsapp
+  source         String    @default("web")
+  createdAt      DateTime  @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([userId, fromDate])
+}
+
+/// Monthly salary history (OWNER only). The row with the latest effectiveFrom ≤ a month applies.
+model SalaryRate {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  monthly        Int
+  /// IST day the salary starts / changes
+  effectiveFrom  String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId, effectiveFrom])
+}
+
+/// Month-end salary sheet (OWNER only): computed lines + owner's adjustments; FINAL once the owner locks it.
+model SalarySheet {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// "YYYY-MM"
+  month          String
+  /// DRAFT | FINAL
+  status         String    @default("DRAFT")
+  lines          Json
+  /// { [userId]: { bonus, advance, otherDeduction, note } }
+  adjustments    Json      @default("{}")
+  /// userIds whose slip was sent on WhatsApp
+  sentTo         Json      @default("[]")
+  finalizedAt    DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([organizationId, month])
+}

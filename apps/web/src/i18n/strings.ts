@@ -1,4 +1,5 @@
 import type { Language } from "@sampada/shared";
+import { attendanceStrings } from "./attendanceStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -695,6 +696,9 @@ export const strings = {
   // My Tasks page (i18n/taskStrings.ts)
   ...taskStrings,
   sidebarTasks: { en: "My Tasks", hi: "मेरे काम" },
+  // Attendance page (i18n/attendanceStrings.ts)
+  ...attendanceStrings,
+  sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 
 export type StringKey = keyof typeof strings;
