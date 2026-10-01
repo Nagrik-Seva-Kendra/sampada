@@ -64,7 +64,7 @@ describe("submit → owner alert", () => {
     vi.stubEnv("WA_ALERT_NUMBERS", env);
     const outbox = { send: vi.fn(async () => ({})) };
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update: vi.fn(async ({ data }: any) => Object.assign(cur, data)) } };
-    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, outbox as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, outbox as any, { classify: async () => null } as any);
     return { outbox, say: (t: string) => svc.handleText({ phone: "919876543210", name: "राम" }, t) };
   }
 

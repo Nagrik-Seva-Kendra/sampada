@@ -16,6 +16,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { type DeedExtract, DeedExtractorService } from "./deed-extractor.service.js";
 import { type GuidelineResult, GuidelineLookupService } from "./guideline-lookup.service.js";
 import { IdCardExtractorService } from "./id-card-extractor.service.js";
+import { type FlowIntent, IntentClassifierService } from "./intent-classifier.service.js";
 import { idWarningsFor, mapIdRead } from "./id-cards.js";
 import { alertMessage, alertNumbers } from "./wa-alerts.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
@@ -338,6 +339,30 @@ function mortgageNext(data: any): string {
 const ownerNames = (deed: DeedExtract | null | undefined) =>
   (deed?.buyers ?? []).map((b) => b?.name).filter((n): n is string => !!n);
 const DEED_LABEL: Record<string, string> = { sale: "विक्रय पत्र", mortgage: "बंधक पत्र", other: "अन्य दस्तावेज़" };
+/** A model intent → the exact words the step expects ("हाँ", "बदलें", "बाद में", "2" ...); null if it doesn't apply. */
+export function smartCanonical(step: string, intent: FlowIntent): string | null {
+  const yn = (yes: string, no: string, unknown?: string) =>
+    intent.intent === "yes" ? yes : intent.intent === "no" ? no : intent.intent === "unknown" && unknown ? unknown : null;
+  if (step === "CONFIRM_PROPERTY") return yn("हाँ", "नहीं");
+  if (/^PLOT_/.test(step) || step === "M_OWNER") return yn("हाँ", "नहीं", "पता नहीं");
+  if (step === "FINAL" || idOkRe.test(step)) return yn("हाँ", "बदलें");
+  if (reuseOfferRe.test(step)) return yn("हाँ", "नहीं");
+  if (step in DOC_STEP) return intent.intent === "later" || intent.intent === "no" ? "बाद में" : null;
+  if (step === "CHOOSE_DEED") return intent.deedType === "sale" ? "1" : intent.deedType === "mortgage" ? "2" : intent.deedType === "other" ? "3" : null;
+  if (step === "M_FIRST_DOC") return intent.saysSanction ? "1" : null;
+  return null;
+}
+
+/** Polite re-ask with examples when the reply couldn't be understood. */
+export function smartReask(step: string): string {
+  const tail = '\nकोई सवाल हो तो लिख दें, या बात करने के लिए "स्टाफ" लिखें।';
+  if (step === "FINAL" || /^ID_OK:/.test(step)) return 'माफ़ कीजिए, समझ नहीं पाए। सही है तो "हाँ" लिखें, कुछ बदलना हो तो "बदलें" लिखें।' + tail;
+  if (/^PLOT_/.test(step) || step === "M_OWNER") return 'माफ़ कीजिए, समझ नहीं पाए। कृपया "हाँ", "नहीं" या "पता नहीं" लिखें।' + tail;
+  if (step === "CHOOSE_DEED" || step === "M_FIRST_DOC") return "माफ़ कीजिए, समझ नहीं पाए। कृपया सिर्फ़ नंबर लिखें, जैसे 1 या 2।" + tail;
+  if (step in DOC_STEP) return 'दस्तावेज़ की PDF या फ़ोटो भेजें, या अभी न हो तो "बाद में" लिखें।' + tail;
+  return 'माफ़ कीजिए, समझ नहीं पाए। कृपया "हाँ" या "नहीं" लिखें (जैसे: हाँ)। कोई और दस्तावेज़ बनवाना हो तो उसका नाम लिखें (जैसे बंधक पत्र)।' + tail;
+}
+
 const AMOUNT_ASK = "रजिस्ट्री कितनी राशि पर बनानी है? राशि लिखें (जैसे 1500000 या 15 लाख), या \"गाइडलाइन\" लिखें।";
 
 @Injectable()
@@ -351,6 +376,7 @@ export class DraftIntakeService {
     private readonly guideline: GuidelineLookupService,
     private readonly idReader: IdCardExtractorService,
     private readonly outbox: WaOutboxService,
+    private readonly intents: IntentClassifierService,
   ) {}
 
   // ================= document received =================
@@ -397,6 +423,16 @@ export class DraftIntakeService {
   // ================= text received =================
   /** Returns null when no draft conversation is active (caller sends the default reply). */
   async handleText(ctx: Ctx, raw: string): Promise<string[] | null> {
+    return this.route(ctx, raw, 0);
+  }
+
+  /** Whether this number has a draft conversation going on (the front door then stays out of the way). */
+  async hasActive(phone: string): Promise<boolean> {
+    return !!(await this.active(phone));
+  }
+
+  /** depth 1 = a canonical answer re-dispatched by smart(); never classified again. */
+  private async route(ctx: Ctx, raw: string, depth: number): Promise<string[] | null> {
     const v = normDigits(raw.trim());
     const cur = await this.active(ctx.phone);
 
@@ -421,12 +457,12 @@ export class DraftIntakeService {
         const intent = YES.test(v) ? "sale" : NO.test(v) ? null : detectDeedIntent(v);
         if (intent) return this.startDeed(cur, data, intent, raw);
         if (NO.test(v)) return this.goto(cur.id, data, "CHOOSE_DEED", "ठीक है।");
-        return ['कृपया "हाँ" या "नहीं" लिखें, या बताएँ कौन सा दस्तावेज़ बनवाना है (जैसे बंधक पत्र)।'];
+        return this.smart(ctx, cur, data, raw, depth);
       }
 
       case "CHOOSE_DEED": {
         const intent = parseDeedChoice(v);
-        if (!intent) return ["कृपया 1, 2 या 3 लिखें।\n\n" + CHOOSE_DEED_ASK];
+        if (!intent) return this.smart(ctx, cur, data, raw, depth);
         // "3" alone doesn't say which document -- ask; words like "दान पत्र" already do.
         if (intent === "other" && /^3\b/.test(v)) return this.goto(cur.id, data, "OTHER_DESC");
         return this.startDeed(cur, data, intent, raw);
@@ -441,7 +477,7 @@ export class DraftIntakeService {
         const i = PLOT_STEPS.findIndex((s) => s.key === cur.step);
         const step = PLOT_STEPS[i]!;
         const answer = yesNoUnknown(v);
-        if (answer === undefined) return ["कृपया \"हाँ\", \"नहीं\" या \"पता नहीं\" लिखें।"];
+        if (answer === undefined) return this.smart(ctx, cur, data, raw, depth);
         data[step.field] = answer;
         const next = PLOT_STEPS[i + 1]?.key ?? BUYER_STEPS[0]!.key;
         if (step.key === "PLOT_BUILDING" && answer !== false) {
@@ -455,7 +491,7 @@ export class DraftIntakeService {
       case "M_FIRST_DOC": {
         const n = normDigits(v).trim();
         const role: MortgageDoc | null | undefined = /^1\b/.test(n) ? "sanction" : /^2\b/.test(n) ? "registry" : /^3\b/.test(n) ? null : undefined;
-        if (role === undefined) return ["कृपया 1, 2 या 3 लिखें।\n\n" + M_FIRST_DOC_ASK];
+        if (role === undefined) return this.smart(ctx, cur, data, raw, depth);
         data.docs = { ...(data.docs ?? {}) };
         if (role) data.docs[role] = cur.documentKey;
         // Not recognised as a sale deed by the reader: staff should look at it.
@@ -467,7 +503,7 @@ export class DraftIntakeService {
       case "M_REGISTRY":
       case "M_TRANSFER": {
         const role = DOC_STEP[cur.step]!;
-        if (!LATER.test(v)) return [this.question(cur.step, data)];
+        if (!LATER.test(v)) return this.smart(ctx, cur, data, raw, depth);
         data.docs = { ...(data.docs ?? {}), [role]: "later" };
         await this.save(cur.id, { data, needsStaff: true });
         const next = mortgageNext(data);
@@ -476,7 +512,7 @@ export class DraftIntakeService {
 
       case "M_OWNER": {
         const answer = yesNoUnknown(v);
-        if (answer === undefined) return ['कृपया "हाँ", "नहीं" या "पता नहीं" लिखें।'];
+        if (answer === undefined) return this.smart(ctx, cur, data, raw, depth);
         data.ownerIsCurrent = answer;
         if (answer === null) await this.save(cur.id, { needsStaff: true });
         const next = mortgageNext(data);
@@ -503,9 +539,13 @@ export class DraftIntakeService {
           const first = data.deedType === "mortgage" ? MORTGAGE_STEPS[0]!.key : BUYER_STEPS[0]!.key;
           return this.goto(cur.id, keep, first, "ठीक है, विवरण दोबारा लेते हैं।");
         }
-        return ["पुष्टि के लिए \"हाँ\", दोबारा भरने के लिए \"बदलें\", या बंद करने के लिए \"रद्द\" लिखें।"];
+        return this.smart(ctx, cur, data, raw, depth);
 
       default: {
+        if (reuseOfferRe.test(cur.step) && !YES.test(v) && !NO.test(v)) return this.smart(ctx, cur, data, raw, depth);
+        if (idOkRe.test(cur.step) && !YES.test(v) && !NO.test(v) && !/बदल|change|edit|गलत|galat|wrong/i.test(v)) {
+          return this.smart(ctx, cur, data, raw, depth);
+        }
         if (reuseOfferRe.test(cur.step)) return this.reuseAnswer(cur, data, v);
         if (reuseCheckRe.test(cur.step)) return this.reuseCheck(cur, data, raw, v);
         if (idStepRe.test(cur.step)) return this.idPhotoText(cur, data, v);
@@ -538,6 +578,48 @@ export class DraftIntakeService {
     }
   }
 
+  // ================= replies that don't match the expected words =================
+  /**
+   * The reply didn't match the question's words: ask the model what it means
+   * (yes/no/cancel/another document/a question/staff) and continue the flow --
+   * a question gets a short answer (or "स्टाफ बताएगा") and the question again.
+   * Only for choice steps, so no Aadhaar/PAN step's text ever reaches the model.
+   */
+  private async smart(ctx: Ctx, cur: any, data: any, raw: string, depth: number): Promise<string[]> {
+    const step: string = cur.step;
+    const q = this.question(step, data);
+    const reask = () => [smartReask(step), q];
+    if (depth > 0) return reask();
+    const intent: FlowIntent | null = await this.intents.classify(q, raw, { deedType: data.deedType ?? null });
+    this.log.log(`request ${String(cur.id).slice(-6).toUpperCase()} step=${step.split(":")[0]} intent=${intent?.intent ?? "none"}${intent?.deedType ? `/${intent.deedType}` : ""}`);
+    if (!intent || intent.intent === "unclear") return reask();
+    switch (intent.intent) {
+      case "cancel":
+        return (await this.route(ctx, "रद्द", 1)) ?? reask();
+      case "staff":
+        await this.outbox
+          .alertOwners(`📞 ग्राहक (अनुरोध ${String(cur.id).slice(-6).toUpperCase()}) स्टाफ से बात करना चाहते हैं।`)
+          .catch(() => undefined);
+        return ["ठीक है, हमारा स्टाफ जल्द आपसे संपर्क करेगा।", q];
+      case "question":
+        return [intent.answer || "यह जानकारी हमारा स्टाफ बताएगा।", q];
+      case "change_deed": {
+        const peopleStarted = partyPrefixes(data).some((p) => data[`${p}Name`] !== undefined);
+        if (intent.deedType === data.deedType) return reask();
+        if (peopleStarted) return ['दस्तावेज़ बदलना हो तो "रद्द" लिखकर नया शुरू करें, या "स्टाफ" लिखें।', q];
+        // Start over with the documents already sent.
+        const fresh: any = { extraDocs: data.extraDocs };
+        const said = intent.saysSanction ? `${raw} sanction` : raw;
+        return this.startDeed(cur, fresh, intent.deedType!, said);
+      }
+      default: {
+        const canon = smartCanonical(step, intent);
+        if (!canon) return reask();
+        return (await this.route(ctx, canon, 1)) ?? reask();
+      }
+    }
+  }
+
   /**
    * Starts the chosen document's questions.
    * sale → plot questions (plots only) → buyer; mortgage → mortgagor + 2 witnesses;
@@ -563,7 +645,7 @@ export class DraftIntakeService {
       ];
       // What was the document they already sent?
       let next: string;
-      if (deed?.isSaleDeed && cur.documentKey) {
+      if (deed?.isSaleDeed && cur.documentKey && !SANCTION_RE.test(said ?? "")) {
         data.docs.registry = cur.documentKey;
         data.registryOwners = ownerNames(deed);
         intro.push("", MORTGAGE_DOC_RECEIVED.registry);

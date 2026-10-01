@@ -4,7 +4,9 @@ import { extname, join } from "node:path";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { r2Configured, r2Put } from "../guideline/r2.js";
 import { DraftIntakeService, type IncomingFile } from "./draft-intake.service.js";
+import { Debouncer, type DebouncedBatch } from "./debouncer.js";
 import { DraftReviewService } from "./draft-review.service.js";
+import { FrontDoorService } from "./front-door.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
@@ -24,7 +26,24 @@ export class WhatsappService {
     private readonly intake: DraftIntakeService,
     private readonly outbox: WaOutboxService,
     private readonly drafts: DraftReviewService,
+    private readonly front: FrontDoorService,
   ) {}
+
+  /** Texts from one number within WA_DEBOUNCE_MS (default 10 s) are handled together. */
+  private debounceMs(): number {
+    const n = Number(process.env.WA_DEBOUNCE_MS ?? 10_000);
+    return Number.isFinite(n) ? n : 10_000;
+  }
+  private readonly debouncer = new Debouncer(() => this.debounceMs());
+
+  private async handleTextsSafely(from: string, batch: DebouncedBatch): Promise<void> {
+    try {
+      await this.handleTexts(from, batch);
+    } catch (e: any) {
+      this.log.error(`text batch from ${maskPhone(from)} failed: ${e?.message}`);
+      await this.sendText(from, "क्षमा करें, तकनीकी समस्या आई। हमारा स्टाफ आपसे संपर्क करेगा।");
+    }
+  }
 
   // ---------- security ----------
   verifySignature(rawBody: Buffer | undefined, header: string | undefined): SignatureResult {
@@ -75,33 +94,80 @@ export class WhatsappService {
     await this.markRead(msg.id);
     // Opens the 24h window in which the office may send free-form text (status updates ...).
     await this.outbox.touchContact(from).catch((e) => this.log.warn(`window update failed: ${e?.code ?? e?.name ?? "error"}`));
+    if (!(await this.front.allowInbound(from))) {
+      this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=blocked`);
+      return;
+    }
     const ctx = { phone: from, name };
-    let replies: string[];
 
     switch (msg.type) {
       case "text": {
-        // A draft waiting for this customer's "SAHI HAI" / correction comes first.
-        const review = await this.drafts.handleReply(from, msg.text?.body ?? "");
-        const r = review ?? (await this.intake.handleText(ctx, msg.text?.body ?? ""));
-        // TODO (next phase): when r is null, answer guideline/act questions via the AI bot.
-        replies = r ?? [`नमस्ते ${name}, आपका संदेश मिल गया है। नागरिक सेवा केंद्र जल्द जवाब देगा।`];
-        break;
+        // Several quick texts → one batch, one answer. Not awaited (except with no window),
+        // so the next message of the same webhook delivery joins this batch.
+        const done = this.debouncer.push(from, msg.text?.body ?? "", name, (b) => this.handleTextsSafely(from, b));
+        if (this.debounceMs() <= 0) await done;
+        else done.catch(() => undefined);
+        return;
       }
       case "document":
       case "image": {
+        await this.debouncer.flushNow(from); // texts sent just before the file come first
         const media = msg[msg.type]; // { id, mime_type, filename?, caption? }
         const file = await this.downloadMedia(media.id, media.filename);
-        replies = await this.intake.handleDocument(ctx, file);
-        break;
+        const viaCost = (await this.intake.hasActive(from)) ? null : await this.front.handleDocument(from, file);
+        const replies = viaCost ? viaCost.replies : await this.intake.handleDocument(ctx, file);
+        await this.send(from, replies);
+        await this.afterReply(from);
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=${viaCost ? "cost" : "flow"} replies=${replies.length}`);
+        return;
       }
       default:
-        replies = ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"];
+        await this.send(from, await this.front.withoutRepeats(from, ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"]));
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=unsupported`);
     }
-    const toSend = replies.filter(Boolean);
-    for (const r of toSend) await this.sendText(from, r);
-    // The window is open now: a draft PDF that could not go out earlier is sent after this reply.
+  }
+
+  /** One debounced batch of texts from a number: draft review → draft flow → front door (menu ...). */
+  async handleTexts(from: string, batch: DebouncedBatch): Promise<void> {
+    const text = batch.texts.map((t) => t.trim()).filter(Boolean).join("\n");
+    const ctx = { phone: from, name: batch.name };
+    let route: string;
+    let replies: string[];
+    if (await this.front.isBlocked(from)) {
+      // Blocked while these texts were waiting (spam burst): stay silent.
+      route = "blocked";
+      replies = [];
+    } else if (await this.front.checkAbuse(from, text)) {
+      route = "abuse";
+      replies = [];
+    } else {
+      const review = await this.drafts.handleReply(from, text);
+      if (review) {
+        route = "draft-review";
+        replies = review;
+      } else if (await this.intake.hasActive(from)) {
+        await this.front.clearGibberish(from);
+        route = "flow";
+        replies = (await this.intake.handleText(ctx, text)) ?? [];
+      } else {
+        const r = await this.front.handle(from, text, () => this.intake.handleText(ctx, text));
+        route = r.route;
+        // Generic answers are never repeated within 10 minutes.
+        replies = await this.front.withoutRepeats(from, r.replies);
+      }
+    }
+    await this.send(from, replies);
+    if (route !== "abuse" && route !== "blocked") await this.afterReply(from);
+    this.log.log(`text batch from ${maskPhone(from)} messages=${batch.texts.length} route=${route} replies=${replies.length}`);
+  }
+
+  private async send(to: string, replies: string[]): Promise<void> {
+    for (const r of replies.filter(Boolean)) await this.sendText(to, r);
+  }
+
+  /** The window is open now: a draft PDF that could not go out earlier is sent after this reply. */
+  private async afterReply(from: string): Promise<void> {
     await this.drafts.flushPending(from).catch((e) => this.log.warn(`pending draft not sent: ${e?.code ?? e?.name ?? "error"}`));
-    this.log.log(`handled message ${msg.id} type=${msg.type} replies=${toSend.length}`);
   }
 
   // ---------- media ----------

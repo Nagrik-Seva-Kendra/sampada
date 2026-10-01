@@ -58,7 +58,7 @@ function convo(prev: any[], createdDaysAgo = 30) {
   const rows = [cur, ...prev.map((p) => ({ status: "SUBMITTED", organizationId: "org-1", createdAt: new Date(Date.now() - createdDaysAgo * 86400_000), ...p }))];
   const prisma = db(rows);
   // active() looks up the ACTIVE row by phone
-  const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any);
+  const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any, { classify: async () => null } as any);
   return { cur, say: async (t: string) => (await svc.handleText({ phone: MINE, name: "अ" }, t))!.join("\n") };
 }
 

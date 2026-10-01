@@ -4,6 +4,7 @@ import type { WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
+import { BlockedPanel, FeesPanel } from "./BotSettingsPanels";
 import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
 import { useBulkDeleteWaRequests, useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
 import { DEED_TYPE_KEY, INTAKE_STATUS_KEY, useWaT, type WaT, WORK_STATUS_KEY } from "./waI18n";
@@ -137,6 +138,8 @@ export function WhatsappRequestsPage() {
         </div>
 
         {canManage && <TemplatesPanel />}
+        {canManage && <FeesPanel />}
+        {canManage && <BlockedPanel />}
 
         {canManage && selected.size > 0 && (
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>

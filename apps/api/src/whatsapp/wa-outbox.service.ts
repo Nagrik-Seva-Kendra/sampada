@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { WaNotification, WaNotificationKind, WaReasonCode, WaTemplateDef } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { alertNumbers } from "./wa-alerts.js";
 import { readMedia } from "./wa-media.js";
 import { requestRef } from "./wa-requests.mapper.js";
 import { graphBase, maskPhone } from "./webhook-diagnostics.js";
@@ -204,6 +205,22 @@ export class WaOutboxService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Plain-text alert to the owner's numbers (WA_ALERT_NUMBERS) that is not about
+   * one request (spam blocked, "staff से बात"). Text inside the 24h window only;
+   * otherwise it is just logged as not delivered. Never carries message content.
+   */
+  async alertOwners(text: string): Promise<number> {
+    let sent = 0;
+    for (const to of alertNumbers()) {
+      if (!process.env.WA_ACCESS_TOKEN || !(await this.inWindow(to))) continue;
+      const r = await this.post(to, { type: "text", text: { body: text } });
+      if (r.ok) sent++;
+    }
+    this.log.log(`owner alert: sent to ${sent} number(s)`);
+    return sent;
   }
 
   /** One Graph /messages call; returns only ok / wamid / error code. */
