@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   WaAssignee,
+  WaBlockedContact,
+  WaOfficeFees,
   WaBulkDeleteResult,
   WaDeleteResult,
   WaDraftForCustomer,
@@ -199,4 +201,42 @@ export function useWaIdPhotoOpener() {
       .get(`whatsapp/requests/${id}/id-photo`, { headers: authHeaders(token), searchParams: { party, kind } })
       .blob()
       .then((b) => URL.createObjectURL(b));
+}
+
+/** OWNER/ADMIN: the office fee table the bot quotes. */
+export function useWaFees(enabled: boolean) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["wa-fees"],
+    enabled: enabled && !!token,
+    queryFn: () => api.get("whatsapp/fees", { headers: authHeaders(token) }).json<WaOfficeFees>(),
+  });
+}
+
+export function useSaveWaFees() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<WaOfficeFees, Error, WaOfficeFees>({
+    mutationFn: (fees) => api.put("whatsapp/fees", { headers: authHeaders(token), json: fees }).json<WaOfficeFees>(),
+    onSuccess: (fees) => qc.setQueryData(["wa-fees"], fees),
+  });
+}
+
+/** OWNER/ADMIN: numbers the bot stopped answering (spam/abuse). */
+export function useWaBlocked(enabled: boolean) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["wa-blocked"],
+    enabled: enabled && !!token,
+    queryFn: () => api.get("whatsapp/contacts/blocked", { headers: authHeaders(token) }).json<WaBlockedContact[]>(),
+  });
+}
+
+export function useUnblockWa() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (phone) => api.post(`whatsapp/contacts/${encodeURIComponent(phone)}/unblock`, { headers: authHeaders(token) }).json(),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["wa-blocked"] }),
+  });
 }

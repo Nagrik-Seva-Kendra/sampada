@@ -324,4 +324,25 @@ export const waStrings = {
     en: "Card photo could not be read — details were typed by the customer",
     hi: "कार्ड की फ़ोटो पढ़ी नहीं जा सकी — जानकारी ग्राहक ने लिखकर दी",
   },
+
+  // ---------- office fees / blocked numbers (bot settings) ----------
+  waFeesTitle: { en: "Office fees quoted by the bot", hi: "बॉट द्वारा बताया जाने वाला कार्यालय शुल्क" },
+  waFeesNote: {
+    en: "Total office charges (writing fee included). Registry: by the higher of consideration and guideline value.",
+    hi: "कुल कार्यालय शुल्क (लेखन शुल्क सहित)। रजिस्ट्री: प्रतिफल या गाइडलाइन मूल्य, जो ज़्यादा हो।",
+  },
+  waFeesUpTo: { en: "Registry up to ₹", hi: "रजिस्ट्री ₹ तक" },
+  waFeesFee: { en: "Fee ₹", hi: "शुल्क ₹" },
+  waFeesAbove: { en: "Above the last slab ₹ (empty = office will tell)", hi: "आखिरी स्लैब से ऊपर ₹ (खाली = कार्यालय बताएगा)" },
+  waFeesGda: { en: "GDA lease ₹", hi: "GDA पट्टा ₹" },
+  waFeesOther: { en: "Other documents ₹", hi: "अन्य दस्तावेज़ ₹" },
+  waFeesAddSlab: { en: "Add slab", hi: "स्लैब जोड़ें" },
+  waFeesRemove: { en: "Remove", hi: "हटाएँ" },
+  waFeesSaved: { en: "Fees saved.", hi: "शुल्क सहेज दिए गए।" },
+  waFeesSaveError: { en: "Could not save the fees.", hi: "शुल्क सहेजे नहीं जा सके।" },
+  waBlockedTitle: { en: "Numbers the bot stopped answering", hi: "जिन नंबरों को बॉट ने रोका है" },
+  waBlockedNone: { en: "No blocked numbers.", hi: "कोई नंबर रोका नहीं गया है।" },
+  waBlockedSpam: { en: "Too many messages (spam)", hi: "बहुत ज़्यादा संदेश (स्पैम)" },
+  waBlockedAbuse: { en: "Abusive language", hi: "अपशब्द" },
+  waUnblock: { en: "Unblock", hi: "खोलें" },
 } as const;

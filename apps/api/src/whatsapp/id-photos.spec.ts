@@ -94,7 +94,7 @@ describe("bot: ID photos before the buyer's typed questions", () => {
       },
     };
     const reader = { read: vi.fn(async () => readerReturns.shift() ?? null) };
-    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup: vi.fn(async () => null) } as any, reader as any, { send: async () => ({}) } as any);
+    const svc = new DraftIntakeService(prisma as any, {} as any, { lookup: vi.fn(async () => null) } as any, reader as any, { send: async () => ({}) } as any, { classify: async () => null } as any);
     const ctx = { phone: "919876543210", name: "अ" };
     let n = 0;
     return {
@@ -210,7 +210,7 @@ describe("bot: ID photos before the buyer's typed questions", () => {
     };
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
-    const svc = new DraftIntakeService({ draftIntake: { findFirst: vi.fn(async () => cur), update } } as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any);
+    const svc = new DraftIntakeService({ draftIntake: { findFirst: vi.fn(async () => cur), update } } as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any, { classify: async () => null } as any);
     await svc.handleText({ phone: "1", name: "" }, "हाँ");
     expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW", needsStaff: true } });
   });

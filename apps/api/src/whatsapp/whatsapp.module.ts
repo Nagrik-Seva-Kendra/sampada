@@ -2,6 +2,9 @@ import { Module } from "@nestjs/common";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import { DraftIntakeService } from "./draft-intake.service.js";
 import { DraftReviewService } from "./draft-review.service.js";
+import { FrontDoorService } from "./front-door.service.js";
+import { IntentClassifierService } from "./intent-classifier.service.js";
+import { WaAdminController, WaAdminService } from "./wa-admin.controller.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
 import { IdCardExtractorService } from "./id-card-extractor.service.js";
 import { IdPhotoRetentionService } from "./id-photo-retention.service.js";
@@ -15,7 +18,7 @@ import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 @Module({
-  controllers: [WhatsappController, WaRequestsController, WaTemplatesController],
+  controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController],
   providers: [
     WhatsappService,
     WhatsappBootstrapService,
@@ -28,6 +31,9 @@ import { WhatsappService } from "./whatsapp.service.js";
     WaOutboxService,
     WaTemplatesService,
     DraftReviewService,
+    FrontDoorService,
+    IntentClassifierService,
+    WaAdminService,
   ],
 })
 export class WhatsappModule {}

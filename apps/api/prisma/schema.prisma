@@ -662,6 +662,30 @@ model WaInboundMessage {
 model WaContact {
   phone         String   @id
   lastInboundAt DateTime
+  /// Organization the number last wrote to (WA_DEFAULT_ORG_ID); used for the unblock list.
+  organizationId  String?
+  /// Front-door state outside a draft conversation (menu choice in progress), e.g. { mode: "cost", step: "KIND" }.
+  state           Json?
+  /// Consecutive gibberish messages; reset by any real message.
+  gibberishStreak Int       @default(0)
+  /// Gibberish is ignored silently until then (a real message clears it).
+  mutedUntil      DateTime?
+  /// Bot stopped answering (spam / abuse) until OWNER/ADMIN unblocks.
+  blockedAt       DateTime?
+  /// spam | abuse
+  blockReason     String?
+  /// Hashes of recent generic replies, to never repeat one within 10 minutes: [{ h, at }].
+  recentReplies   Json?
+
+  @@index([organizationId, blockedAt])
+}
+
+/// The office's charges quoted by the bot (WaOfficeFees in @sampada/shared), per organization.
+model WaOfficeFeeConfig {
+  organizationId String   @id
+  config         Json
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
 }
 
 /// Every message the office sends for a WhatsApp request outside the bot
