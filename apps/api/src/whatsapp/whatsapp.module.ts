@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AttendanceModule } from "../attendance/attendance.module.js";
+import { ColonyModule } from "../colony/colony.module.js";
 import { StaffModeService } from "./staff-mode.service.js";
 import { RegistryJobsService } from "./registry-jobs.service.js";
 import { CallbackService } from "./callback.service.js";
@@ -27,7 +28,7 @@ import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 @Module({
-  imports: [TasksModule, WaMessagingModule, AttendanceModule],
+  imports: [TasksModule, WaMessagingModule, AttendanceModule, ColonyModule],
   controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController, CallsController],
   providers: [
     WhatsappService,

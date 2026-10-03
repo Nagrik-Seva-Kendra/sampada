@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -9,6 +9,7 @@ import { DraftReviewService } from "./draft-review.service.js";
 import { FrontDoorService } from "./front-door.service.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
 import { StaffModeService } from "./staff-mode.service.js";
+import { ColonyService } from "../colony/colony.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
   checkSignature,
@@ -31,6 +32,7 @@ export class WhatsappService {
     private readonly front: FrontDoorService,
     private readonly owner: OwnerAssistantService,
     private readonly staffMode: StaffModeService,
+    @Optional() private readonly colony?: ColonyService,
   ) {}
 
   /** Texts from one number within WA_DEBOUNCE_MS (default 10 s) are handled together. */
@@ -132,6 +134,15 @@ export class WhatsappService {
       await this.send(from, staffReply);
       this.log.log(`message ${msg.id} from staff ${maskPhone(from)} type=${msg.type} route=staff replies=${staffReply.length}`);
       return;
+    }
+    // A colony project's company people (company mode): plot status, counts, sale drafts.
+    if (msg.type === "text" && this.colony) {
+      const company = await this.colony.handleCompany(from, String(msg.text?.body ?? ""));
+      if (company) {
+        await this.send(from, company);
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} route=company replies=${company.length}`);
+        return;
+      }
     }
     if (!(await this.front.allowInbound(from))) {
       this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=blocked`);

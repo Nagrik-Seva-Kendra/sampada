@@ -1021,3 +1021,75 @@ model AiEvalRun {
 
   @@index([organizationId, propertyType, startedAt])
 }
+
+/// A developer's colony project (first: FLORA CITY). Deeds = standard text with 4 blocks changed.
+model ColonyProject {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  name               String
+  village            String
+  developer          String
+  /// [{ key, label, text }] -- which partner signs for the company.
+  partners           Json     @default("[]")
+  devPermissions     Json     @default("[]")
+  maintenanceClauses Json     @default("[]")
+  guidelineRatePerSqm Float?
+  /// Standard text with {{BUYER}} {{PLOT}} {{BOUNDARY}} {{PAYMENT}}.
+  template           String   @default("") @db.Text
+  templateDeedId     String?
+  /// WhatsApp numbers of the company's people (company mode).
+  companyNumbers     Json     @default("[]")
+  /// Set by the owner only.
+  live               Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, name])
+}
+
+/// Plot master of a project (imported from Excel/CSV).
+model ColonyPlot {
+  id             String  @id @default(cuid())
+  organizationId String
+  projectId      String
+  block          String
+  plotNo         String
+  ewFt           Float?
+  nsFt           Float?
+  areaSqft       Float?
+  east           String?
+  west           String?
+  north          String?
+  south          String?
+  /// AVAILABLE | DRAFTED | SOLD
+  status         String  @default("AVAILABLE")
+
+  @@unique([projectId, block, plotNo])
+  @@index([organizationId, projectId])
+}
+
+/// One plot sale of a project; the deed is created from the template.
+model ColonySale {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  number         Int
+  plotId         String
+  partnerKey     String
+  /// Buyers; Aadhaar / PAN AES-encrypted ("enc:").
+  buyers         Json
+  consideration  Int
+  instalments    Json
+  /// web | excel | whatsapp
+  source         String   @default("web")
+  /// DRAFT | DEED_CREATED | CANCELLED
+  status         String   @default("DRAFT")
+  deedId         String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projectId, number])
+  @@index([organizationId, projectId])
+  @@index([plotId])
+}
