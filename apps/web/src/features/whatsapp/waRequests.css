@@ -14,7 +14,7 @@
 }
 .wa-table {
   width: 100%;
-  min-width: 1040px; /* fixed columns + ≥ 200px property → below this it scrolls, never squeezes */
+  min-width: 1160px; /* fixed columns + ≥ 200px property → below this it scrolls, never squeezes */
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13.5px;
@@ -49,6 +49,7 @@
 .wa-col-amount { width: 128px; }
 .wa-col-status { width: 180px; } /* fits the two widest badges side by side */
 .wa-col-assignee { width: 104px; }
+.wa-col-registry { width: 120px; }
 .wa-col-date { width: 104px; }
 
 /* Long text: at most two lines, full text in the title tooltip. */

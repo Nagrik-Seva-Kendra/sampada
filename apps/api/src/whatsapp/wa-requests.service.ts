@@ -20,12 +20,15 @@ import {
   type WaRequestDetail,
   type WaRequestList,
   type WaRequestSummary,
+  type WaRegistryWhen,
   type WaRequestUpdateInput,
   type WaRevealResult,
   type WaWorkStatus,
 } from "@sampada/shared";
 import { r2Configured, r2Get } from "../guideline/r2.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { addDay, istToday } from "./registry-date.js";
+import { registryConfirmText, registryWhenHi } from "./registry-flow.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
@@ -62,6 +65,14 @@ export function visibleWhere(tenant: Pick<TenantContext, "organizationId" | "use
 }
 
 /** closedAt for a status change: set when it becomes DONE/REJECTED, kept if already closed, cleared on reopen. */
+/** Requests whose registry day (confirmed, else the customer's preferred one) is today / tomorrow / within 7 days. */
+export function registryWhere(when: WaRegistryWhen, now = new Date()) {
+  const today = istToday(now);
+  const [from, to] = when === "today" ? [today, today] : when === "tomorrow" ? [addDay(today, 1), addDay(today, 1)] : [today, addDay(today, 6)];
+  const range = { gte: from, lte: to };
+  return { OR: [{ registryDate: range }, { registryDate: null, preferredDate: range }] };
+}
+
 export function closedAtFor(row: { workStatus: string | null; closedAt?: Date | null }, next: string, now = new Date()): Date | null {
   const closed = (s: string | null) => s === "DONE" || s === "REJECTED";
   if (!closed(next)) return null;
@@ -91,13 +102,14 @@ export class WaRequestsService {
     private readonly outbox: WaOutboxService,
   ) {}
 
-  async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean }): Promise<WaRequestList> {
+  async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean; registry?: WaRegistryWhen }): Promise<WaRequestList> {
     const tenant = requireTenantContext(this.cls);
     const rows = (await this.prisma.draftIntake.findMany({
       where: {
         ...visibleWhere(tenant),
         ...(filters.workStatus ? { workStatus: filters.workStatus } : {}),
         ...(filters.needsStaff !== undefined ? { needsStaff: filters.needsStaff } : {}),
+        ...(filters.registry ? registryWhere(filters.registry) : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 500,
@@ -176,6 +188,10 @@ export class WaRequestsService {
       });
       if (!deed) throw new BadRequestException("यह डीड इस संस्था में नहीं मिली।");
     }
+    const nextDate = input.registryDate !== undefined ? input.registryDate : (before.registryDate ?? null);
+    const nextTime = input.registryTime !== undefined ? input.registryTime : (before.registryTime ?? null);
+    if (input.registryDate && input.registryDate < istToday()) throw new BadRequestException("रजिस्ट्री की तारीख पिछली नहीं हो सकती।");
+    const registryChanged = nextDate !== (before.registryDate ?? null) || (nextDate !== null && nextTime !== (before.registryTime ?? null));
     await this.prisma.draftIntake.updateMany({
       where: { id, ...visibleWhere(tenant) },
       data: {
@@ -183,8 +199,14 @@ export class WaRequestsService {
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
         ...(input.staffNote !== undefined ? { staffNote: input.staffNote?.trim() || null } : {}),
         ...(input.deedTemplateId !== undefined ? { deedTemplateId: input.deedTemplateId } : {}),
+        ...(input.registryDate !== undefined ? { registryDate: input.registryDate } : {}),
+        ...(input.registryTime !== undefined ? { registryTime: input.registryTime } : {}),
+        ...(registryChanged ? { registryReminderSentAt: null } : {}),
+        ...(input.geoTagPhotos !== undefined ? { geoTagPhotos: input.geoTagPhotos } : {}),
+        ...(input.geoTagTaken !== undefined ? { geoTagTakenAt: input.geoTagTaken ? (before.geoTagTakenAt ?? new Date()) : null } : {}),
       },
     });
+    if (registryChanged && nextDate && before.status === "SUBMITTED") await this.notifyRegistry(before, nextDate, nextTime);
     if (input.workStatus !== undefined && input.workStatus !== prevStatus && before.status === "SUBMITTED") {
       await this.notifyStatus(before, input.workStatus);
     }
@@ -210,6 +232,21 @@ export class WaRequestsService {
         template: { name: WA_TEMPLATES.status.name, language: WA_TEMPLATES.status.language, params: [ref, WA_STATUS_PHRASE[s]] },
       })
       .catch((e) => this.log.error(`status message for request ${ref} not recorded: ${e?.code ?? e?.name ?? "error"}`));
+  }
+
+  /** Tells the customer the confirmed registry date (same window/template rules as status updates). */
+  private async notifyRegistry(row: DraftIntakeRow, date: string, time: string | null): Promise<void> {
+    const ref = requestRef(row.id);
+    await this.outbox
+      .send({
+        organizationId: row.organizationId,
+        draftIntakeId: row.id,
+        kind: "REGISTRY",
+        to: row.phone,
+        text: registryConfirmText(ref, date, time),
+        template: { name: WA_TEMPLATES.registryDate.name, language: WA_TEMPLATES.registryDate.language, params: [ref, registryWhenHi(date, time)] },
+      })
+      .catch((e) => this.log.error(`registry date message for request ${ref} not recorded: ${e?.code ?? e?.name ?? "error"}`));
   }
 
   /** Resend a PENDING message of a request the caller may see (same access as the request). */

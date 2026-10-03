@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AttendanceModule } from "../attendance/attendance.module.js";
 import { StaffModeService } from "./staff-mode.service.js";
+import { RegistryJobsService } from "./registry-jobs.service.js";
 import { TasksModule } from "../tasks/tasks.module.js";
 import { WaMessagingModule } from "./wa-messaging.module.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
@@ -38,6 +39,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     DraftReviewService,
     FrontDoorService,
     StaffModeService,
+    RegistryJobsService,
     IntentClassifierService,
     WaAdminService,
     OwnerAssistantService,

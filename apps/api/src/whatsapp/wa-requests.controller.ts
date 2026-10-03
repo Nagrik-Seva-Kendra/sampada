@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { WaBulkDeleteInput, WaDeleteInput, WaRequestUpdateInput, WaSendDraftInput, WaWorkStatus } from "@sampada/shared";
+import { WaBulkDeleteInput, WaDeleteInput, WaRegistryWhen, WaRequestUpdateInput, WaSendDraftInput, WaWorkStatus } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { DraftReviewService } from "./draft-review.service.js";
 import { WaRequestsService } from "./wa-requests.service.js";
@@ -19,10 +19,12 @@ export class WaRequestsController {
   ) {}
 
   @Get()
-  list(@Query("workStatus") workStatus?: string, @Query("needsStaff") needsStaff?: string) {
+  list(@Query("workStatus") workStatus?: string, @Query("needsStaff") needsStaff?: string, @Query("registry") registry?: string) {
     const ws = WaWorkStatus.safeParse(workStatus);
+    const rw = WaRegistryWhen.safeParse(registry);
     return this.service.list({
       workStatus: ws.success ? ws.data : undefined,
+      registry: rw.success ? rw.data : undefined,
       needsStaff: needsStaff === "true" ? true : needsStaff === "false" ? false : undefined,
     });
   }

@@ -32,7 +32,7 @@ import {
 } from "./useWhatsappRequests";
 import type { StringKey } from "../../i18n/strings";
 import { DEED_TYPE_KEY, INTAKE_STATUS_KEY, useWaT, type WaT, WORK_STATUS_KEY } from "./waI18n";
-import { formatAmount, formatDate, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
+import { formatAmount, formatDate, formatDay, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
 
 const PROPERTY_TYPE_KEY: Record<string, StringKey> = {
   agricultural: "waPropAgricultural",
@@ -310,7 +310,97 @@ function DraftCard({ r }: { r: WaRequestDetail }) {
   );
 }
 
-const NOTIFICATION_KIND: Record<string, StringKey> = { STATUS: "waKindSTATUS", ALERT: "waKindALERT", DRAFT: "waKindDRAFT" };
+const NOTIFICATION_KIND: Record<string, StringKey> = { STATUS: "waKindSTATUS", ALERT: "waKindALERT", DRAFT: "waKindDRAFT", REGISTRY: "waKindREGISTRY" };
+
+/**
+ * Registry date the customer asked for, the date/time staff confirm (the
+ * customer is told on WhatsApp and reminded a day before), and the geo-tag
+ * photo: who takes it, how many, taken or not, and the cost line for STAFF.
+ */
+function RegistryCard({ r }: { r: WaRequestDetail }) {
+  const { t, lang } = useWaT();
+  const update = useUpdateWaRequest(r.id);
+  const s = r.schedule;
+  const [date, setDate] = useState(s?.registryDate ?? "");
+  const [time, setTime] = useState(s?.registryTime ?? "");
+  const [photos, setPhotos] = useState(s?.geoTagPhotos != null ? String(s.geoTagPhotos) : "");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    setDate(s?.registryDate ?? "");
+    setTime(s?.registryTime ?? "");
+    setPhotos(s?.geoTagPhotos != null ? String(s.geoTagPhotos) : "");
+  }, [s?.registryDate, s?.registryTime, s?.geoTagPhotos]);
+  if (!s) return null;
+  const tod = (v: string | null) => (v === "MORNING" ? `, ${t("rgMorning")}` : v === "AFTERNOON" ? `, ${t("rgAfternoon")}` : "");
+  async function save(input: Parameters<typeof update.mutateAsync>[0], ok: string) {
+    setMsg(null);
+    try {
+      await update.mutateAsync(input);
+      setMsg({ text: ok, ok: true });
+    } catch (err) {
+      setMsg({ text: await apiErrorMessage(err, t("rgSaveError")), ok: false });
+    }
+  }
+  const count = s.geoTagPhotos ?? 0;
+  return (
+    <Card title={t("rgCardTitle")}>
+      <p style={{ fontWeight: 600 }}>
+        {s.preferredDate ? t("rgCustomerAsked", { when: `${formatDay(s.preferredDate, lang)}${tod(s.timeOfDay)}` }) : t("rgCustomerNone")}
+      </p>
+      {s.alternateDate && <p className="doc-sub">{t("rgCustomerAlt", { when: formatDay(s.alternateDate, lang) })}</p>}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end", marginTop: 10 }}>
+        <label className="modal-field">
+          {t("rgConfirmDate")}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className="modal-field">
+          {t("rgConfirmTime")}
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+        <button
+          type="button"
+          className="btn-calc"
+          disabled={update.isPending || (date === (s.registryDate ?? "") && time === (s.registryTime ?? ""))}
+          onClick={() => save({ registryDate: date || null, registryTime: time || null }, t("rgSaved"))}
+        >
+          {t("rgSaveDate")}
+        </button>
+      </div>
+      {s.reminderSentAt && <p className="doc-sub">{t("rgReminderSent", { at: formatDate(s.reminderSentAt, lang) })}</p>}
+      <div style={{ borderTop: "1px solid var(--border, #e5e5e5)", marginTop: 12, paddingTop: 10 }}>
+        <p style={{ fontWeight: 600 }}>
+          {t("rgGeoMode", { mode: s.geoTagMode === "STAFF" ? t("rgGeoStaff") : s.geoTagMode === "SELF" ? t("rgGeoSelf") : t("rgGeoNone") })}{" "}
+          {s.geoTagMode === "STAFF" && !s.geoTagTakenAt && <span className="status-pill warn">📸 {t("rgGeoStaffBadge")}</span>}
+        </p>
+        {s.geoTagMode === "STAFF" && (
+          <p className="doc-sub">
+            {count > 0 ? t("rgGeoCost", { n: count, fee: s.geoTagFee, total: (count * s.geoTagFee).toLocaleString("en-IN") }) : t("rgGeoCostPer", { fee: s.geoTagFee })}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end", marginTop: 6 }}>
+          <label className="modal-field">
+            {t("rgGeoPhotos")}
+            <input type="number" min={0} max={50} value={photos} onChange={(e) => setPhotos(e.target.value)} style={{ width: 100 }} />
+          </label>
+          <button
+            type="button"
+            className="doc-btn"
+            disabled={update.isPending}
+            onClick={() => save({ geoTagPhotos: photos === "" ? null : Math.max(0, Math.min(50, Math.round(Number(photos) || 0))) }, t("waSaved"))}
+          >
+            {t("rgSave")}
+          </button>
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="checkbox" checked={!!s.geoTagTakenAt} disabled={update.isPending} onChange={(e) => save({ geoTagTaken: e.target.checked }, t("waSaved"))} />
+            {t("rgGeoTaken")}
+          </label>
+          {s.geoTagTakenAt && <span className="doc-sub">{t("rgGeoTakenAt", { at: formatDate(s.geoTagTakenAt, lang) })}</span>}
+        </div>
+      </div>
+      {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
+    </Card>
+  );
+}
 
 /** WhatsApp messages sent for this request; PENDING ones get a resend button. */
 function MessagesCard({ r }: { r: WaRequestDetail }) {
@@ -835,6 +925,8 @@ export function WhatsappRequestDetailPage() {
             </>
           )}
         </Card>
+
+        <RegistryCard r={r} />
 
         <DraftCard r={r} />
 

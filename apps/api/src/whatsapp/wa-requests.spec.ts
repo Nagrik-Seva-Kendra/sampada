@@ -420,7 +420,7 @@ describe("DraftIntakeService plot questions", () => {
   it("final summary lists the plot answers", async () => {
     const c = conversation(plotDeed);
     c.cur.step = "sellerPan"; // last step before FINAL when TDS applies
-    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: null, tax: { tdsApplies: true, panRequired: true } };
+    c.cur.data = { plotHasBuilding: false, plotCorner: true, plotBoundary: null, tax: { tdsApplies: true, panRequired: true }, regDate: null, regAlt: null, regTime: null, geoTagMode: "SELF" };
     const reply = await c.say("ABCDE1234F");
     const text = reply!.join("\n");
     expect(text).toContain("प्लॉट पर मकान/निर्माण: नहीं");
@@ -516,8 +516,16 @@ describe("DraftIntakeService document choice and बंधक पत्र (mort
     expect(asked[8]).toContain("पहले गवाह की माता का नाम"); // split skipped relation + father
     expect(asked[15]).toContain("पति का नाम लिखें"); // after "3" (पत्नी)
     expect(c.cur.data).toMatchObject({ mortgagorName: "राम प्रसाद", witness1Relation: "पुत्र", witness1FatherName: "पिता एक", witness2Relation: "पत्नी" });
+    // Registry date / time / geo-tag come before the summary.
+    expect(c.cur.step).toBe("REG_DATE");
+    expect(last!.join("\n")).toContain("रजिस्ट्री किस तारीख");
+    expect((await c.say("पता नहीं"))!.join("\n")).toContain("मूल पहचान पत्र");
+    last = await c.say("2");
+    expect(c.cur.data).toMatchObject({ regDate: null, geoTagMode: "STAFF" });
     expect(c.cur.step).toBe("FINAL");
     const summary = last!.join("\n");
+    expect(summary).toContain("जियो-टैग फ़ोटो: ऑफिस स्टाफ से (₹250 प्रति फ़ोटो)");
+    expect(summary).toContain("रजिस्ट्री की तारीख: अभी तय नहीं");
     expect(summary).toContain("दस्तावेज़: बंधक पत्र");
     expect(summary).toContain("सैंक्शन लेटर: मिला ✅");
     expect(summary).toContain("रजिस्ट्री वाले मालिक ही वर्तमान मालिक: नहीं");
@@ -737,13 +745,14 @@ describe("DraftIntakeService", () => {
       buyerMobile: "9876543210",
       buyerEmail: "shyam@example.com",
       buyerAddress: "लश्कर, ग्वालियर",
+      regDate: null, regAlt: null, regTime: null, geoTagMode: "SELF",
     };
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
     const prisma = { draftIntake: { findFirst: vi.fn(async () => cur), update } };
     const svc = new DraftIntakeService(prisma as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any, { classify: async () => null } as any);
     const replies = await svc.handleText({ phone: "919876543210", name: "राम" }, "हाँ");
-    expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW" } });
+    expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW", preferredDate: null, alternateDate: null, timeOfDay: null, geoTagMode: "SELF" } });
     expect(replies?.[0]).toContain("XYZ123");
   });
 

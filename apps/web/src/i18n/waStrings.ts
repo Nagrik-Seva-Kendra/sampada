@@ -276,6 +276,7 @@ export const waStrings = {
   waKindSTATUS: { en: "Status update", hi: "स्थिति सूचना" },
   waKindALERT: { en: "Owner alert", hi: "मालिक को अलर्ट" },
   waKindDRAFT: { en: "Draft check", hi: "ड्राफ्ट जाँच" },
+  waKindREGISTRY: { en: "Registry date", hi: "रजिस्ट्री तारीख" },
   waMsgSent: { en: "Sent", hi: "भेजा गया" },
   waMsgViaTemplate: { en: " (template)", hi: " (टेम्पलेट)" },
   waMsgPendingPill: { en: "Pending", hi: "बाकी" },

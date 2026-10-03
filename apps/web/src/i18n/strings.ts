@@ -1,5 +1,6 @@
 import type { Language } from "@sampada/shared";
 import { attendanceStrings } from "./attendanceStrings";
+import { registryStrings } from "./registryStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -698,6 +699,8 @@ export const strings = {
   sidebarTasks: { en: "My Tasks", hi: "मेरे काम" },
   // Attendance page (i18n/attendanceStrings.ts)
   ...attendanceStrings,
+  // Registry date + geo-tag (i18n/registryStrings.ts)
+  ...registryStrings,
   sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 

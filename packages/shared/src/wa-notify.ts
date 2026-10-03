@@ -96,6 +96,20 @@ export const WA_TEMPLATES = {
     body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से सूचना: {{2}}। धन्यवाद।",
     example: ["राहुल", "आपकी छुट्टी की अर्ज़ी #5 मंज़ूर हो गई"],
   },
+  registryDate: {
+    name: "registry_date_confirmed",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते, अनुरोध नंबर {{1}} की रजिस्ट्री {{2}} को तय हुई है। सभी पक्षकार और 2 गवाह अपना मूल पहचान पत्र साथ लाएँ। धन्यवाद।",
+    example: ["AB12CD", "15/10/2026 (गुरुवार), 11:00 बजे"],
+  },
+  registryReminder: {
+    name: "registry_reminder",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते, याद दिलाना: अनुरोध नंबर {{1}} की रजिस्ट्री कल {{2}} को है। सभी पक्षकार और 2 गवाह मूल पहचान पत्र साथ लाएँ। {{3}} धन्यवाद।",
+    example: ["AB12CD", "15/10/2026 (गुरुवार), 11:00 बजे", "जियो-टैग फ़ोटो संपदा 2.0 ऐप से ले ली हो तो ठीक, नहीं तो ऑफिस से संपर्क करें।"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaReasonCode =
@@ -109,7 +123,7 @@ export type WaReasonCode =
   | "noticeSent"
   | "sendFailed";
 
-export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT";
+export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT" | "REGISTRY";
 /** SENT: accepted by WhatsApp. PENDING: could not be sent (window closed and template not approved, ...) -- resend by hand. */
 export type WaNotificationStatus = "SENT" | "PENDING";
 

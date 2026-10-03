@@ -10,6 +10,7 @@ import type {
   WaTemplateStatus,
   WaTemplateSubmitResult,
   WaRequestDetail,
+  WaRegistryWhen,
   WaRequestList,
   WaRequestSummary,
   WaRequestUpdateInput,
@@ -22,18 +23,20 @@ import { authHeaders, useAuthStore } from "../../stores/authStore";
 export interface WaRequestFilters {
   workStatus?: WaWorkStatus;
   needsStaff?: boolean;
+  registry?: WaRegistryWhen;
 }
 
 /** Staff: WhatsApp draft requests for the active organization. */
 export function useWaRequests(filters: WaRequestFilters) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: ["wa-requests", "list", filters.workStatus ?? null, filters.needsStaff ?? null],
+    queryKey: ["wa-requests", "list", filters.workStatus ?? null, filters.needsStaff ?? null, filters.registry ?? null],
     enabled: !!token,
     queryFn: () => {
       const searchParams: Record<string, string> = {};
       if (filters.workStatus) searchParams.workStatus = filters.workStatus;
       if (filters.needsStaff !== undefined) searchParams.needsStaff = String(filters.needsStaff);
+      if (filters.registry) searchParams.registry = filters.registry;
       return api.get("whatsapp/requests", { headers: authHeaders(token), searchParams }).json<WaRequestList>();
     },
   });

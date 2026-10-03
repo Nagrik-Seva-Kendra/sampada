@@ -207,6 +207,31 @@ describe("status change → customer message", () => {
     }
   });
 
+  it("confirmed registry date/time → one REGISTRY message; changing the time sends again; geo-tag fields send nothing", async () => {
+    vi.useFakeTimers({ now: new Date("2026-10-03T06:00:00Z"), toFake: ["Date"] });
+    try {
+      const r = row();
+      const { svc, outbox } = svcFor(r);
+      await svc.update("cmg1abcdefxyz123", { registryDate: "2026-10-15", registryTime: "11:00" });
+      expect(outbox.send).toHaveBeenCalledTimes(1);
+      const m = (outbox.send.mock.calls[0] as any)[0];
+      expect(m).toMatchObject({ kind: "REGISTRY", to: PHONE, template: { name: "registry_date_confirmed", params: ["XYZ123", "15/10/2026 (गुरुवार), 11:00 बजे"] } });
+      expect(m.text).toContain("2 गवाह अपना मूल पहचान पत्र");
+      expect((r as any).registryReminderSentAt).toBeNull();
+      await svc.update("cmg1abcdefxyz123", { registryDate: "2026-10-15" });
+      expect(outbox.send).toHaveBeenCalledTimes(1); // unchanged
+      await svc.update("cmg1abcdefxyz123", { registryTime: "12:30" });
+      expect(outbox.send).toHaveBeenCalledTimes(2);
+      await svc.update("cmg1abcdefxyz123", { geoTagPhotos: 3, geoTagTaken: true });
+      expect(outbox.send).toHaveBeenCalledTimes(2);
+      expect((r as any).geoTagPhotos).toBe(3);
+      expect((r as any).geoTagTakenAt).toBeInstanceOf(Date);
+      await expect(svc.update("cmg1abcdefxyz123", { registryDate: "2026-10-01" })).rejects.toThrow(/पिछली/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("a failing send never blocks the status change", async () => {
     const r = row();
     const { svc, outbox } = svcFor(r);
