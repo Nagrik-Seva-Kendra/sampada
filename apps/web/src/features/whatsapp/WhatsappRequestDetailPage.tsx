@@ -16,6 +16,7 @@ import { apiErrorMessage } from "../../lib/api";
 import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { deedPdfBase64 } from "../deeds/deedPdf";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
+import { AiDraftCard } from "../ai-draft/AiDraftCard";
 import { DeleteRequestDialog, setWaToast } from "./DeleteRequestDialog";
 import "./waRequests.css";
 import {
@@ -989,6 +990,8 @@ export function WhatsappRequestDetailPage() {
         </Card>
 
         <RegistryCard r={r} />
+
+        <AiDraftCard requestId={r.id} />
 
         <FollowUpCard r={r} />
 

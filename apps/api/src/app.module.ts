@@ -1,3 +1,4 @@
+import { AiDraftModule } from "./ai-draft/ai-draft.module.js";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ClsModule } from "nestjs-cls";
@@ -34,6 +35,7 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     PropertiesModule,
     PlatformModule,
     WhatsappModule,
+    AiDraftModule,
   ],
   controllers: [HealthController, StatsController],
 })
