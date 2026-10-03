@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AiDraftAvailability, AiDraftRunItem, AiDraftSettings, AiEvalItem, AiPropertyTypeT } from "@sampada/shared";
+import type { AiDraftAvailability, AiDraftRunItem, AiDraftSettings, AiEvalItem, AiLearningView, AiPropertyTypeT } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -77,5 +77,24 @@ export function useAiEvals() {
     retry: false,
     refetchInterval: (q) => ((q.state.data ?? []).some((e) => e.status === "RUNNING") ? 5000 : false),
     queryFn: () => api.get("ai-draft/evals", { headers: authHeaders(token) }).json<AiEvalItem[]>(),
+  });
+}
+
+export function useAiLearning() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["ai-draft", "learning"],
+    enabled: !!token,
+    retry: false,
+    queryFn: () => api.get("ai-draft/learning", { headers: authHeaders(token) }).json<AiLearningView>(),
+  });
+}
+
+export function useAiDecideRule() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<AiLearningView, Error, { id: string; approve: boolean }>({
+    mutationFn: ({ id, approve }) => api.put(`ai-draft/learning/${id}`, { headers: authHeaders(token), json: { approve } }).json<AiLearningView>(),
+    onSuccess: (d) => qc.setQueryData(["ai-draft", "learning"], d),
   });
 }

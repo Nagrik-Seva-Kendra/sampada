@@ -996,6 +996,11 @@ model AiDraftRun {
   costUsd        Float    @default(0)
   createdById    String?
   createdAt      DateTime @default(now())
+  /// The model's draft (AES-encrypted) until staff review it; cleared after the learning step.
+  originalEnc    String?  @db.Text
+  /// Share of lines staff changed before marking it reviewed (0..1).
+  editRatio      Float?
+  reviewedAt     DateTime?
 
   @@index([draftIntakeId])
   @@index([organizationId, createdAt])
@@ -1092,4 +1097,22 @@ model ColonySale {
   @@unique([projectId, number])
   @@index([organizationId, projectId])
   @@index([plotId])
+}
+
+/// A wording change staff made to AI drafts (masked, no personal data). APPROVED ones go into the prompt.
+model AiLearnedRule {
+  id             String    @id @default(cuid())
+  organizationId String
+  deedType       String
+  before         String
+  after          String
+  /// SUGGESTED | APPROVED | REJECTED
+  status         String    @default("SUGGESTED")
+  /// How many reviewed drafts had this change.
+  count          Int       @default(1)
+  createdAt      DateTime  @default(now())
+  decidedAt      DateTime?
+
+  @@unique([organizationId, deedType, before, after])
+  @@index([organizationId, status])
 }

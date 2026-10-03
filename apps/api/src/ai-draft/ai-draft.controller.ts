@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
-import { AiDraftToggleInput, AiEvalStartInput, AiStarInput } from "@sampada/shared";
+import { AiDraftToggleInput, AiEvalStartInput, AiRuleDecisionInput, AiStarInput } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { AiDraftService } from "./ai-draft.service.js";
 
@@ -36,6 +36,16 @@ export class AiDraftController {
   startEval(@Body() body: unknown) {
     const i = AiEvalStartInput.parse(body);
     return this.service.startEval(i.propertyType, i.deedType);
+  }
+
+  @Get("learning")
+  learning() {
+    return this.service.learning();
+  }
+
+  @Put("learning/:id")
+  decide(@Param("id") id: string, @Body() body: unknown) {
+    return this.service.decideRule(id, AiRuleDecisionInput.parse(body).approve);
   }
 
   @Get("requests/:id")

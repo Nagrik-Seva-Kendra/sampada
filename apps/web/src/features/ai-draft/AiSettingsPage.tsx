@@ -5,7 +5,7 @@ import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
 import { useWaT } from "../whatsapp/waI18n";
 import { formatDate } from "../whatsapp/waLabels";
-import { useAiEvals, useAiSettings, useAiSettingsActions } from "./useAiDraft";
+import { useAiDecideRule, useAiEvals, useAiLearning, useAiSettings, useAiSettingsActions } from "./useAiDraft";
 
 const TYPES: AiPropertyTypeT[] = ["plot", "building", "agricultural", "flat"];
 
@@ -109,7 +109,9 @@ export function AiSettingsPage() {
           ))}
         </div>
 
-        <div className="dr-form">
+        <LearningPanel />
+
+        <div className="dr-form" style={{ marginTop: 14 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>★ {t("aiStarred")}</div>
           {d.starred.map((x) => (
             <div key={x.deedId} style={{ display: "flex", gap: 10, alignItems: "center", padding: "4px 0" }}>
@@ -142,5 +144,61 @@ export function AiSettingsPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+function LearningPanel() {
+  const { t } = useWaT();
+  const q = useAiLearning();
+  const decide = useAiDecideRule();
+  if (!q.data) return null;
+  const v = q.data;
+  const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const row = (r: (typeof v.suggestions)[number], approved: boolean) => (
+    <div key={r.id} style={{ padding: "8px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
+      <div className="doc-sub" style={{ marginTop: 0 }}>
+        {r.deedType} · {t("aiLearnSeen", { n: r.count })}
+      </div>
+      {r.before && (
+        <div style={{ fontSize: 14 }}>
+          <span className="doc-sub">{t("aiLearnBefore")}:</span> <s>{r.before}</s>
+        </div>
+      )}
+      <div style={{ fontSize: 14 }}>
+        <span className="doc-sub">{t("aiLearnAfter")}:</span> <b>{r.after}</b>
+      </div>
+      {v.canManage && (
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          {!approved && (
+            <button type="button" className="btn-calc" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, approve: true })}>
+              {t("aiApprove")}
+            </button>
+          )}
+          <button type="button" className="doc-btn" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, approve: false })}>
+            {approved ? t("aiRemove") : t("aiReject")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div className="dr-form">
+      <div style={{ fontWeight: 800 }}>📈 {t("aiLearnTitle")}</div>
+      <p className="doc-sub">{t("aiLearnIntro")}</p>
+      <p style={{ fontWeight: 600 }}>
+        {t("aiLearnMetrics", {
+          drafts: v.metrics.drafts,
+          reviewed: v.metrics.reviewed,
+          r30: pct(v.metrics.editRatio30),
+          rPrev: pct(v.metrics.editRatioPrev30),
+          rules: v.metrics.approvedRules,
+          cost: v.metrics.costUsd30.toFixed(2),
+        })}
+      </p>
+      <div style={{ fontWeight: 700, marginTop: 8 }}>{t("aiLearnSuggestions")}</div>
+      {v.suggestions.length ? v.suggestions.map((r) => row(r, false)) : <p className="doc-sub">{t("aiLearnNone")}</p>}
+      <div style={{ fontWeight: 700, marginTop: 12 }}>{t("aiLearnApproved")}</div>
+      {v.approved.length ? v.approved.map((r) => row(r, true)) : <p className="doc-sub">{t("aiLearnNone")}</p>}
+    </div>
   );
 }

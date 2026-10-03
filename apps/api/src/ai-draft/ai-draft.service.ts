@@ -4,6 +4,8 @@ import { ClsService } from "nestjs-cls";
 import type { Prisma } from "@prisma/client";
 import { formatParty, formatPartyBlock, formatPropertyBlock } from "@sampada/shared";
 import type {
+  AiLearnedRuleItem,
+  AiLearningView,
   AiDraftAvailability,
   AiDraftRunItem,
   AiDraftSettings,
@@ -31,6 +33,8 @@ import {
   placeOf,
 } from "./archive-text.js";
 import { AI_DRAFT_MODEL, callClaude, type ClaudeResult } from "./claude.js";
+import { editRatio, rulesPrompt, suggestionsFrom } from "./learning.js";
+import { decrypt, encrypt } from "../whatsapp/pii-crypto.js";
 import {
   buildPrompt,
   cleanOutput,
@@ -296,7 +300,19 @@ export class AiDraftService {
     });
     if (!(row as any).deedTemplateId) await this.prisma.draftIntake.update({ where: { id: row.id }, data: { deedTemplateId: deedId } });
     const run = await this.prisma.aiDraftRun.create({
-      data: { ...base, status: "OK", deedId, examples: exampleItems, issues: out.issues as any, reviewIssues, flags: input.flags, ...tokens, costUsd: cost },
+      data: {
+        ...base,
+        status: "OK",
+        deedId,
+        examples: exampleItems,
+        issues: out.issues as any,
+        reviewIssues,
+        flags: input.flags,
+        ...tokens,
+        costUsd: cost,
+        // Kept encrypted only until staff review it (learning step), then cleared.
+        originalEnc: encrypt(content),
+      },
     });
     this.log.log(
       `ai draft for request ${ref}: ok, examples=${examples.length} issues=${out.issues.length} review=${reviewIssues.length} in=${tokens.inputTokens} out=${tokens.outputTokens} cost=$${cost.toFixed(4)}`,
@@ -308,24 +324,95 @@ export class AiDraftService {
   private async draftOnce(organizationId: string, input: DraftInput, examples: (Candidate & { score: number; reason: string })[]) {
     const rows = await this.prisma.deedTemplate.findMany({ where: { id: { in: examples.map((e) => e.deedId) } }, select: { id: true, content: true } });
     const masked = examples.map((e) => ({ e, m: maskArchive(rows.find((r) => r.id === e.deedId)?.content ?? "") }));
-    const prompt = buildPrompt(input, masked.map(({ e, m }) => ({ title: e.title, text: m.text, reason: e.reason })));
+    const rules = await this.prisma.aiLearnedRule.findMany({ where: { organizationId, deedType: input.deedType, status: "APPROVED" } });
+    const prompt = buildPrompt(
+      input,
+      masked.map(({ e, m }) => ({ title: e.title, text: m.text, reason: e.reason })),
+      rulesPrompt(rules.map((r) => ({ before: r.before, after: r.after }))),
+    );
     const usage = await this.call({ system: SYSTEM_PROMPT, user: prompt, maxTokens: 16000, effort: "high" });
     const text = cleanOutput(usage.text);
     const allowed = [...input.facts.map((f) => f.value), ...input.blocks];
     const leaks = leakCount(text, masked.flatMap(({ m }) => m.originals), allowed);
     const issues: Issue[] = validateDraft(text, input);
     if (usage.stopReason === "max_tokens") issues.push({ code: "truncated", message: "ड्राफ्ट पूरा नहीं बना (बहुत लंबा)।" });
-    void organizationId;
     return { text, usage, leaks, issues, cost: costUsd(AI_DRAFT_MODEL(), usage.inputTokens, usage.outputTokens) };
   }
 
   /** Staff checked the AI draft: the deed loses the "समीक्षा बाकी" mark. */
   async markReviewed(deedId: string): Promise<{ ok: true }> {
-    requireTenantContext(this.cls);
-    const deed = await this.prisma.deedTemplate.findFirst({ where: { id: deedId }, select: { id: true, aiDraftStatus: true } });
+    const t = requireTenantContext(this.cls);
+    const deed = await this.prisma.deedTemplate.findFirst({ where: { id: deedId }, select: { id: true, type: true, content: true, aiDraftStatus: true } });
     if (!deed) throw new NotFoundException("डीड नहीं मिली।");
+    const wasPending = deed.aiDraftStatus === "REVIEW_PENDING";
     await this.prisma.deedTemplate.update({ where: { id: deedId }, data: { aiDraftStatus: deed.aiDraftStatus ? "REVIEWED" : null } });
+    if (wasPending) await this.learn(t.organizationId, deed).catch((e) => this.log.warn(`learning step failed: ${e?.name ?? "error"}`));
     return { ok: true };
+  }
+
+  /** Staff's edits to the AI draft → edit ratio + masked wording suggestions; the stored draft is then deleted. */
+  private async learn(organizationId: string, deed: { id: string; type: string; content: string }) {
+    const run = await this.prisma.aiDraftRun.findFirst({ where: { organizationId, deedId: deed.id, status: "OK" } });
+    if (!run?.originalEnc) return;
+    let original: string;
+    try {
+      original = decrypt(run.originalEnc);
+    } catch {
+      await this.prisma.aiDraftRun.update({ where: { id: run.id }, data: { originalEnc: null, reviewedAt: new Date() } });
+      return;
+    }
+    const ratio = editRatio(original, deed.content);
+    const suggestions = suggestionsFrom(original, deed.content);
+    for (const sg of suggestions) {
+      const key = { organizationId_deedType_before_after: { organizationId, deedType: deed.type, before: sg.before, after: sg.after } };
+      const existing = await this.prisma.aiLearnedRule.findUnique({ where: key });
+      if (existing) await this.prisma.aiLearnedRule.update({ where: { id: existing.id }, data: { count: existing.count + 1 } });
+      else await this.prisma.aiLearnedRule.create({ data: { organizationId, deedType: deed.type, before: sg.before, after: sg.after } });
+    }
+    await this.prisma.aiDraftRun.update({ where: { id: run.id }, data: { originalEnc: null, editRatio: ratio, reviewedAt: new Date() } });
+    this.log.log(`learning: run ${run.id} edit ratio ${ratio}, ${suggestions.length} suggestion(s)`);
+  }
+
+  // ---------- learning (OWNER/ADMIN view, OWNER decides) ----------
+  async learning(): Promise<AiLearningView> {
+    const t = requireTenantContext(this.cls);
+    if (!isManager(t.role)) throw new ForbiddenException("केवल मालिक या एडमिन।");
+    const rules = await this.prisma.aiLearnedRule.findMany({ where: { organizationId: t.organizationId, status: { in: ["SUGGESTED", "APPROVED"] } } });
+    const item = (r: any): AiLearnedRuleItem => ({ id: r.id, deedType: r.deedType, before: r.before, after: r.after, status: r.status, count: r.count, createdAt: r.createdAt.toISOString() });
+    const now = Date.now();
+    const runs = await this.prisma.aiDraftRun.findMany({
+      where: { organizationId: t.organizationId, createdAt: { gte: new Date(now - 60 * 864e5) } },
+      select: { status: true, editRatio: true, reviewedAt: true, costUsd: true, createdAt: true },
+    });
+    const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 1000) / 1000 : null);
+    const recent = runs.filter((r) => r.createdAt.getTime() >= now - 30 * 864e5);
+    const prev = runs.filter((r) => r.createdAt.getTime() < now - 30 * 864e5);
+    const byStatus: Record<string, number> = {};
+    for (const r of recent) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+    return {
+      suggestions: rules.filter((r) => r.status === "SUGGESTED").sort((a, b) => b.count - a.count).slice(0, 100).map(item),
+      approved: rules.filter((r) => r.status === "APPROVED").map(item),
+      metrics: {
+        drafts: recent.length,
+        reviewed: recent.filter((r) => r.reviewedAt).length,
+        editRatio30: avg(recent.filter((r) => r.editRatio != null).map((r) => r.editRatio!)),
+        editRatioPrev30: avg(prev.filter((r) => r.editRatio != null).map((r) => r.editRatio!)),
+        approvedRules: rules.filter((r) => r.status === "APPROVED").length,
+        byStatus,
+        costUsd30: Math.round(recent.reduce((a, r) => a + r.costUsd, 0) * 100) / 100,
+      },
+      canManage: t.role === "OWNER",
+    };
+  }
+
+  /** OWNER: approve a suggestion into the prompt, or reject it (also removes an approved rule). */
+  async decideRule(id: string, approve: boolean): Promise<AiLearningView> {
+    const t = this.owner();
+    const r = await this.prisma.aiLearnedRule.findFirst({ where: { id, organizationId: t.organizationId } });
+    if (!r) throw new NotFoundException("नियम नहीं मिला।");
+    await this.prisma.aiLearnedRule.update({ where: { id }, data: { status: approve ? "APPROVED" : "REJECTED", decidedAt: new Date() } });
+    this.log.log(`learned rule ${approve ? "approved" : "rejected"}`);
+    return this.learning();
   }
 
   private runItem(r: any, facts: AiFactShown[]): AiDraftRunItem {
