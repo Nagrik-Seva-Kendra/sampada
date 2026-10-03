@@ -188,6 +188,17 @@ export class WaOutboxService {
     return { status: "PENDING", via: null, wamid: null, reason: "24 घंटे की विंडो बंद" };
   }
 
+  /** A PDF not tied to a request (archive copy): only inside the 24h window; never stored. */
+  async deliverDocumentDirect(to: string, caption: string, buf: Buffer, fileName: string): Promise<{ status: "SENT" | "PENDING"; reason: string | null }> {
+    if (!process.env.WA_ACCESS_TOKEN || !process.env.WA_PHONE_NUMBER_ID) return { status: "PENDING", reason: "WhatsApp कॉन्फ़िगर नहीं (WA_ACCESS_TOKEN)" };
+    if (!(await this.inWindow(to))) return { status: "PENDING", reason: "24 घंटे की विंडो बंद — ग्राहक के दोबारा लिखने पर भेजें" };
+    const mediaId = await this.uploadMedia(buf, "application/pdf", fileName);
+    if (!mediaId) return { status: "PENDING", reason: "PDF WhatsApp पर अपलोड नहीं हो सकी" };
+    const r = await this.post(to, { type: "document", document: { id: mediaId, filename: fileName, caption } });
+    this.log.log(`direct document to ${maskPhone(to)}: ${r.ok ? "SENT" : "PENDING"}`);
+    return r.ok ? { status: "SENT", reason: null } : { status: "PENDING", reason: reasonFor(r.code, "text") };
+  }
+
   /** Graph media upload (the document to send); returns the media id or null. */
   async uploadMedia(buf: Buffer, mime: string, fileName: string): Promise<string | null> {
     const form = new FormData();
