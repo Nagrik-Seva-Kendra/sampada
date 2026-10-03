@@ -85,3 +85,33 @@ export interface AiEvalItem {
   startedAt: string;
   finishedAt: string | null;
 }
+
+/** Learning from staff edits: masked wording changes the owner approves into rules. */
+export interface AiLearnedRuleItem {
+  id: string;
+  deedType: string;
+  before: string;
+  after: string;
+  status: "SUGGESTED" | "APPROVED" | "REJECTED";
+  count: number;
+  createdAt: string;
+}
+
+export interface AiLearningView {
+  suggestions: AiLearnedRuleItem[];
+  approved: AiLearnedRuleItem[];
+  metrics: {
+    drafts: number;
+    reviewed: number;
+    /** Average share of lines staff changed, last 30 days and the 30 days before (null: none). */
+    editRatio30: number | null;
+    editRatioPrev30: number | null;
+    approvedRules: number;
+    /** Drafts by status (OK / NO_EXAMPLES / BLOCKED_LEAK ...). */
+    byStatus: Record<string, number>;
+    costUsd30: number;
+  };
+  canManage: boolean;
+}
+
+export const AiRuleDecisionInput = z.object({ approve: z.boolean() }).strict();

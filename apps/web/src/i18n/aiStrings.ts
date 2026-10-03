@@ -55,4 +55,21 @@ export const aiStrings = {
   aiOwnerOnly: { en: "Only the owner can change these.", hi: "इन्हें केवल मालिक बदल सकते हैं।" },
   aiError: { en: "Could not save.", hi: "सहेजा नहीं जा सका।" },
   sidebarAi: { en: "AI draft", hi: "AI ड्राफ्ट" },
+  aiLearnTitle: { en: "Learning from staff edits", hi: "स्टाफ के सुधार से सीख" },
+  aiLearnIntro: {
+    en: "When staff mark an AI draft reviewed, their wording changes (personal data hidden) appear here. Approved rules are given to the AI in every new draft of that deed type.",
+    hi: "स्टाफ जब AI ड्राफ्ट की समीक्षा पूरी करता है, तो उनके शब्दों के बदलाव (निजी जानकारी छुपाकर) यहाँ आते हैं। मंज़ूर नियम उस प्रकार की हर नई AI ड्राफ्ट में AI को दिए जाते हैं।",
+  },
+  aiLearnMetrics: {
+    en: "Last 30 days: {drafts} AI drafts, {reviewed} reviewed · staff changed {r30} of lines (before: {rPrev}) · {rules} approved rules · ${cost}",
+    hi: "पिछले 30 दिन: {drafts} AI ड्राफ्ट, {reviewed} की समीक्षा · स्टाफ ने {r30} पंक्तियाँ बदलीं (उससे पहले: {rPrev}) · {rules} मंज़ूर नियम · ${cost}",
+  },
+  aiLearnSuggestions: { en: "Suggestions", hi: "सुझाव" },
+  aiLearnApproved: { en: "Approved rules", hi: "मंज़ूर नियम" },
+  aiLearnNone: { en: "Nothing yet.", hi: "अभी कुछ नहीं।" },
+  aiLearnSeen: { en: "seen {n}×", hi: "{n} बार" },
+  aiLearnBefore: { en: "AI wrote", hi: "AI ने लिखा" },
+  aiLearnAfter: { en: "Staff wrote", hi: "स्टाफ ने लिखा" },
+  aiApprove: { en: "Approve", hi: "मंज़ूर" },
+  aiReject: { en: "Reject", hi: "नामंज़ूर" },
 } as const;

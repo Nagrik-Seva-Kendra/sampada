@@ -5,6 +5,7 @@ import { aiPropertyTypeOf, classifyPropertyType, leakCount, locationScore, maskA
 import { AiDraftService, factsShown, parseReview, syntheticInput, targetPlace } from "./ai-draft.service.js";
 import { readStream } from "./claude.js";
 import { costUsd, substituteTokens, validateDraft } from "./draft-rules.js";
+import { editRatio, generalize, lineDiff, rulesPrompt, suggestionsFrom } from "./learning.js";
 
 const ORG = "org-1";
 const OLD_AADHAAR = "4567 8901 2345";
@@ -111,10 +112,12 @@ function fakePrisma() {
   const match = (row: any, where: any = {}): boolean =>
     Object.entries(where).every(([k, v]: [string, any]) => {
       if (k === "NOT") return !match(row, v);
+      if (k.includes("_") && v && typeof v === "object") return match(row, v);
       const x = row[k];
       if (v && typeof v === "object" && !(v instanceof Date)) {
         if ("in" in v) return v.in.includes(x);
         if ("not" in v) return x !== v.not;
+        if ("gte" in v) return x >= v.gte;
         return true;
       }
       return v === null ? x == null : x === v;
@@ -126,7 +129,7 @@ function fakePrisma() {
       findFirst: async (a: any = {}) => rows.find((r) => match(r, a.where)) ?? null,
       findUnique: async (a: any) => rows.find((r) => match(r, a.where)) ?? null,
       create: async (a: any) => {
-        const row = { id: `${name}-${rows.length + 1}`, createdAt: new Date(), startedAt: new Date(), ...a.data };
+        const row = { id: `${name}-${rows.length + 1}`, createdAt: new Date(), updatedAt: new Date(), startedAt: new Date(), status: "SUGGESTED", count: 1, ...a.data };
         rows.push(row);
         return row;
       },
@@ -147,6 +150,7 @@ function fakePrisma() {
     aiDraftRun: model("aiDraftRun"),
     aiEvalRun: model("aiEvalRun"),
     draftIntake: model("draftIntake"),
+    aiLearnedRule: model("aiLearnedRule"),
   } as any;
 }
 
@@ -249,6 +253,30 @@ describe("AiDraftService", () => {
     await expect(svc("EMPLOYEE", "u-other").generate("cmreq00000xyz123", user)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it("learning: the draft is kept encrypted until review; edits become suggestions; approved rules reach the prompt", async () => {
+    await prisma.aiDraftConfig.upsert({ where: { organizationId: ORG }, create: { organizationId: ORG, config: { enabled: { plot: true } } }, update: {} });
+    const run = await svc().generate("cmreq00000xyz123", user);
+    const stored = prisma.t.aiDraftRun.find((r: any) => r.id === run.id);
+    expect(stored.originalEnc).toMatch(/^enc:/);
+    expect(stored.originalEnc).not.toContain("श्याम");
+    const deed = prisma.t.deedTemplate.find((d: any) => d.id === run.deedId);
+    deed.content = deed.content.replace("अब भविष्य में कुछ भी लेना देना शेष नहीं रहा है।", "अब भविष्य में विक्रेता का कोई हक़ शेष नहीं रहा है।");
+    await svc("EMPLOYEE", "u-emp").markReviewed(run.deedId!);
+    expect(deed.aiDraftStatus).toBe("REVIEWED");
+    expect(stored.originalEnc).toBeNull();
+    expect(stored.editRatio).toBeGreaterThan(0);
+    expect(prisma.t.aiLearnedRule).toHaveLength(1);
+    const view = await svc("ADMIN").learning();
+    expect(view.suggestions[0]!.after).toContain("कोई हक़ शेष नहीं");
+    expect(view.metrics.reviewed).toBe(1);
+    await expect(svc("ADMIN").decideRule(view.suggestions[0]!.id, true)).rejects.toBeInstanceOf(ForbiddenException);
+    await svc().decideRule(view.suggestions[0]!.id, true);
+    calls = [];
+    await svc().generate("cmreq00000xyz123", user);
+    expect(calls[0]!.user).toContain("Office rules learned from staff corrections");
+    expect(calls[0]!.user).toContain("कोई हक़ शेष नहीं");
+  });
+
   it("eval: synthetic parties, the target deed is never its own example, score recorded", async () => {
     const s = svc();
     const cands = (await (s as any).candidates(ORG, "sale-deed", "plot")) as any[];
@@ -259,5 +287,22 @@ describe("AiDraftService", () => {
     expect(ev).toMatchObject({ status: "DONE", passed: 12, score: 1, done: 12 });
     expect(calls).toHaveLength(12);
     expect(calls.every((c) => !c.user.includes("रामलाल") && c.user.includes("परीक्षण क्रेता"))).toBe(true);
+  });
+});
+
+describe("learning from staff edits", () => {
+  it("line diff, edit ratio and masked wording suggestions", () => {
+    expect(lineDiff(["a", "b", "c"], ["a", "x", "c", "d"])).toEqual([
+      { removed: ["b"], added: ["x"] },
+      { removed: [], added: ["d"] },
+    ]);
+    const original = "विक्रय पत्र\nक्रेता पक्ष - श्री श्याम पुत्र श्री मोहन (आधार नं. [[AADHAAR_1]])\nप्रतिफल राशि रु. 1500000 प्राप्त हुई।\nइति ग्वालियर";
+    const final = "विक्रय पत्र\nक्रेता पक्ष - श्री श्याम लाल पुत्र श्री मोहन (आधार नं. 2345 6789 0123)\nप्रतिफल राशि रु. 1500000 नगद व चैक द्वारा पूर्ण प्राप्त हो चुकी है।\nइति ग्वालियर";
+    expect(editRatio(original, final)).toBe(0.5);
+    const sg = suggestionsFrom(original, final);
+    expect(sg).toEqual([{ before: "प्रतिफल राशि रु. [राशि] प्राप्त हुई।", after: "प्रतिफल राशि रु. [राशि] नगद व चैक द्वारा पूर्ण प्राप्त हो चुकी है।" }]); // the name fix is a fact, not a rule
+    expect(JSON.stringify(sg)).not.toMatch(/श्याम|2345|1500000/);
+    expect(generalize("दिनांक 12.03.2026 को")).toBe("दिनांक # को");
+    expect(rulesPrompt([{ before: "क", after: "ख" }])[1]).toBe("- Instead of «क» write «ख»");
   });
 });

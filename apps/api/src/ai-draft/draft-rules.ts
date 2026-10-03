@@ -152,7 +152,7 @@ Write the new deed ONLY from the FACTS and BLOCKS given:
 - Output plain text paragraphs separated by blank lines, ready to print: first line the deed title, no markdown, no notes before or after.`;
 
 /** The user message: masked examples, then facts / blocks / required clauses / scenario flags. */
-export function buildPrompt(input: DraftInput, examples: { title: string; text: string; reason: string }[]): string {
+export function buildPrompt(input: DraftInput, examples: { title: string; text: string; reason: string }[], learned: string[] = []): string {
   const c = CLAUSE_LIBRARY[input.deedType];
   const parts = [
     ...examples.map((e, i) => `<example n="${i + 1}" why="${e.reason}">\n${e.text.slice(0, 14000)}\n</example>`),
@@ -163,6 +163,7 @@ export function buildPrompt(input: DraftInput, examples: { title: string; text: 
     ...input.blocks.map((b) => `<block>\n${b}\n</block>`),
     ...(c ? ["Must contain these phrases:", ...c.must.map((m) => `- ${m}`), "Also follow:", ...c.hints.map((h) => `- ${h}`)] : []),
     ...(input.flags.length ? ["Points for this deed:", ...input.flags.map((f) => `- ${f}`)] : []),
+    ...learned,
     "Write the complete deed now.",
   ];
   return parts.join("\n");
