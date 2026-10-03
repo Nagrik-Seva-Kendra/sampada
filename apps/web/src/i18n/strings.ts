@@ -3,6 +3,7 @@ import { attendanceStrings } from "./attendanceStrings";
 import { registryStrings } from "./registryStrings";
 import { callStrings } from "./callStrings";
 import { aiStrings } from "./aiStrings";
+import { colonyStrings } from "./colonyStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -707,6 +708,8 @@ export const strings = {
   ...callStrings,
   // AI draft (i18n/aiStrings.ts)
   ...aiStrings,
+  // Colony deeds (i18n/colonyStrings.ts)
+  ...colonyStrings,
   sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 

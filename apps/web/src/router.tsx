@@ -24,6 +24,7 @@ import { TasksPage } from "./features/tasks/TasksPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
 import { CallsPage } from "./features/calls/CallsPage";
 import { AiSettingsPage } from "./features/ai-draft/AiSettingsPage";
+import { ColonyPage } from "./features/colony/ColonyPage";
 import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
 import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
@@ -293,7 +294,17 @@ const aiSettingsRoute = createRoute({
   component: GuardedAiSettingsPage,
 });
 
+function GuardedColonyPage() {
+  return useIsStaff() ? <ColonyPage /> : <Navigate to="/deeds" />;
+}
+const colonyRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/colony",
+  component: GuardedColonyPage,
+});
+
 const dashboardRoute = dashboardLayoutRoute.addChildren([
+  colonyRoute,
   aiSettingsRoute,
   tasksRoute,
   attendanceRoute,

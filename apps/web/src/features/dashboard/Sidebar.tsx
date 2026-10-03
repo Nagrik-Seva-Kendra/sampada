@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, Bot, CalendarCheck, PhoneCall, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, Building2, CalendarCheck, PhoneCall, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useCallbackCount } from "../calls/useCalls";
 import { useUiStore } from "../../stores/uiStore";
@@ -145,6 +145,9 @@ export function Sidebar({
             badge={callCount}
             badgeLabel={String(callCount)}
           />
+        )}
+        {waEligible && (
+          <SidebarLink to="/colony" icon={<Building2 size={17} strokeWidth={2.2} />} label={t("sidebarColony")} collapsed={collapsed} />
         )}
         {waEligible && isWaManager && (
           <SidebarLink to="/ai-draft" icon={<Bot size={17} strokeWidth={2.2} />} label={t("sidebarAi")} collapsed={collapsed} />
