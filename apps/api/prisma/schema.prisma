@@ -1143,3 +1143,23 @@ model ArchiveCopyRequest {
   @@index([organizationId, status])
   @@index([phone, createdAt])
 }
+
+/// What an archive deed says about its property (number + place) and parties, for the risk check.
+model PropertyIndexEntry {
+  deedId         String   @id
+  organizationId String
+  deedType       String
+  number         String?
+  colony         String?
+  village        String?
+  ward           String?
+  tehsil         String?
+  district       String?
+  sellers        Json     @default("[]")
+  buyers         Json     @default("[]")
+  /// The deed's own date (createdAt) for chain order.
+  deedDate       DateTime
+  indexedAt      DateTime
+
+  @@index([organizationId, number])
+}

@@ -17,6 +17,7 @@ import { CreateDeedMenu } from "../deeds/CreateDeedMenu";
 import { deedPdfBase64 } from "../deeds/deedPdf";
 import { useCreateSampleDeed } from "../deeds/useSampleDeeds";
 import { AiDraftCard } from "../ai-draft/AiDraftCard";
+import { ArchiveRiskCard } from "./ArchiveRiskCard";
 import { DeleteRequestDialog, setWaToast } from "./DeleteRequestDialog";
 import "./waRequests.css";
 import {
@@ -990,6 +991,8 @@ export function WhatsappRequestDetailPage() {
         </Card>
 
         <RegistryCard r={r} />
+
+        <ArchiveRiskCard requestId={r.id} canManage={r.canAssign} />
 
         <AiDraftCard requestId={r.id} />
 
