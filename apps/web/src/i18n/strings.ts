@@ -2,6 +2,7 @@ import type { Language } from "@sampada/shared";
 import { attendanceStrings } from "./attendanceStrings";
 import { registryStrings } from "./registryStrings";
 import { callStrings } from "./callStrings";
+import { aiStrings } from "./aiStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -704,6 +705,8 @@ export const strings = {
   ...registryStrings,
   // Calls & follow-ups (i18n/callStrings.ts)
   ...callStrings,
+  // AI draft (i18n/aiStrings.ts)
+  ...aiStrings,
   sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 

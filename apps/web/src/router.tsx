@@ -23,6 +23,7 @@ import { PropertiesListPage } from "./features/properties/PropertiesListPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
 import { CallsPage } from "./features/calls/CallsPage";
+import { AiSettingsPage } from "./features/ai-draft/AiSettingsPage";
 import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
 import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
@@ -283,7 +284,17 @@ const callsRoute = createRoute({
   component: GuardedCallsPage,
 });
 
+function GuardedAiSettingsPage() {
+  return useIsStaff() ? <AiSettingsPage /> : <Navigate to="/deeds" />;
+}
+const aiSettingsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/ai-draft",
+  component: GuardedAiSettingsPage,
+});
+
 const dashboardRoute = dashboardLayoutRoute.addChildren([
+  aiSettingsRoute,
   tasksRoute,
   attendanceRoute,
   callsRoute,
