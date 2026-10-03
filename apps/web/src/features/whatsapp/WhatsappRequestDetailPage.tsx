@@ -310,7 +310,7 @@ function DraftCard({ r }: { r: WaRequestDetail }) {
   );
 }
 
-const NOTIFICATION_KIND: Record<string, StringKey> = { STATUS: "waKindSTATUS", ALERT: "waKindALERT", DRAFT: "waKindDRAFT", REGISTRY: "waKindREGISTRY" };
+const NOTIFICATION_KIND: Record<string, StringKey> = { STATUS: "waKindSTATUS", ALERT: "waKindALERT", DRAFT: "waKindDRAFT", REGISTRY: "waKindREGISTRY", FOLLOWUP: "waKindFOLLOWUP" };
 
 /**
  * Registry date the customer asked for, the date/time staff confirm (the
@@ -397,6 +397,68 @@ function RegistryCard({ r }: { r: WaRequestDetail }) {
           {s.geoTagTakenAt && <span className="doc-sub">{t("rgGeoTakenAt", { at: formatDate(s.geoTagTakenAt, lang) })}</span>}
         </div>
       </div>
+      {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
+    </Card>
+  );
+}
+
+/** Follow-up after the registry: which kind, the period / loan end, and the planned reminders. */
+function FollowUpCard({ r }: { r: WaRequestDetail }) {
+  const { t, lang } = useWaT();
+  const update = useUpdateWaRequest(r.id);
+  const f = r.followUp;
+  const [kind, setKind] = useState(f?.kind ?? "auto");
+  const [end, setEnd] = useState(f?.termEndDate ?? "");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    setKind(f?.kind ?? "auto");
+    setEnd(f?.termEndDate ?? "");
+  }, [f?.kind, f?.termEndDate]);
+  if (!f || r.status !== "SUBMITTED") return null;
+  async function save() {
+    setMsg(null);
+    try {
+      await update.mutateAsync({ followUpKind: kind, termEndDate: end || null });
+      setMsg({ text: t("waSaved"), ok: true });
+    } catch (err) {
+      setMsg({ text: await apiErrorMessage(err, t("rgSaveError")), ok: false });
+    }
+  }
+  const needsEnd = kind === "agreement" || kind === "patta" || f.effectiveKind === "mortgage";
+  return (
+    <Card title={t("fuCardTitle")}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+        <label className="modal-field">
+          {t("fuChoice")}
+          <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+            {(["auto", "none", "agreement", "patta"] as const).map((k) => (
+              <option key={k} value={k}>
+                {t(`fuChoice_${k}` as StringKey)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {needsEnd && (
+          <label className="modal-field">
+            {t("fuTermEnd")}
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </label>
+        )}
+        <button type="button" className="doc-btn" disabled={update.isPending || (kind === f.kind && end === (f.termEndDate ?? ""))} onClick={save}>
+          {t("rgSave")}
+        </button>
+      </div>
+      <p className="doc-sub">
+        {f.effectiveKind ? t("fuEffective", { kind: t(`fuShort_${f.effectiveKind}` as StringKey) }) : t("fuEffectiveNone")}
+        {f.effectiveKind && r.workStatus !== "DONE" ? ` ${t("fuPlannedWhenDone")}` : ""}
+      </p>
+      {f.optedOut && <p className="modal-error">{t("fuOptedOut")}</p>}
+      {f.items.map((x) => (
+        <div key={x.id} className="doc-sub" style={{ marginTop: 2 }}>
+          {formatDay(x.dueDate, lang)} · {t(`fuShort_${x.kind}` as StringKey)}
+          {x.recurring ? ` (${t("fuYearly")})` : ""} · {t(`fuSt_${x.status}` as StringKey)}
+        </div>
+      ))}
       {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
     </Card>
   );
@@ -927,6 +989,8 @@ export function WhatsappRequestDetailPage() {
         </Card>
 
         <RegistryCard r={r} />
+
+        <FollowUpCard r={r} />
 
         <DraftCard r={r} />
 

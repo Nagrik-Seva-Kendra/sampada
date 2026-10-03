@@ -1,5 +1,5 @@
 import { Logger } from "@nestjs/common";
-import { DEFAULT_OFFICE_FEES } from "@sampada/shared";
+import { DEFAULT_ATTENDANCE_SETTINGS, DEFAULT_OFFICE_FEES } from "@sampada/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Debouncer } from "./debouncer.js";
 import { DraftIntakeService, smartCanonical } from "./draft-intake.service.js";
@@ -116,10 +116,13 @@ function frontWorld(requests: any[] = []) {
     draftIntake: { findMany: vi.fn(async ({ where }: any) => requests.filter((r) => r.phone === where.phone && r.status === where.status)) },
     waOfficeFeeConfig: { findUnique: vi.fn(async () => null) },
   };
-  const outbox = { alertOwners: vi.fn(async () => 1) };
-  const front = new FrontDoorService(prisma, outbox as any, { extract: vi.fn() } as any, { lookup: vi.fn() } as any);
+  const outbox = { alertOwners: vi.fn(async () => 1), post: vi.fn(async () => ({ ok: false })) };
+  const callbacks = { create: vi.fn(async () => ({ number: 7 })) };
+  const followups = { reply: vi.fn(async (): Promise<string[] | null> => null) };
+  const attendance = { settings: async () => DEFAULT_ATTENDANCE_SETTINGS, holidays: async () => [] };
+  const front = new FrontDoorService(prisma, outbox as any, { extract: vi.fn() } as any, { lookup: vi.fn() } as any, callbacks as any, followups as any, attendance as any);
   const noDeed = async () => null;
-  return { contacts, prisma, outbox, front, say: (t: string, now?: Date) => front.handle(PHONE, t, noDeed, now) };
+  return { contacts, prisma, outbox, front, callbacks, followups, say: (t: string, now?: Date) => front.handle(PHONE, t, noDeed, now) };
 }
 
 describe("front door", () => {

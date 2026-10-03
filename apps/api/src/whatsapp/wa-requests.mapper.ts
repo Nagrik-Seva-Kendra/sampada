@@ -53,6 +53,8 @@ export interface DraftIntakeRow {
   registryReminderSentAt?: Date | null;
   geoTagPhotos?: number | null;
   geoTagTakenAt?: Date | null;
+  followUpKind?: string | null;
+  termEndDate?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

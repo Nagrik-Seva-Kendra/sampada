@@ -655,6 +655,10 @@ model DraftIntake {
   /// Geo-tag photos taken by staff (count) and when they were marked taken.
   geoTagPhotos   Int?
   geoTagTakenAt  DateTime?
+  /// Follow-up after the registry: auto | none | agreement | patta (null = auto).
+  followUpKind   String?
+  /// End of the agreement / loan / patta period (IST "YYYY-MM-DD").
+  termEndDate    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -692,6 +696,8 @@ model WaContact {
   recentReplies   Json?
   /// Owner numbers only: customer flow for testing until then ("ग्राहक मोड", 30 min).
   ownerTestUntil  DateTime?
+  /// The customer wrote "बंद" / STOP: no follow-up reminders any more.
+  followUpOptOutAt DateTime?
 
   @@index([organizationId, blockedAt])
 }
@@ -881,4 +887,64 @@ model SalarySheet {
   updatedAt      DateTime  @updatedAt
 
   @@unique([organizationId, month])
+}
+
+/// A customer asked the office to call them back (WhatsApp menu 5, or "हाँ करवाना है" to a follow-up).
+model CallbackRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// Short per-organization number.
+  number         Int
+  phone          String
+  customerName   String?
+  preferredAt    DateTime?
+  preferredText  String?
+  purpose        String
+  /// NEW | DONE
+  status         String    @default("NEW")
+  /// whatsapp | followup
+  source         String    @default("whatsapp")
+  assigneeId     String?
+  draftIntakeId  String?
+  doneNote       String?
+  doneAt         DateTime?
+  doneById       String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+/// Owner-editable follow-up rule per kind (agreement | mortgage | patta | sale): text, days, on/off.
+model FollowUpRule {
+  id             String  @id @default(cuid())
+  organizationId String
+  kind           String
+  enabled        Boolean @default(true)
+  offsetDays     Int
+  text           String
+
+  @@unique([organizationId, kind])
+}
+
+/// A follow-up reminder for a DONE request, sent on dueDate by the daily job.
+model FollowUp {
+  id             String    @id @default(cuid())
+  organizationId String
+  draftIntakeId  String
+  phone          String
+  kind           String
+  /// IST "YYYY-MM-DD"
+  dueDate        String
+  /// PENDING | SENT | YES | OPTED_OUT | CANCELLED
+  status         String    @default("PENDING")
+  /// Mortgage without a known loan period: a new one a year later.
+  recurring      Boolean   @default(false)
+  sentAt         DateTime?
+  repliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, status, dueDate])
+  @@index([draftIntakeId])
+  @@index([phone, status])
 }

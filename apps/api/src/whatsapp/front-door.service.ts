@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { Injectable, Logger } from "@nestjs/common";
 import { DEFAULT_OFFICE_FEES, WA_STATUS_PHRASE, WaOfficeFees } from "@sampada/shared";
+import { AttendanceService } from "../attendance/attendance.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { parseDue } from "../tasks/task-rules.js";
+import { inOfficeHours, nextOpening, officeCallNumber, saysAsap, showNumber, whenHi } from "./call-rules.js";
+import { CallbackService } from "./callback.service.js";
+import { FollowUpService } from "./followup.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -17,6 +22,7 @@ import {
   isGibberish,
   isGreeting,
   MENU_TEXT,
+  menuText,
   parseCostKind,
   parseMenuChoice,
   registryCostText,
@@ -49,13 +55,25 @@ export type FrontRoute =
   | "staff"
   | "gibberish"
   | "gibberish-muted"
-  | "deed-words";
+  | "deed-words"
+  | "call"
+  | "callback"
+  | "followup";
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
 }
 
-type State = { mode: "cost"; step: "KIND" | "AMOUNT"; guideline?: { value: number; sdPct: number } | null } | null;
+type State =
+  | { mode: "cost"; step: "KIND" | "AMOUNT"; guideline?: { value: number; sdPct: number } | null }
+  | { mode: "call"; step: "CHOICE" }
+  | { mode: "callback"; step: "WHEN" }
+  | { mode: "callback"; step: "PURPOSE"; at: string | null; atText: string | null }
+  | null;
+
+export const CALL_CHOICE_TEXT = "1. मैं अभी ऑफिस को कॉल करूँगा\n2. ऑफिस मुझे कॉल करे (कॉल बैक)";
+export const CALLBACK_WHEN_ASK = 'आपको कब कॉल करें? जैसे "आज 4 बजे", "कल सुबह" — या "अभी" लिखें।';
+export const CALLBACK_PURPOSE_ASK = "किस काम के लिए बात करनी है? छोटे में लिखें (जैसे: रजिस्ट्री की तारीख, बंधक, नामांतरण)।";
 const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
 /**
@@ -76,7 +94,14 @@ export class FrontDoorService {
     private readonly outbox: WaOutboxService,
     private readonly extractor: DeedExtractorService,
     private readonly guideline: GuidelineLookupService,
+    private readonly callbacks: CallbackService,
+    private readonly followups: FollowUpService,
+    private readonly attendance: AttendanceService,
   ) {}
+
+  private callNumber(): string | null {
+    return officeCallNumber();
+  }
 
   // ---------- spam / abuse ----------
   /** Every incoming message: false = stay silent (blocked, or this one made it spam). */
@@ -156,11 +181,26 @@ export class FrontDoorService {
       const streak = (c?.gibberishStreak ?? 0) + 1;
       const mute = streak >= 3;
       await this.setContact(phone, { gibberishStreak: mute ? 0 : streak, mutedUntil: mute ? new Date(now.getTime() + GIBBERISH_MUTE_MS) : null });
-      return { replies: [mute ? GIBBERISH_NOTICE : MENU_TEXT], route: "gibberish" };
+      return { replies: [mute ? GIBBERISH_NOTICE : menuText(!!this.callNumber())], route: "gibberish" };
     }
     await this.clearGibberish(phone);
 
-    const choice = parseMenuChoice(text);
+    const callOn = !!this.callNumber();
+    const choice = parseMenuChoice(text, callOn);
+    // "बंद" / "हाँ करवाना है" after a follow-up reminder.
+    const fu = await this.followups.reply(phone, text, now);
+    if (fu) {
+      await this.setContact(phone, { state: null });
+      return { replies: fu, route: "followup" };
+    }
+    if (state?.mode === "call" || state?.mode === "callback") {
+      // A bare menu number other than the call answers, or words of another option, leave the call questions.
+      const leaves =
+        choice !== null &&
+        choice !== 5 &&
+        ((state.mode === "call" && choice >= 3) || (state.mode === "callback" && state.step === "WHEN"));
+      if (!leaves) return this.call(phone, state, text, now);
+    }
     if (state?.mode === "cost") {
       // Inside the cost questions a bare number answers them ("1" = रजिस्ट्री); words of
       // another menu option ("स्टाफ से बात") or "4" switch to that option instead.
@@ -179,6 +219,9 @@ export class FrontDoorService {
       case 3:
         await this.setContact(phone, { state: null });
         return { replies: [await this.myRequests(phone)], route: "status" };
+      case 5:
+        if (callOn) return this.callMenu(phone);
+        break;
       case 4:
         await this.setContact(phone, { state: null });
         await this.outbox.alertOwners(`📞 WhatsApp नंबर ${maskPhone(phone)} स्टाफ से बात करना चाहते हैं (+${phone}).`).catch(() => undefined);
@@ -194,7 +237,103 @@ export class FrontDoorService {
       const r = await deedWords();
       if (r) return { replies: r, route: "deed-words" };
     }
-    return { replies: [MENU_TEXT], route: isGreeting(text) ? "greeting" : "menu" };
+    return { replies: [menuText(callOn)], route: isGreeting(text) ? "greeting" : "menu" };
+  }
+
+  // ---------- call (menu 5) ----------
+  /** Menu 5: buttons inside the 24h window (the customer just wrote), else numbered text. */
+  private async callMenu(phone: string): Promise<FrontReply> {
+    const n = this.callNumber()!;
+    await this.setContact(phone, { state: { mode: "call", step: "CHOICE" } });
+    const body = `📞 ऑफिस का नंबर: ${showNumber(n)}\nआप क्या चाहेंगे?`;
+    if (process.env.WA_ACCESS_TOKEN) {
+      const r = await this.outbox.post(phone, {
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: body },
+          action: {
+            buttons: [
+              { type: "reply", reply: { id: "call:now", title: "मैं अभी कॉल करूँगा" } },
+              { type: "reply", reply: { id: "call:back", title: "मुझे कॉल बैक करें" } },
+            ],
+          },
+        },
+      });
+      if (r.ok) return { replies: [], route: "call" };
+    }
+    return { replies: [`${body}\n${CALL_CHOICE_TEXT}`], route: "call" };
+  }
+
+  /** A call button ("call:now" / "call:back"); null for other buttons. */
+  async callButton(phone: string, id: string, now = new Date()): Promise<string[] | null> {
+    if (!this.callNumber() || (id !== "call:now" && id !== "call:back")) return null;
+    const r = await this.call(phone, { mode: "call", step: "CHOICE" }, id === "call:now" ? "1" : "2", now);
+    return r.replies;
+  }
+
+  private async call(phone: string, state: Extract<NonNullable<State>, { mode: "call" | "callback" }>, text: string, now: Date): Promise<FrontReply> {
+    const v = normDigits(text).trim();
+    const n = this.callNumber();
+    if (state.mode === "call") {
+      if (/^1[.)]?$|अभी कॉल|abhi call|मैं कॉल|main call|now/i.test(v) && n) {
+        await this.setContact(phone, { state: null });
+        const open = await this.isOpen(now);
+        return {
+          replies: [`📞 कृपया ${showNumber(n)} पर कॉल करें।${open ? "" : `\nऑफिस अभी बंद है — ${whenHi(await this.opening(now), now)} के बाद कॉल करें।`}`],
+          route: "call",
+        };
+      }
+      if (/^2[.)]?$|कॉल ?बैक|call ?back|मुझे कॉल|mujhe call/i.test(v)) {
+        await this.setContact(phone, { state: { mode: "callback", step: "WHEN" } });
+        return { replies: [CALLBACK_WHEN_ASK], route: "callback" };
+      }
+      return { replies: [`कृपया 1 या 2 लिखें:\n${CALL_CHOICE_TEXT}`], route: "call" };
+    }
+    if (state.step === "WHEN") {
+      let at: Date | null = null;
+      if (!saysAsap(v)) {
+        at = parseDue(v, now);
+        // "9 बजे रात" / "7 बजे शाम": evening hours.
+        if (at && /रात|raat|शाम|shaam|sham|evening|night/i.test(v) && Number(at.toLocaleString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false })) < 12) {
+          at = new Date(at.getTime() + 12 * 3600 * 1000);
+        }
+        if (!at) return { replies: ['समय समझ नहीं आया। जैसे "आज 4 बजे", "कल सुबह" लिखें, या "अभी" लिखें।'], route: "callback" };
+        if (at < now) at = null;
+      }
+      await this.setContact(phone, { state: { mode: "callback", step: "PURPOSE", at: at?.toISOString() ?? null, atText: saysAsap(v) ? null : v.slice(0, 100) } });
+      return { replies: [CALLBACK_PURPOSE_ASK], route: "callback" };
+    }
+    // PURPOSE
+    if (v.length < 2) return { replies: [CALLBACK_PURPOSE_ASK], route: "callback" };
+    let at = state.at ? new Date(state.at) : null;
+    const { hours, holidays } = await this.hours();
+    let when: string;
+    if (!at) {
+      when = inOfficeHours(now, hours, holidays)
+        ? "स्टाफ जल्द आपको कॉल करेगा।"
+        : `ऑफिस अभी बंद है (समय ${hours.startTime}–${hours.endTime})। आपको ${whenHi(nextOpening(now, hours, holidays), now)} के बाद कॉल आएगा।`;
+    } else if (!inOfficeHours(at, hours, holidays)) {
+      at = nextOpening(at, hours, holidays);
+      when = `यह समय ऑफिस के समय (${hours.startTime}–${hours.endTime}) से बाहर है — आपको ${whenHi(at, now)} के बाद कॉल आएगा।`;
+    } else when = `आपको ${whenHi(at, now)} के आसपास कॉल आएगा।`;
+    const cb = await this.callbacks.create({ phone, preferredAt: at, preferredText: state.atText, purpose: v, source: "whatsapp" });
+    await this.setContact(phone, { state: null });
+    return { replies: [`✅ कॉल बैक दर्ज हो गया (नंबर ${cb.number})।\n${when}`], route: "callback" };
+  }
+
+  private async hours() {
+    const s = await this.attendance.settings(this.orgId);
+    const holidays = (await this.attendance.holidays(this.orgId)).map((h) => h.date);
+    return { hours: s, holidays };
+  }
+  private async isOpen(now: Date) {
+    const { hours, holidays } = await this.hours();
+    return inOfficeHours(now, hours, holidays);
+  }
+  private async opening(now: Date) {
+    const { hours, holidays } = await this.hours();
+    return nextOpening(now, hours, holidays);
   }
 
   /** A file while the cost questions are open: read the registry, quote with the guideline value, delete the file. */
@@ -222,7 +361,7 @@ export class FrontDoorService {
     };
   }
 
-  private async cost(phone: string, state: NonNullable<State>, text: string): Promise<FrontReply> {
+  private async cost(phone: string, state: Extract<NonNullable<State>, { mode: "cost" }>, text: string): Promise<FrontReply> {
     const fees = await this.fees();
     if (state.step === "KIND") {
       const kind = parseCostKind(text);
