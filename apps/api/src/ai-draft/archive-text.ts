@@ -131,7 +131,7 @@ export interface Masked {
 const STOP = "(?:पुत्री|पुत्र|पत्नी|पति|श्रीमती|सुश्री|श्री|निवासी|उम्र|आयु|जाति|पता|व्यवसाय|का|की|के)";
 const NAME_WORD = `(?!${STOP}(?=[\\s,।)(]|$))[\\u0900-\\u097F]{2,}`;
 const NAME_WORDS = `${NAME_WORD}(?:\\s${NAME_WORD}){0,3}`;
-const HONORIFIC = "(?:श्री|श्रीमती|सुश्री|कुमारी|स्व\\.?|स्वर्गीय|मेसर्स|मै\\.)";
+const HONORIFIC = "(?:श्रीमती|सुश्री|कुमारी|श्री|स्व\\.?|स्वर्गीय|मेसर्स|मै\\.)";
 
 /**
  * Old customers' data out of an archive deed: names after an honorific,
