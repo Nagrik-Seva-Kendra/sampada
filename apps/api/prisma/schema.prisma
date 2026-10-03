@@ -1116,3 +1116,30 @@ model AiLearnedRule {
   @@unique([organizationId, deedType, before, after])
   @@index([organizationId, status])
 }
+
+/// Customer copies of archive registries over WhatsApp: OFF until the owner switches it on.
+model ArchiveCopySetting {
+  organizationId String   @id
+  enabled        Boolean  @default(false)
+  dailyLimit     Int      @default(3)
+  updatedAt      DateTime @updatedAt
+}
+
+/// One verified request for a copy (number matched, code confirmed); staff send the watermarked PDF.
+model ArchiveCopyRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         Int
+  phone          String
+  deedId         String
+  /// REQUESTED | SENT | REJECTED
+  status         String    @default("REQUESTED")
+  reason         String?
+  sentAt         DateTime?
+  sentById       String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([phone, createdAt])
+}

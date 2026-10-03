@@ -5,6 +5,7 @@ import { StaffModeService } from "./staff-mode.service.js";
 import { RegistryJobsService } from "./registry-jobs.service.js";
 import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
+import { ArchiveCopyService } from "./archive-copy.service.js";
 import { CallsController } from "./calls.controller.js";
 import { TasksModule } from "../tasks/tasks.module.js";
 import { WaMessagingModule } from "./wa-messaging.module.js";
@@ -46,6 +47,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     RegistryJobsService,
     CallbackService,
     FollowUpService,
+    ArchiveCopyService,
     IntentClassifierService,
     WaAdminService,
     OwnerAssistantService,

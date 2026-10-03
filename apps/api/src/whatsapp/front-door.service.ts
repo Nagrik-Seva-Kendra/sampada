@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { DEFAULT_OFFICE_FEES, WA_STATUS_PHRASE, WaOfficeFees } from "@sampada/shared";
 import { AttendanceService } from "../attendance/attendance.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -7,6 +7,7 @@ import { parseDue } from "../tasks/task-rules.js";
 import { inOfficeHours, nextOpening, officeCallNumber, saysAsap, showNumber, whenHi } from "./call-rules.js";
 import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
+import { ArchiveCopyService } from "./archive-copy.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -58,7 +59,8 @@ export type FrontRoute =
   | "deed-words"
   | "call"
   | "callback"
-  | "followup";
+  | "followup"
+  | "copy";
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
@@ -97,6 +99,7 @@ export class FrontDoorService {
     private readonly callbacks: CallbackService,
     private readonly followups: FollowUpService,
     private readonly attendance: AttendanceService,
+    @Optional() private readonly copies?: ArchiveCopyService,
   ) {}
 
   private callNumber(): string | null {
@@ -187,6 +190,9 @@ export class FrontDoorService {
 
     const callOn = !!this.callNumber();
     const choice = parseMenuChoice(text, callOn);
+    // "पुरानी रजिस्ट्री की कॉपी" (code, then the deed to send).
+    const copy = this.copies ? await this.copies.handle(phone, text, now) : null;
+    if (copy) return { replies: copy, route: "copy" };
     // "बंद" / "हाँ करवाना है" after a follow-up reminder.
     const fu = await this.followups.reply(phone, text, now);
     if (fu) {
