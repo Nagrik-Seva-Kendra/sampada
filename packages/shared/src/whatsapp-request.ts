@@ -55,7 +55,30 @@ export interface WaRequestListItem {
   assigneeName: string | null;
   /** Which document the customer asked for (older requests: "sale"). */
   deedType: WaDeedType;
+  /** Registry date (customer's choice, then the staff-confirmed one) and geo-tag photo. */
+  schedule?: WaRegistrySchedule;
 }
+
+/** Registry date + geo-tag photo of a request. Days are IST "YYYY-MM-DD". */
+export interface WaRegistrySchedule {
+  preferredDate: string | null;
+  alternateDate: string | null;
+  timeOfDay: "MORNING" | "AFTERNOON" | null;
+  /** Confirmed by staff (the customer is told and reminded a day before). */
+  registryDate: string | null;
+  registryTime: string | null;
+  reminderSentAt: string | null;
+  /** SELF: customer with the Sampada 2.0 app; STAFF: office staff, paid per photo. */
+  geoTagMode: "SELF" | "STAFF" | null;
+  geoTagPhotos: number | null;
+  geoTagTakenAt: string | null;
+  /** Fee per photo (GEOTAG_FEE) for the cost line. */
+  geoTagFee: number;
+}
+
+/** List filter on the registry date (confirmed, else the customer's preferred one). */
+export const WaRegistryWhen = z.enum(["today", "tomorrow", "week"]);
+export type WaRegistryWhen = z.infer<typeof WaRegistryWhen>;
 
 export type WaDeedType = "sale" | "mortgage" | "other";
 export type WaDocState = "received" | "later" | null;
@@ -222,6 +245,12 @@ export const WaRequestUpdateInput = z
     staffNote: z.string().max(2000).nullable().optional(),
     /** Link (or unlink with null) the deed drafted for this request. */
     deedTemplateId: z.string().trim().min(1).max(64).nullable().optional(),
+    /** Confirmed registry day and time; the customer gets a WhatsApp when both are set or changed. */
+    registryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    registryTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+    /** Geo-tag photos taken by staff: count, and taken (true) / not yet (false). */
+    geoTagPhotos: z.number().int().min(0).max(50).nullable().optional(),
+    geoTagTaken: z.boolean().optional(),
   })
   .strict();
 export type WaRequestUpdateInput = z.infer<typeof WaRequestUpdateInput>;

@@ -207,12 +207,13 @@ describe("bot: ID photos before the buyer's typed questions", () => {
       buyerName: "अमित", buyerRelation: "पुत्र", buyerFatherName: "राजेश", buyerMotherName: "सीता", buyerAadhaar: "enc:x",
       buyerMobile: "9876543210", buyerEmail: "a@b.com", buyerAddress: "लश्कर, ग्वालियर",
       idRead: { buyer: { aadhaarNameEn: "Amit Sharma", panName: "SUMIT VERMA" } },
+      regDate: null, regAlt: null, regTime: null, geoTagMode: "SELF",
     };
     const cur = { id: "cmg1abcdefxyz123", step: "FINAL", status: "ACTIVE", data, needsStaff: false };
     const update = vi.fn(async () => ({}));
     const svc = new DraftIntakeService({ draftIntake: { findFirst: vi.fn(async () => cur), update } } as any, {} as any, {} as any, {} as any, { send: async () => ({}) } as any, { classify: async () => null } as any);
     await svc.handleText({ phone: "1", name: "" }, "हाँ");
-    expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW", needsStaff: true } });
+    expect(update).toHaveBeenCalledWith({ where: { id: cur.id }, data: { status: "SUBMITTED", workStatus: "NEW", needsStaff: true, preferredDate: null, alternateDate: null, timeOfDay: null, geoTagMode: "SELF" } });
   });
 });
 

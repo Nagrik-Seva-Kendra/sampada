@@ -59,6 +59,7 @@ describe("submit → owner alert", () => {
   const full = {
     buyerName: "श्याम", buyerRelation: "पुत्र", buyerFatherName: "मोहन", buyerMotherName: "सीता", buyerAadhaar: "enc:x",
     buyerMobile: "9876543210", buyerEmail: "s@example.com", buyerAddress: "लश्कर, ग्वालियर",
+    regDate: null, regAlt: null, regTime: null, geoTagMode: "SELF",
   };
   function run(cur: any, env: string) {
     vi.stubEnv("WA_ALERT_NUMBERS", env);

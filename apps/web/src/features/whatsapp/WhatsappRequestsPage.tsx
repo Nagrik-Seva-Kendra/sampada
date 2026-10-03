@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { WaWorkStatus } from "@sampada/shared";
+import type { WaRegistryWhen, WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
@@ -8,7 +8,7 @@ import { BlockedPanel, FeesPanel } from "./BotSettingsPanels";
 import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
 import { useBulkDeleteWaRequests, useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
 import { DEED_TYPE_KEY, INTAKE_STATUS_KEY, useWaT, type WaT, WORK_STATUS_KEY } from "./waI18n";
-import { formatAmount, formatDate, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
+import { formatAmount, formatDate, registryWhen, WORK_STATUS_PILL, WORK_STATUSES } from "./waLabels";
 import "./waRequests.css";
 
 const TEMPLATE_STATUS: Record<string, StringKey> = { APPROVED: "waTplAPPROVED", PENDING: "waTplPENDING", REJECTED: "waTplREJECTED", PAUSED: "waTplPAUSED" };
@@ -62,8 +62,10 @@ export function WhatsappRequestsPage() {
   const canManage = useWaSummary(true).data?.canManage ?? false;
   const [workStatus, setWorkStatus] = useState<WaWorkStatus | "">("");
   const [needsStaff, setNeedsStaff] = useState<"" | "true" | "false">("");
+  const [registry, setRegistry] = useState<WaRegistryWhen | "">("");
   const query = useWaRequests({
     workStatus: workStatus || undefined,
+    registry: registry || undefined,
     needsStaff: needsStaff === "" ? undefined : needsStaff === "true",
   });
   const rows = query.data?.data ?? [];
@@ -72,7 +74,7 @@ export function WhatsappRequestsPage() {
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const bulk = useBulkDeleteWaRequests();
-  const cols = canManage ? 9 : 8;
+  const cols = canManage ? 10 : 9;
 
   // A message left by a delete (detail page) or set here; hides after a while.
   useEffect(() => {
@@ -181,6 +183,15 @@ export function WhatsappRequestsPage() {
               <option value="false">{t("waFilterStaffNotNeeded")}</option>
             </select>
           </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+            {t("rgFilter")}
+            <select className="dr-action-select" value={registry} onChange={(e) => setRegistry(e.target.value as WaRegistryWhen | "")}>
+              <option value="">{t("waFilterAll")}</option>
+              <option value="today">{t("rgFilterToday")}</option>
+              <option value="tomorrow">{t("rgFilterTomorrow")}</option>
+              <option value="week">{t("rgFilterWeek")}</option>
+            </select>
+          </label>
         </div>
 
         <div className="wa-table-wrap">
@@ -193,6 +204,7 @@ export function WhatsappRequestsPage() {
               <col className="wa-col-property" />
               <col className="wa-col-amount" />
               <col className="wa-col-status" />
+              <col className="wa-col-registry" />
               <col className="wa-col-assignee" />
               <col className="wa-col-date" />
             </colgroup>
@@ -214,6 +226,7 @@ export function WhatsappRequestsPage() {
                 <th>{t("waColProperty")}</th>
                 <th>{t("waColAmount")}</th>
                 <th>{t("waColStatus")}</th>
+                <th>{t("rgColRegistry")}</th>
                 <th>{t("waColAssignee")}</th>
                 <th>{t("waColDate")}</th>
               </tr>
@@ -286,6 +299,24 @@ export function WhatsappRequestsPage() {
                       )}
                       {r.needsStaff && <span className="status-pill bad">{t("waStaffCheck")}</span>}
                     </div>
+                  </td>
+                  <td>
+                    {(() => {
+                      const w = registryWhen(r.schedule, lang, t);
+                      return w ? (
+                        <>
+                          <div style={{ fontWeight: w.confirmed ? 700 : 400 }}>{w.text}</div>
+                          <div className="doc-sub">{w.confirmed ? t("rgConfirmed") : t("rgPreferred")}</div>
+                        </>
+                      ) : (
+                        "—"
+                      );
+                    })()}
+                    {r.schedule?.geoTagMode === "STAFF" && !r.schedule.geoTagTakenAt && (
+                      <div className="status-pill warn" style={{ marginTop: 4, display: "inline-block" }} title={t("rgGeoStaffBadge")}>
+                        📸 {t("rgGeoStaffShort")}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <div className="wa-clamp-2" title={r.assigneeName ?? undefined}>

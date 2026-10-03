@@ -17,6 +17,7 @@ import {
   type WaPerson,
   type WaIntakeStatus,
   type WaPropertySummary,
+  type WaRegistrySchedule,
   type WaRequestDetail,
   type WaRequestListItem,
   type WaRevealResult,
@@ -43,6 +44,15 @@ export interface DraftIntakeRow {
   staffNote: string | null;
   closedAt?: Date | null;
   idPhotosPurgedAt?: Date | null;
+  preferredDate?: string | null;
+  alternateDate?: string | null;
+  timeOfDay?: string | null;
+  geoTagMode?: string | null;
+  registryDate?: string | null;
+  registryTime?: string | null;
+  registryReminderSentAt?: Date | null;
+  geoTagPhotos?: number | null;
+  geoTagTakenAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -120,6 +130,24 @@ export function toListItem(row: DraftIntakeRow, assigneeName: string | null): Wa
     propertySummary: propertySummary(property(deed?.property)),
     assigneeName,
     deedType: deedTypeOf(d),
+    schedule: scheduleOf(row),
+  };
+}
+
+/** Registry date + geo-tag of a request (columns, set at submit / by staff). */
+export function scheduleOf(row: DraftIntakeRow): WaRegistrySchedule {
+  const fee = Number(process.env.GEOTAG_FEE ?? 250);
+  return {
+    preferredDate: row.preferredDate ?? null,
+    alternateDate: row.alternateDate ?? null,
+    timeOfDay: row.timeOfDay === "MORNING" || row.timeOfDay === "AFTERNOON" ? row.timeOfDay : null,
+    registryDate: row.registryDate ?? null,
+    registryTime: row.registryTime ?? null,
+    reminderSentAt: row.registryReminderSentAt?.toISOString() ?? null,
+    geoTagMode: row.geoTagMode === "SELF" || row.geoTagMode === "STAFF" ? row.geoTagMode : null,
+    geoTagPhotos: row.geoTagPhotos ?? null,
+    geoTagTakenAt: row.geoTagTakenAt?.toISOString() ?? null,
+    geoTagFee: Number.isFinite(fee) && fee >= 0 ? fee : 250,
   };
 }
 

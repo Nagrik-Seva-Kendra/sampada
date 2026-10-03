@@ -642,12 +642,26 @@ model DraftIntake {
   idPhotosPurgedAt DateTime?
   /// The deed (DeedTemplate.id, same organization) drafted for this request.
   deedTemplateId String?
+  /// Registry date the customer would like (IST "YYYY-MM-DD"), a second choice, and MORNING | AFTERNOON.
+  preferredDate  String?
+  alternateDate  String?
+  timeOfDay      String?
+  /// Geo-tag photo: SELF (customer, Sampada 2.0 app) | STAFF (office staff, paid per photo).
+  geoTagMode     String?
+  /// Registry date and time confirmed by staff ("YYYY-MM-DD", "HH:MM"); the customer is told, and reminded a day before.
+  registryDate   String?
+  registryTime   String?
+  registryReminderSentAt DateTime?
+  /// Geo-tag photos taken by staff (count) and when they were marked taken.
+  geoTagPhotos   Int?
+  geoTagTakenAt  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([organizationId, phone, status])
   @@index([closedAt])
   @@index([organizationId, workStatus])
+  @@index([organizationId, registryDate])
 }
 
 /// Processed WhatsApp message ids — Meta re-delivers webhooks; this makes them idempotent.

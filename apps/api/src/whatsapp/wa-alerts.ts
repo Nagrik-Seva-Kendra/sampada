@@ -2,6 +2,7 @@
  * Owner alert for a newly submitted WhatsApp request (pure helpers; sent via
  * WaOutboxService with the same 24h-window / template rule as customer messages).
  */
+import { dayHi } from "./registry-date.js";
 import { WA_TEMPLATES } from "@sampada/shared";
 import type { TemplateCall } from "./wa-outbox.service.js";
 import { validMobile } from "./intake-rules.js";
@@ -54,6 +55,8 @@ export function alertMessage(a: AlertInput): { text: string; template: TemplateC
     `दस्तावेज़: ${deedText}`,
     `ग्राहक: ${who} (${mobile})`,
     ...(a.needsStaff ? ["⚠️ स्टाफ जाँच ज़रूरी"] : []),
+    ...(a.data?.regDate ? [`🗓️ रजिस्ट्री की पसंद: ${dayHi(a.data.regDate)}${a.data.regTime === "MORNING" ? ", सुबह" : a.data.regTime === "AFTERNOON" ? ", दोपहर" : ""}`] : []),
+    ...(a.data?.geoTagMode === "STAFF" ? ["📸 जियो-टैग फ़ोटो: ऑफिस स्टाफ से लेनी है"] : []),
     `देखें: ${link}`,
   ];
   return {

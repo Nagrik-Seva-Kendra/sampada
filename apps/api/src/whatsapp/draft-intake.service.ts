@@ -19,6 +19,8 @@ import { IdCardExtractorService } from "./id-card-extractor.service.js";
 import { type FlowIntent, IntentClassifierService } from "./intent-classifier.service.js";
 import { idWarningsFor, mapIdRead } from "./id-cards.js";
 import { alertMessage, alertNumbers } from "./wa-alerts.js";
+import { isRegistryStep, REGISTRY_KEEP, registryAnswer, registryAsk, registryNext, registrySummaryLines } from "./registry-flow.js";
+import { istToday, registryRules } from "./registry-date.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
@@ -527,12 +529,14 @@ export class DraftIntakeService {
           // Nothing SAMPADA needs may be missing (e.g. an email skipped before it was required).
           const missing = firstMissingSampadaStep(data);
           if (missing) return this.goto(cur.id, data, missing, "SAMPADA 2.0 के लिए एक जानकारी बाकी है।");
+          const reg = registryNext(data);
+          if (reg) return this.goto(cur.id, data, reg);
           return this.submit(cur);
         }
         if (/बदल|change|edit/i.test(v)) {
           // Re-collect the people's details; the deed type and plot answers stay.
           const keep = Object.fromEntries(
-            ["deedType", "docs", "ownerIsCurrent", "registryOwners", "extraDocs", ...PLOT_FIELDS, ...ID_KEEP]
+            ["deedType", "docs", "ownerIsCurrent", "registryOwners", "extraDocs", ...PLOT_FIELDS, ...ID_KEEP, ...REGISTRY_KEEP]
               .filter((f) => f in data)
               .map((f) => [f, data[f]]),
           );
@@ -542,6 +546,14 @@ export class DraftIntakeService {
         return this.smart(ctx, cur, data, raw, depth);
 
       default: {
+        if (isRegistryStep(cur.step)) {
+          const r = registryAnswer(cur.step, data, raw, istToday(), await this.registryRules());
+          if (!r.done) {
+            await this.save(cur.id, { data: r.data });
+            return r.replies;
+          }
+          return [...r.replies, ...(await this.goto(cur.id, r.data, registryNext(r.data) ?? "FINAL"))];
+        }
         if (reuseOfferRe.test(cur.step) && !YES.test(v) && !NO.test(v)) return this.smart(ctx, cur, data, raw, depth);
         if (idOkRe.test(cur.step) && !YES.test(v) && !NO.test(v) && !/बदल|change|edit|गलत|galat|wrong/i.test(v)) {
           return this.smart(ctx, cur, data, raw, depth);
@@ -798,6 +810,8 @@ export class DraftIntakeService {
           if (d[s.key] !== undefined) lines.push(`${s.label.split(" — ")[1]}: ${shownValue(s)}`);
         }
       }
+      const reg = registrySummaryLines(d);
+      if (reg.length) lines.push("", ...reg);
       lines.push("", 'सही है तो "हाँ" लिखें। दोबारा भरने के लिए "बदलें" लिखें।');
       return lines.join("\n");
     }
@@ -816,7 +830,7 @@ export class DraftIntakeService {
       d.amount != null
         ? `₹${inr(d.amount)}${d.amountMode === "GUIDELINE" ? " (गाइडलाइन)" : ""}`
         : "गाइडलाइन (स्टाफ बताएगा)";
-    lines.push(`राशि: ${amt}`, "", "सही है तो \"हाँ\" लिखें। दोबारा भरने के लिए \"बदलें\" लिखें।");
+    lines.push(`राशि: ${amt}`, ...registrySummaryLines(d), "", "सही है तो \"हाँ\" लिखें। दोबारा भरने के लिए \"बदलें\" लिखें।");
     return lines.join("\n");
   }
 
@@ -826,7 +840,15 @@ export class DraftIntakeService {
     const idWarn = partyPrefixes(d).some(
       (p) => idWarningsFor(d.idRead?.[p], { fatherName: d[`${p}FatherName`], relation: d[`${p}Relation`] }).length > 0,
     );
-    await this.save(cur.id, { status: "SUBMITTED", workStatus: "NEW", ...(idWarn ? { needsStaff: true } : {}) });
+    await this.save(cur.id, {
+      status: "SUBMITTED",
+      workStatus: "NEW",
+      ...(idWarn ? { needsStaff: true } : {}),
+      preferredDate: d.regDate ?? null,
+      alternateDate: d.regAlt ?? null,
+      timeOfDay: d.regTime ?? null,
+      geoTagMode: d.geoTagMode ?? null,
+    });
     await this.alertOwners(cur, d, idWarn || !!cur.needsStaff);
     // workStatus NEW puts it on the office's "WhatsApp अनुरोध" page.
     // TODO: notify staff (e.g. push/email) when a new request arrives.
@@ -869,6 +891,17 @@ export class DraftIntakeService {
   }
 
   // ================= db / helpers =================
+  /** Sunday + the owner's holiday list (Attendance settings), REGISTRY_MIN_WORKING_DAYS / REGISTRY_MAX_DAYS. */
+  private async registryRules() {
+    let hol: { date: string }[] = [];
+    try {
+      hol = await this.prisma.holiday.findMany({ where: { organizationId: this.orgId }, select: { date: true } });
+    } catch {
+      // No holiday list → Sundays only.
+    }
+    return registryRules(hol.map((h) => h.date));
+  }
+
   private active(phone: string) {
     return this.prisma.draftIntake.findFirst({
       where: {
@@ -887,6 +920,8 @@ export class DraftIntakeService {
 
   /** Saves and asks `step` -- or, before a person's first question, their ID photos. */
   private async goto(id: string, data: any, step: string, prefix?: string): Promise<string[]> {
+    // Registry date, time and geo-tag come just before the summary (sale and mortgage).
+    if (step === "FINAL") step = registryNext(data) ?? "FINAL";
     const person = step.match(personNameRe)?.[1];
     if (person && REUSE_PARTIES.includes(person) && !data.idDone?.[person] && data.reuse?.[person] === undefined) {
       const prev = await this.previousParty(id);
@@ -1130,6 +1165,7 @@ export class DraftIntakeService {
     if (step === "AMOUNT") return AMOUNT_ASK;
     if (step === "CONFIRM_PROPERTY") return "कृपया \"हाँ\" या \"नहीं\" लिखें।";
     if (step === "FINAL") return this.finalSummary(data);
+    if (isRegistryStep(step)) return registryAsk(step, data);
     if (step === "CHOOSE_DEED") return CHOOSE_DEED_ASK;
     if (step === "OTHER_DESC") return OTHER_ASK;
     if (step === "M_FIRST_DOC") return M_FIRST_DOC_ASK;
