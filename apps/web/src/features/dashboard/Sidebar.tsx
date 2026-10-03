@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, CalendarCheck, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
+import { BookOpen, CalendarCheck, PhoneCall, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
+import { useCallbackCount } from "../calls/useCalls";
 import { useUiStore } from "../../stores/uiStore";
 import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
 import { translate, type StringKey } from "../../i18n/strings";
@@ -76,6 +77,7 @@ export function Sidebar({
   const waSummary = useWaSummary(waEligible).data;
   const showWhatsapp = waEligible && (isWaManager || !!waSummary?.visible);
   const waNewCount = waSummary?.newCount ?? 0;
+  const callCount = useCallbackCount(waEligible).data?.newCount ?? 0;
 
   const canManageTeam = !!activeOrganization && hasPermission(activeOrganization.role, "members.invite");
 
@@ -133,6 +135,16 @@ export function Sidebar({
         )}
         {waEligible && (
           <SidebarLink to="/tasks" icon={<ListTodo size={17} strokeWidth={2.2} />} label={t("sidebarTasks")} collapsed={collapsed} />
+        )}
+        {waEligible && (
+          <SidebarLink
+            to="/calls"
+            icon={<PhoneCall size={17} strokeWidth={2.2} />}
+            label={t("sidebarCalls")}
+            collapsed={collapsed}
+            badge={callCount}
+            badgeLabel={String(callCount)}
+          />
         )}
         {waEligible && (
           <SidebarLink to="/attendance" icon={<CalendarCheck size={17} strokeWidth={2.2} />} label={t("sidebarAttendance")} collapsed={collapsed} />

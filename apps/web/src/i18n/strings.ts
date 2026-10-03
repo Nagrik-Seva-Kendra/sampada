@@ -1,6 +1,7 @@
 import type { Language } from "@sampada/shared";
 import { attendanceStrings } from "./attendanceStrings";
 import { registryStrings } from "./registryStrings";
+import { callStrings } from "./callStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -701,6 +702,8 @@ export const strings = {
   ...attendanceStrings,
   // Registry date + geo-tag (i18n/registryStrings.ts)
   ...registryStrings,
+  // Calls & follow-ups (i18n/callStrings.ts)
+  ...callStrings,
   sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 

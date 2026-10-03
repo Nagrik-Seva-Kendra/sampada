@@ -110,6 +110,13 @@ export const WA_TEMPLATES = {
     body: "नमस्ते, याद दिलाना: अनुरोध नंबर {{1}} की रजिस्ट्री कल {{2}} को है। सभी पक्षकार और 2 गवाह मूल पहचान पत्र साथ लाएँ। {{3}} धन्यवाद।",
     example: ["AB12CD", "15/10/2026 (गुरुवार), 11:00 बजे", "जियो-टैग फ़ोटो संपदा 2.0 ऐप से ले ली हो तो ठीक, नहीं तो ऑफिस से संपर्क करें।"],
   },
+  followUp: {
+    name: "follow_up_reminder",
+    language: "hi",
+    category: "UTILITY",
+    body: "नागरिक सेवा केंद्र से सूचना: {{1}} ऐसे संदेश बंद करने के लिए बंद लिखें। धन्यवाद।",
+    example: ["आपके पट्टे (अनुरोध AB12CD) की अवधि 15/11/2026 को पूरी हो रही है। नवीनीकरण करवाना हो तो हाँ करवाना है लिखें।"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaReasonCode =
@@ -123,7 +130,7 @@ export type WaReasonCode =
   | "noticeSent"
   | "sendFailed";
 
-export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT" | "REGISTRY";
+export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT" | "REGISTRY" | "FOLLOWUP";
 /** SENT: accepted by WhatsApp. PENDING: could not be sent (window closed and template not approved, ...) -- resend by hand. */
 export type WaNotificationStatus = "SENT" | "PENDING";
 

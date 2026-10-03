@@ -14,13 +14,18 @@ export const MENU_TEXT =
   "3. मेरा काम कहाँ पहुँचा (अनुरोध नंबर)\n" +
   "4. स्टाफ से बात";
 
-export type MenuChoice = 1 | 2 | 3 | 4;
+export const MENU_CALL_LINE = "5. ऑफिस को कॉल / कॉल बैक";
+/** The menu; option 5 (call) only when OFFICE_CALL_NUMBER is set. */
+export const menuText = (callOn: boolean) => (callOn ? `${MENU_TEXT}\n${MENU_CALL_LINE}` : MENU_TEXT);
 
-/** "1"/"१"/"1." or the words of an option → its number; null otherwise. */
-export function parseMenuChoice(text: string): MenuChoice | null {
+export type MenuChoice = 1 | 2 | 3 | 4 | 5;
+
+/** "1"/"१"/"1." or the words of an option → its number; null otherwise. With `callOn`, "5" and call words → 5. */
+export function parseMenuChoice(text: string, callOn = false): MenuChoice | null {
   const s = normDigits(text).trim().toLowerCase();
-  const n = s.match(/^([1-4])(?:\s*[.)।]?\s*)$/);
+  const n = s.match(callOn ? /^([1-5])(?:\s*[.)।]?\s*)$/ : /^([1-4])(?:\s*[.)।]?\s*)$/);
   if (n) return Number(n[1]) as MenuChoice;
+  if (callOn && /कॉल|call|फ़ोन|फोन|phone|बात करवा/.test(s)) return 5;
   if (/खर्च|खर्चा|kharch|kharcha|गाइडलाइन|guideline|स्टाम्प|stamp|फीस|fees?\b|शुल्क|कितना लगेगा|kitna lagega|cost/.test(s)) return 2;
   if (/कहाँ पहुँचा|कहां पहुंचा|kahan pahuncha|स्थिति|status|मेरा काम|mera kaam|अनुरोध नंबर|request (no|number)/.test(s)) return 3;
   if (/स्टाफ|staff|बात करनी|बात करना|baat karni|baat karna|call|कॉल|फोन करें|phone karo|इंसान|human/.test(s)) return 4;

@@ -2,6 +2,9 @@ import { Module } from "@nestjs/common";
 import { AttendanceModule } from "../attendance/attendance.module.js";
 import { StaffModeService } from "./staff-mode.service.js";
 import { RegistryJobsService } from "./registry-jobs.service.js";
+import { CallbackService } from "./callback.service.js";
+import { FollowUpService } from "./followup.service.js";
+import { CallsController } from "./calls.controller.js";
 import { TasksModule } from "../tasks/tasks.module.js";
 import { WaMessagingModule } from "./wa-messaging.module.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
@@ -25,7 +28,7 @@ import { WhatsappService } from "./whatsapp.service.js";
 
 @Module({
   imports: [TasksModule, WaMessagingModule, AttendanceModule],
-  controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController],
+  controllers: [WhatsappController, WaRequestsController, WaTemplatesController, WaAdminController, CallsController],
   providers: [
     WhatsappService,
     WhatsappBootstrapService,
@@ -40,6 +43,8 @@ import { WhatsappService } from "./whatsapp.service.js";
     FrontDoorService,
     StaffModeService,
     RegistryJobsService,
+    CallbackService,
+    FollowUpService,
     IntentClassifierService,
     WaAdminService,
     OwnerAssistantService,

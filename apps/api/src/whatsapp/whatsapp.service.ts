@@ -139,6 +139,17 @@ export class WhatsappService {
     }
     const ctx = { phone: from, name };
 
+    // Call buttons (menu 5): "मैं अभी कॉल करूँगा" / "मुझे कॉल बैक करें".
+    if (msg.type === "interactive") {
+      const id = String(msg.interactive?.button_reply?.id ?? "");
+      const replies = id ? await this.front.callButton(from, id) : null;
+      if (replies) {
+        await this.send(from, replies);
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=interactive route=call replies=${replies.length}`);
+        return;
+      }
+    }
+
     switch (msg.type) {
       case "text": {
         // Several quick texts → one batch, one answer. Not awaited (except with no window),

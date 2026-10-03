@@ -22,6 +22,7 @@ import { PlatformOrganizationDetailPage } from "./features/platform/PlatformOrga
 import { PropertiesListPage } from "./features/properties/PropertiesListPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
+import { CallsPage } from "./features/calls/CallsPage";
 import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
 import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
@@ -273,9 +274,19 @@ const attendanceRoute = createRoute({
   component: GuardedAttendancePage,
 });
 
+function GuardedCallsPage() {
+  return useIsStaff() ? <CallsPage /> : <Navigate to="/deeds" />;
+}
+const callsRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: "/calls",
+  component: GuardedCallsPage,
+});
+
 const dashboardRoute = dashboardLayoutRoute.addChildren([
   tasksRoute,
   attendanceRoute,
+  callsRoute,
   dashboardIndexRoute,
   allDeedsRoute,
   allDeedDetailsRedirectRoute,

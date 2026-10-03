@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { readFile } from "node:fs/promises";
@@ -28,6 +29,8 @@ import {
 import { r2Configured, r2Get } from "../guideline/r2.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { addDay, istToday } from "./registry-date.js";
+import { effectiveKind } from "./call-rules.js";
+import { FollowUpService } from "./followup.service.js";
 import { registryConfirmText, registryWhenHi } from "./registry-flow.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
@@ -100,6 +103,7 @@ export class WaRequestsService {
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
     private readonly outbox: WaOutboxService,
+    @Optional() private readonly followups?: FollowUpService,
   ) {}
 
   async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean; registry?: WaRegistryWhen }): Promise<WaRequestList> {
@@ -148,6 +152,19 @@ export class WaRequestsService {
       deed: deed ?? null,
       draftReview: draftReviewOf(row.data),
       canSendDraft: canManage && !!deed && row.workStatus === "DRAFT_READY",
+      followUp: await this.followUpOf(row),
+    };
+  }
+
+  private async followUpOf(row: DraftIntakeRow): Promise<WaRequestDetail["followUp"]> {
+    if (!this.followups) return undefined;
+    const choice = (["auto", "none", "agreement", "patta"] as const).find((k) => k === row.followUpKind) ?? "auto";
+    return {
+      kind: choice,
+      termEndDate: row.termEndDate ?? null,
+      effectiveKind: effectiveKind((row.data as any)?.deedType, choice),
+      items: await this.followups.forRequest(row.id),
+      optedOut: await this.followups.optedOut(row.phone),
     };
   }
 
@@ -204,8 +221,20 @@ export class WaRequestsService {
         ...(registryChanged ? { registryReminderSentAt: null } : {}),
         ...(input.geoTagPhotos !== undefined ? { geoTagPhotos: input.geoTagPhotos } : {}),
         ...(input.geoTagTaken !== undefined ? { geoTagTakenAt: input.geoTagTaken ? (before.geoTagTakenAt ?? new Date()) : null } : {}),
+        ...(input.followUpKind !== undefined ? { followUpKind: input.followUpKind } : {}),
+        ...(input.termEndDate !== undefined ? { termEndDate: input.termEndDate } : {}),
       },
     });
+    // Follow-ups: planned when the request becomes DONE, re-planned when their inputs change (cancelled when reopened).
+    const followUpChanged =
+      (input.workStatus !== undefined && input.workStatus !== prevStatus && (input.workStatus === "DONE" || prevStatus === "DONE")) ||
+      (input.followUpKind !== undefined && input.followUpKind !== (before.followUpKind ?? "auto")) ||
+      (input.termEndDate !== undefined && input.termEndDate !== (before.termEndDate ?? null)) ||
+      (input.registryDate !== undefined && input.registryDate !== (before.registryDate ?? null));
+    if (followUpChanged && this.followups && before.status === "SUBMITTED") {
+      const after = (await this.prisma.draftIntake.findFirst({ where: { id } })) as DraftIntakeRow | null;
+      if (after) await this.followups.scheduleFor(after).catch((e) => this.log.error(`follow-up for request ${requestRef(id)} not planned: ${e?.name ?? "error"}`));
+    }
     if (registryChanged && nextDate && before.status === "SUBMITTED") await this.notifyRegistry(before, nextDate, nextTime);
     if (input.workStatus !== undefined && input.workStatus !== prevStatus && before.status === "SUBMITTED") {
       await this.notifyStatus(before, input.workStatus);

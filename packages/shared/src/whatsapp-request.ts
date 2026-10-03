@@ -210,6 +210,15 @@ export interface WaRequestDetail extends WaRequestListItem {
   canSendDraft?: boolean;
   /** WhatsApp messages sent for this request (status updates ...), oldest first. PENDING ones can be resent. */
   notifications?: WaNotification[];
+  /** Follow-up reminders for this request (after it is DONE). */
+  followUp?: {
+    kind: "auto" | "none" | "agreement" | "patta";
+    termEndDate: string | null;
+    /** The kind the rules use: auto → sale / mortgage; null → no follow-up. */
+    effectiveKind: import("./wa-calls.js").FollowUpKind | null;
+    items: import("./wa-calls.js").FollowUpItem[];
+    optedOut: boolean;
+  };
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: {
     index: number;
@@ -251,6 +260,10 @@ export const WaRequestUpdateInput = z
     /** Geo-tag photos taken by staff: count, and taken (true) / not yet (false). */
     geoTagPhotos: z.number().int().min(0).max(50).nullable().optional(),
     geoTagTaken: z.boolean().optional(),
+    /** Follow-up after the registry: auto (from the deed type), none, or agreement / patta for "other" documents. */
+    followUpKind: z.enum(["auto", "none", "agreement", "patta"]).optional(),
+    /** End of the agreement / loan / patta period (IST "YYYY-MM-DD"); null = not known. */
+    termEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   })
   .strict();
 export type WaRequestUpdateInput = z.infer<typeof WaRequestUpdateInput>;
