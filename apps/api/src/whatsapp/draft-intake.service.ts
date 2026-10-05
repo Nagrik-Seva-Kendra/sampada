@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import {
   formatParty,
   ID_PHOTO_LABEL,
@@ -22,6 +22,7 @@ import { alertMessage, alertNumbers } from "./wa-alerts.js";
 import { isRegistryStep, REGISTRY_KEEP, registryAnswer, registryAsk, registryNext, registrySummaryLines } from "./registry-flow.js";
 import { istToday, registryRules } from "./registry-date.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
+import { SatisfactionService } from "./satisfaction.service.js";
 import { decrypt, encrypt, mask } from "./pii-crypto.js";
 import {
   detectDeedIntent,
@@ -379,6 +380,7 @@ export class DraftIntakeService {
     private readonly idReader: IdCardExtractorService,
     private readonly outbox: WaOutboxService,
     private readonly intents: IntentClassifierService,
+    @Optional() private readonly satisfaction?: SatisfactionService,
   ) {}
 
   // ================= document received =================
@@ -853,7 +855,10 @@ export class DraftIntakeService {
     // workStatus NEW puts it on the office's "WhatsApp अनुरोध" page.
     // TODO: notify staff (e.g. push/email) when a new request arrives.
     const ref = String(cur.id).slice(-6).toUpperCase();
-    return [`✅ आपका ड्राफ्ट अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nस्टाफ ड्राफ्ट तैयार करके आपसे संपर्क करेगा।`];
+    const extra = this.satisfaction
+      ? await this.satisfaction.afterSubmit(cur.organizationId ?? this.orgId, cur.id, d).catch(() => [] as string[])
+      : [];
+    return [`✅ आपका ड्राफ्ट अनुरोध दर्ज हो गया।\nअनुरोध नंबर: ${ref}\nस्टाफ ड्राफ्ट तैयार करके आपसे संपर्क करेगा।`, ...extra];
   }
 
   /**

@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
 import { ArchiveCopyPanel } from "./ArchiveCopyPanel";
+import { SatisfactionPanel } from "./SatisfactionPanel";
 import { BlockedPanel, FeesPanel } from "./BotSettingsPanels";
 import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
 import { useBulkDeleteWaRequests, useSubmitWaTemplates, useWaRequests, useWaSummary, useWaTemplates } from "./useWhatsappRequests";
@@ -144,6 +145,7 @@ export function WhatsappRequestsPage() {
         {canManage && <FeesPanel />}
         {canManage && <BlockedPanel />}
         {canManage && <ArchiveCopyPanel />}
+        {canManage && <SatisfactionPanel />}
 
         {canManage && selected.size > 0 && (
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>

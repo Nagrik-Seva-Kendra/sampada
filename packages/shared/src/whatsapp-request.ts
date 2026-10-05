@@ -219,6 +219,8 @@ export interface WaRequestDetail extends WaRequestListItem {
     items: import("./wa-calls.js").FollowUpItem[];
     optedOut: boolean;
   };
+  /** Rating, feedback, corrections the customer sent after submitting, packet sent. */
+  satisfaction?: import("./satisfaction.js").WaSatisfaction;
   /** Files the customer sent: index 0 is the registry, then extras. */
   documents: {
     index: number;

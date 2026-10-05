@@ -25,3 +25,4 @@ export * from "./ai-draft.js";
 export * from "./colony.js";
 export * from "./archive-copy.js";
 export * from "./archive-risk.js";
+export * from "./satisfaction.js";

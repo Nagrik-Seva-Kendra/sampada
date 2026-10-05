@@ -661,6 +661,13 @@ model DraftIntake {
   followUpKind   String?
   /// End of the agreement / loan / patta period (IST "YYYY-MM-DD").
   termEndDate    String?
+  /// Customer satisfaction: rating 1-5 after DONE, feedback for low ratings, corrections sent after submit.
+  rating         Int?
+  ratingAt       DateTime?
+  ratingAskedAt  DateTime?
+  feedback       String?
+  corrections    Json?
+  packetSentAt   DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1162,4 +1169,14 @@ model PropertyIndexEntry {
   indexedAt      DateTime
 
   @@index([organizationId, number])
+}
+
+/// Customer satisfaction settings: Google review link, correction-deed policy, rating timing.
+model SatisfactionConfig {
+  organizationId   String   @id
+  reviewUrl        String   @default("")
+  correctionPolicy String   @db.Text
+  ratingDelayHours Int      @default(24)
+  ratingsEnabled   Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
 }

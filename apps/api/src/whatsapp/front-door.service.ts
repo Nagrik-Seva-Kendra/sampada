@@ -8,6 +8,7 @@ import { inOfficeHours, nextOpening, officeCallNumber, saysAsap, showNumber, whe
 import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
 import { ArchiveCopyService } from "./archive-copy.service.js";
+import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -60,7 +61,8 @@ export type FrontRoute =
   | "call"
   | "callback"
   | "followup"
-  | "copy";
+  | "copy"
+  | "satisfaction";
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
@@ -100,6 +102,7 @@ export class FrontDoorService {
     private readonly followups: FollowUpService,
     private readonly attendance: AttendanceService,
     @Optional() private readonly copies?: ArchiveCopyService,
+    @Optional() private readonly satisfaction?: SatisfactionService,
   ) {}
 
   private callNumber(): string | null {
@@ -190,6 +193,9 @@ export class FrontDoorService {
 
     const callOn = !!this.callNumber();
     const choice = parseMenuChoice(text, callOn);
+    // Rating / feedback after DONE, "सुधार: ...", "चेकलिस्ट".
+    const sat = this.satisfaction ? await this.satisfaction.handle(phone, text, now) : null;
+    if (sat) return { replies: sat, route: "satisfaction" };
     // "पुरानी रजिस्ट्री की कॉपी" (code, then the deed to send).
     const copy = this.copies ? await this.copies.handle(phone, text, now) : null;
     if (copy) return { replies: copy, route: "copy" };
