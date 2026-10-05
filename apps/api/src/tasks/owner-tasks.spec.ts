@@ -1,11 +1,12 @@
 import { ForbiddenException, Logger, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OwnerAssistantService } from "../whatsapp/owner-assistant.service.js";
 import { digestDue, TaskJobsService } from "../whatsapp/task-jobs.service.js";
 import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 import { opusSampleRate, speechConfig, speechErrorReason } from "./speech.service.js";
 import { findMobile } from "./task-extractor.service.js";
-import { istDate } from "./task-rules.js";
+import { isSmallTalk, istDate, looksLikeTask, OWNER_HELP } from "./task-rules.js";
 import { TasksService } from "./tasks.service.js";
 
 const OWNER = "919111111111";
@@ -188,6 +189,84 @@ describe("owner: note → confirm → task", () => {
     expect(w.tasks[0].status).toBe("CANCELLED");
     expect((await w.say("9 हो गया"))[0]).toContain("काम #9 नहीं मिला");
     expect((await w.say("नहीं"))[0]).toContain("अभी कोई काम पुष्टि के लिए नहीं है");
+  });
+});
+
+describe("owner: greetings are not tasks; one reply per message", () => {
+  it("greetings, ok, thanks, emoji and a word or two are small talk; real work notes are tasks", () => {
+    for (const t of ["Hello", "hello!!", "Hi", "hii", "नमस्ते", "namaste ji", "Good morning sir", "ok", "OK 👍", "Thanks", "धन्यवाद", "👍", "ji", "?", "a", "राम राम"]) {
+      expect([t, isSmallTalk(t)]).toEqual([t, true]);
+      expect([t, looksLikeTask(t, NOW)]).toEqual([t, false]);
+    }
+    for (const t of ["कहाँ हो", "abc"]) expect([t, looksLikeTask(t, NOW)]).toEqual([t, false]);
+    for (const t of ["रमेश का बैनामा", "Sharma ji ki registry kal", "शाम 5 बजे", "9876543210", "गुप्ता जी के यहाँ जाकर आना है आज", "bank se NOC lena"]) {
+      expect([t, looksLikeTask(t, NOW)]).toEqual([t, true]);
+    }
+  });
+
+  it("'Hello' with nothing pending → short help, no task prompt; real work text → task prompt", async () => {
+    const w = world();
+    expect(await w.say("Hello")).toEqual([OWNER_HELP]);
+    expect(await w.say("ok")).toEqual([OWNER_HELP]);
+    expect(await w.say("Thanks 🙏")).toEqual([OWNER_HELP]);
+    expect(w.extractor.extract).not.toHaveBeenCalled();
+    expect(w.contacts.get(OWNER)?.state ?? null).toBeNull();
+    const out = await w.say("Sharma ji ki registry kal tak");
+    expect(w.extractor.extract).toHaveBeenCalledTimes(1);
+    expect(out[0]).toContain("काम दर्ज:");
+    // A greeting while "ठीक?" is waiting is answered as itself, the task stays waiting.
+    const hi = await w.say("hello");
+    expect(hi[0]).toBe(OWNER_HELP);
+    expect(hi[1]).toContain("पुष्टि के लिए बाकी");
+    expect(w.extractor.extract).toHaveBeenCalledTimes(1);
+    expect(await w.say("Cancel")).toEqual(["ठीक है, यह काम दर्ज नहीं किया।"]);
+    expect(w.tasks).toHaveLength(0);
+    // Voice saying only "hello": no task either.
+    w.speech.transcribe.mockResolvedValueOnce({ ok: true, text: "हेलो" } as any);
+    const v = await w.owner.handle(OWNER, { type: "audio", audio: { key: "k2", buf: Buffer.from("OggS"), mime: "audio/ogg" } }, NOW);
+    expect(v).toEqual(['🎙️ सुना: "हेलो"', OWNER_HELP]);
+  });
+
+  it("cancel words: रद्द / radd / nahi / no / cancel / Cancel. all cancel straight away", async () => {
+    const w = world();
+    for (const c of ["रद्द", "radd karo", "nahi", "No", "Cancel.", "नहीं", "chhodo"]) {
+      await w.say("रमेश का बैनामा");
+      expect([c, await w.say(c)]).toEqual([c, ["ठीक है, यह काम दर्ज नहीं किया।"]]);
+    }
+    expect(w.tasks).toHaveLength(0);
+  });
+
+  it("burst 'Cancel' + 'Hello' (two webhooks at once): Cancel answered first, Hello is its own message", async () => {
+    vi.stubEnv("WA_DEBOUNCE_MS", "0");
+    vi.stubEnv("WA_ACCESS_TOKEN", "t");
+    vi.stubEnv("WA_PHONE_NUMBER_ID", "1");
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: any) => {
+      const b = JSON.parse(init.body);
+      if (b.type === "text") sent.push(b.text.body);
+      return new Response(JSON.stringify({ messages: [{ id: "w" }] }), { status: 200 });
+    }));
+    const w = world();
+    // A slow state read, like a real DB round-trip: without per-number ordering both messages would see "ठीक?".
+    const read = w.prisma.waContact.findUnique.getMockImplementation()!;
+    w.prisma.waContact.findUnique.mockImplementation(async (a: any) => {
+      const row = await read(a);
+      await new Promise((r) => setTimeout(r, 15));
+      return row;
+    });
+    const front = { allowInbound: async () => true, isBlocked: async () => false, handle: vi.fn(async () => ({ replies: ["menu"], route: "menu" })), withoutRepeats: async (_p: string, r: string[]) => r };
+    const wa = new WhatsappService({ waInboundMessage: { create: async () => ({}) } } as any, {} as any, { touchContact: async () => undefined } as any, {} as any, front as any, w.owner, { handle: async () => null, ownerText: async () => null, ownerButton: async () => null } as any);
+    const msg = (id: string, body: string) => ({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { messages: [{ id, from: OWNER, type: "text", text: { body } }] } }] }] });
+
+    await wa.handlePayload(msg("m1", "रमेश का बैनामा सोमवार तक"));
+    expect(sent.at(-1)).toContain("काम दर्ज:");
+    sent.length = 0;
+    await Promise.all([wa.handlePayload(msg("m2", "Cancel")), wa.handlePayload(msg("m3", "Hello"))]);
+    expect(sent).toEqual(["ठीक है, यह काम दर्ज नहीं किया।", OWNER_HELP]);
+    expect(w.extractor.extract).toHaveBeenCalledTimes(1);
+    expect(w.contacts.get(OWNER).state).toBe(Prisma.DbNull);
+    expect(w.tasks).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 });
 

@@ -57,6 +57,18 @@ export class WhatsappService {
   }
 
   // ---------- incoming ----------
+  /** Per-number queue (this process): the next message of a number starts after the previous one is answered. */
+  private readonly lanes = new Map<string, Promise<void>>();
+  private inLane(key: string, fn: () => Promise<void>): Promise<void> {
+    const run = (this.lanes.get(key) ?? Promise.resolve()).then(fn);
+    const tail = run.catch(() => undefined);
+    this.lanes.set(key, tail);
+    void tail.then(() => {
+      if (this.lanes.get(key) === tail) this.lanes.delete(key);
+    });
+    return run;
+  }
+
   async handlePayload(body: any): Promise<void> {
     if (body?.object !== "whatsapp_business_account") return;
     for (const entry of body.entry ?? []) {
@@ -64,13 +76,18 @@ export class WhatsappService {
         const value = change.value;
         const contact = value?.contacts?.[0];
         for (const msg of value?.messages ?? []) {
-          if (!(await this.firstTime(msg.id))) continue; // Meta retries → ignore duplicates
-          try {
-            await this.handleMessage(msg, msg.from, contact?.profile?.name ?? "");
-          } catch (e: any) {
-            this.log.error(`message ${msg.id} failed: ${e?.message}`);
-            await this.sendText(msg.from, "क्षमा करें, तकनीकी समस्या आई। हमारा स्टाफ आपसे संपर्क करेगा।");
-          }
+          // One number's messages run one after another, each to its own reply: Meta sends every
+          // message as its own webhook, and without this a quick "रद्द" + "Hello" both read the
+          // old "ठीक?" state and the replies come out shifted by one.
+          await this.inLane(String(msg.from ?? ""), async () => {
+            if (!(await this.firstTime(msg.id))) return; // Meta retries → ignore duplicates
+            try {
+              await this.handleMessage(msg, msg.from, contact?.profile?.name ?? "");
+            } catch (e: any) {
+              this.log.error(`message ${msg.id} failed: ${e?.message}`);
+              await this.sendText(msg.from, "क्षमा करें, तकनीकी समस्या आई। हमारा स्टाफ आपसे संपर्क करेगा।");
+            }
+          });
         }
       }
     }
