@@ -4,6 +4,7 @@ import { registryStrings } from "./registryStrings";
 import { callStrings } from "./callStrings";
 import { aiStrings } from "./aiStrings";
 import { colonyStrings } from "./colonyStrings";
+import { homeStrings } from "./homeStrings";
 import { taskStrings } from "./taskStrings";
 import { waStrings } from "./waStrings";
 
@@ -710,6 +711,8 @@ export const strings = {
   ...aiStrings,
   // Colony deeds (i18n/colonyStrings.ts)
   ...colonyStrings,
+  // Home + global search (i18n/homeStrings.ts)
+  ...homeStrings,
   sidebarAttendance: { en: "Attendance", hi: "हाज़िरी" },
 } as const;
 

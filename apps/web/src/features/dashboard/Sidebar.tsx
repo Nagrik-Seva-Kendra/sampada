@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, Bot, Building2, CalendarCheck, PhoneCall, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, House, Building2, CalendarCheck, PhoneCall, ChevronLeft, ChevronRight, FileStack, ListTodo, MessageCircle, Settings, Users, X } from "lucide-react";
 import { hasPermission } from "@sampada/shared";
 import { useCallbackCount } from "../calls/useCalls";
 import { useUiStore } from "../../stores/uiStore";
@@ -119,6 +119,7 @@ export function Sidebar({
       </div>
 
       <nav className="sidebar-nav">
+        {waEligible && <SidebarLink to="/" icon={<House size={17} strokeWidth={2.2} />} label={t("sidebarHome")} collapsed={collapsed} />}
         <SidebarLink
           to="/deeds"
           icon={<FileStack size={17} strokeWidth={2.2} />}

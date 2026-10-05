@@ -25,6 +25,7 @@ import { AttendancePage } from "./features/attendance/AttendancePage";
 import { CallsPage } from "./features/calls/CallsPage";
 import { AiSettingsPage } from "./features/ai-draft/AiSettingsPage";
 import { ColonyPage } from "./features/colony/ColonyPage";
+import { HomePage } from "./features/home/HomePage";
 import { WhatsappRequestDetailPage } from "./features/whatsapp/WhatsappRequestDetailPage";
 import { WhatsappRequestsPage } from "./features/whatsapp/WhatsappRequestsPage";
 import { PropertyFormPage } from "./features/properties/PropertyFormPage";
@@ -145,10 +146,16 @@ function GuardedTeamPage() {
   return canManageTeam ? <TeamPage /> : <Navigate to="/deeds" />;
 }
 
+// Home (today's numbers) for staff with an office; everyone else lands on their deeds.
+function HomeOrDeeds() {
+  const isStaff = useIsStaff();
+  const activeOrganization = useActiveOrganization();
+  return isStaff && activeOrganization ? <HomePage /> : <Navigate to="/deeds" />;
+}
 const dashboardIndexRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: "/",
-  component: () => <Navigate to="/deeds" />,
+  component: HomeOrDeeds,
 });
 const allDeedsRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,

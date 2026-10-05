@@ -1,5 +1,6 @@
 import { AiDraftModule } from "./ai-draft/ai-draft.module.js";
 import { ArchiveRiskModule } from "./archive-risk/archive-risk.module.js";
+import { HomeModule } from "./home/home.module.js";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ClsModule } from "nestjs-cls";
@@ -38,6 +39,7 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     WhatsappModule,
     AiDraftModule,
     ArchiveRiskModule,
+    HomeModule,
   ],
   controllers: [HealthController, StatsController],
 })
