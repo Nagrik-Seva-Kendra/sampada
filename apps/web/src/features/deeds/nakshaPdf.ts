@@ -6,6 +6,9 @@
  * (matching deedPdf.ts's page size), top-aligned with the same margin
  * convention. jspdf/html2canvas are lazy-imported, same as deedPdf.ts.
  */
+
+import { loadModule } from "../../lib/lazy";
+
 import { sanitizeFilename } from "./deedPdf";
 
 /** A4 in points, jsPDF's unit — same constants as deedPdf.ts. */
@@ -37,7 +40,7 @@ async function ensureFontsReady(): Promise<void> {
 }
 
 async function renderNakshaCanvas(svg: string, width: number, height: number): Promise<HTMLCanvasElement> {
-  const html2canvas = await import("html2canvas").then((m) => m.default);
+  const html2canvas = await loadModule(() => import("html2canvas").then((m) => m.default));
   const container = document.createElement("div");
   container.style.cssText = [
     "position:absolute",
@@ -60,7 +63,7 @@ async function renderNakshaCanvas(svg: string, width: number, height: number): P
 /** Renders a naksha SVG string onto a single true-A4 PDF page and downloads it as "<filename>.pdf". */
 export async function downloadNakshaPdf(svg: string, filename: string): Promise<void> {
   const { width, height } = parseSvgSize(svg);
-  const [{ jsPDF }, canvas] = await Promise.all([import("jspdf"), renderNakshaCanvas(svg, width, height)]);
+  const [{ jsPDF }, canvas] = await Promise.all([loadModule(() => import("jspdf")), renderNakshaCanvas(svg, width, height)]);
 
   const availableWidthPt = A4_WIDTH_PT - 2 * PAGE_MARGIN_PT;
   const availableHeightPt = A4_HEIGHT_PT - 2 * PAGE_MARGIN_PT;

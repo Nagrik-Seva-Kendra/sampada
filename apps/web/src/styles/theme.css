@@ -5104,6 +5104,19 @@ h3 {
   color: #ffc46b;
 }
 
+/* A plain link inside a message, e.g. "Refresh" after an app update. */
+.btn-link {
+  margin-inline-start: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .srcdoc-file-reading {
   display: inline-flex;
   align-items: center;

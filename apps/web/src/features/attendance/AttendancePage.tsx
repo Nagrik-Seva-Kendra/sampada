@@ -3,6 +3,7 @@ import type { AttendanceSettings, DayStatus, LeaveApplyInput, LeaveRequestItem, 
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
+import { loadModule } from "../../lib/lazy";
 import { useActiveOrganization } from "../../stores/authStore";
 import { useWaT, type WaT } from "../whatsapp/waI18n";
 import {
@@ -331,7 +332,7 @@ function MonthPanel({ canManage }: { canManage: boolean }) {
     if (!tableRef.current) return;
     setBusy(true);
     try {
-      const [{ jsPDF }, html2canvas] = await Promise.all([import("jspdf"), import("html2canvas").then((m) => m.default)]);
+      const [{ jsPDF }, html2canvas] = await Promise.all([loadModule(() => import("jspdf")), loadModule(() => import("html2canvas").then((m) => m.default))]);
       const canvas = await html2canvas(tableRef.current, { scale: 2, backgroundColor: "#ffffff" });
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
       const w = doc.internal.pageSize.getWidth() - 40;

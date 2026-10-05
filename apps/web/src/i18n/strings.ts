@@ -326,6 +326,12 @@ export const strings = {
     en: "Could not create the PDF — please retry.",
     hi: "PDF नहीं बन सका — पुनः प्रयास करें।",
   },
+  /** The tab was open across a deploy, so the part that makes the PDF is no longer on the server. */
+  appUpdatedReload: {
+    en: "The app was updated while this tab was open. Refresh the page, then make the PDF again.",
+    hi: "यह टैब खुला था तभी ऐप का नया संस्करण आ गया। पेज रीफ़्रेश करें, फिर PDF बनाएँ।",
+  },
+  appUpdatedReloadBtn: { en: "Refresh", hi: "रीफ़्रेश करें" },
 
   // Property details (structured plot data + auto-generated naksha)
   propDetailHeading: { en: "Property Details", hi: "संपत्ति विवरण" },

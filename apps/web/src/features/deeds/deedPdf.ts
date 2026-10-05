@@ -12,6 +12,8 @@
  * someone actually exports a deed.
  */
 
+import { loadModule } from "../../lib/lazy";
+
 /** A4 in points, jsPDF's unit. */
 const A4_WIDTH_PT = 595.28;
 const A4_HEIGHT_PT = 841.89;
@@ -56,7 +58,7 @@ function rasterFailure(e: unknown): Error {
 
 /** Rasterises the deed's print layout — the pixels that become the PDF's pages. */
 async function renderDeedCanvas(title: string, content: string): Promise<DeedRaster> {
-  const html2canvas = await import("html2canvas").then((m) => m.default);
+  const html2canvas = await loadModule(() => import("html2canvas").then((m) => m.default));
   const node = buildPrintNode(title, content);
   document.body.appendChild(node);
   try {
@@ -113,7 +115,7 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
 /** Lays the deed out across A4 pages and returns the jsPDF document. */
 async function buildDeedPdf(title: string, content: string, watermark?: string) {
   const [{ jsPDF }, { canvas, lineBreaks }] = await Promise.all([
-    import("jspdf"),
+    loadModule(() => import("jspdf")),
     renderDeedCanvas(title, content),
   ]);
 

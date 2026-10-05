@@ -10,6 +10,7 @@ import { useAutoSaveDeed } from "./useAutoSaveDeed";
 import { peerColor, useDeedPresence } from "./useDeedPresence";
 import { printDeed } from "./printDeed";
 import { downloadDeedPdf } from "./deedPdf";
+import { APP_UPDATED } from "../../lib/lazy";
 import { DeedHistoryModal } from "./DeedHistoryModal";
 import { useLiveSelection } from "./useDeedLiveSelection";
 import { DeedPropertyDetailSection } from "./DeedPropertyDetailSection";
@@ -412,7 +413,16 @@ export function DeedEditPage() {
               el.setSelectionRange(start, end);
             }}
           />
-          {pdfFailed && <p className="modal-error">{pdfFailed}</p>}
+          {pdfFailed && (
+            <p className="modal-error">
+              {pdfFailed === APP_UPDATED ? t("appUpdatedReload") : pdfFailed}
+              {pdfFailed === APP_UPDATED && (
+                <button type="button" className="btn-link" onClick={() => window.location.reload()}>
+                  {t("appUpdatedReloadBtn")}
+                </button>
+              )}
+            </p>
+          )}
           {linkCopyFailed && <p className="modal-error">{t("deedsLinkCopyFailed")}</p>}
           <div className="deed-edit-actions">
             <button className="btn-calc" type="submit" disabled={status === "saving"}>
