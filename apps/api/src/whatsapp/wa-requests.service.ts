@@ -31,6 +31,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { addDay, istToday } from "./registry-date.js";
 import { effectiveKind } from "./call-rules.js";
 import { FollowUpService } from "./followup.service.js";
+import { SatisfactionService } from "./satisfaction.service.js";
 import { registryConfirmText, registryWhenHi } from "./registry-flow.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
@@ -104,6 +105,7 @@ export class WaRequestsService {
     private readonly cls: ClsService,
     private readonly outbox: WaOutboxService,
     @Optional() private readonly followups?: FollowUpService,
+    @Optional() private readonly satisfaction?: SatisfactionService,
   ) {}
 
   async list(filters: { workStatus?: WaWorkStatus; needsStaff?: boolean; registry?: WaRegistryWhen }): Promise<WaRequestList> {
@@ -238,6 +240,10 @@ export class WaRequestsService {
     if (registryChanged && nextDate && before.status === "SUBMITTED") await this.notifyRegistry(before, nextDate, nextTime);
     if (input.workStatus !== undefined && input.workStatus !== prevStatus && before.status === "SUBMITTED") {
       await this.notifyStatus(before, input.workStatus);
+      if (input.workStatus === "DONE" && this.satisfaction) {
+        const after = (await this.prisma.draftIntake.findFirst({ where: { id } })) as any;
+        if (after) await this.satisfaction.onDone(after).catch((e) => this.log.error(`packet for request ${requestRef(id)} failed: ${e?.name ?? "error"}`));
+      }
     }
     return this.detail(id);
   }

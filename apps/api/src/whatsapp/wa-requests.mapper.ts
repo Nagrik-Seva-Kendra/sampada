@@ -55,6 +55,11 @@ export interface DraftIntakeRow {
   geoTagTakenAt?: Date | null;
   followUpKind?: string | null;
   termEndDate?: string | null;
+  rating?: number | null;
+  ratingAt?: Date | null;
+  feedback?: string | null;
+  corrections?: unknown;
+  packetSentAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -235,6 +240,13 @@ export function toDetail(row: DraftIntakeRow, assigneeName: string | null, canMa
       .map((r) => requestRef(r.from)),
     idCards: idCards(d),
     idPhotosPurgedAt: row.idPhotosPurgedAt ? row.idPhotosPurgedAt.toISOString() : null,
+    satisfaction: {
+      rating: row.rating ?? null,
+      ratingAt: row.ratingAt?.toISOString() ?? null,
+      feedback: row.feedback ?? null,
+      corrections: Array.isArray(row.corrections) ? (row.corrections as { text: string; at: string }[]) : [],
+      packetSentAt: row.packetSentAt?.toISOString() ?? null,
+    },
     documents,
     canReveal: canManage,
     canAssign: canManage,

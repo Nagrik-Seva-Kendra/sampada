@@ -6,6 +6,7 @@ import { RegistryJobsService } from "./registry-jobs.service.js";
 import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
 import { ArchiveCopyService } from "./archive-copy.service.js";
+import { SatisfactionService } from "./satisfaction.service.js";
 import { CallsController } from "./calls.controller.js";
 import { TasksModule } from "../tasks/tasks.module.js";
 import { WaMessagingModule } from "./wa-messaging.module.js";
@@ -48,6 +49,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     CallbackService,
     FollowUpService,
     ArchiveCopyService,
+    SatisfactionService,
     IntentClassifierService,
     WaAdminService,
     OwnerAssistantService,

@@ -1,9 +1,10 @@
 import { Body, Controller, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
-import { ArchiveCopySendInput, ArchiveCopySettingsInput, CallbackAssignInput, CallbackDoneInput, FollowUpRulesInput } from "@sampada/shared";
+import { ArchiveCopySendInput, ArchiveCopySettingsInput, SatisfactionSettingsInput, CallbackAssignInput, CallbackDoneInput, FollowUpRulesInput } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
 import { ArchiveCopyService } from "./archive-copy.service.js";
+import { SatisfactionService } from "./satisfaction.service.js";
 
 /** Web "कॉल बैक" and "फ़ॉलो-अप" tabs. Same access as WhatsApp requests: OWNER/ADMIN all, others their own. */
 @Controller("whatsapp")
@@ -13,7 +14,19 @@ export class CallsController {
     private readonly callbacks: CallbackService,
     private readonly followups: FollowUpService,
     private readonly copies: ArchiveCopyService,
+    private readonly satisfaction: SatisfactionService,
   ) {}
+
+  // ---------- customer satisfaction (OWNER/ADMIN view, OWNER edits) ----------
+  @Get("satisfaction")
+  satisfactionSettings() {
+    return this.satisfaction.settings();
+  }
+
+  @Put("satisfaction")
+  saveSatisfaction(@Body() body: unknown) {
+    return this.satisfaction.save(SatisfactionSettingsInput.parse(body));
+  }
 
   // ---------- registry copies (OWNER/ADMIN; on/off OWNER) ----------
   @Get("archive-copy/settings")

@@ -117,6 +117,13 @@ export const WA_TEMPLATES = {
     body: "नागरिक सेवा केंद्र से सूचना: {{1}} ऐसे संदेश बंद करने के लिए बंद लिखें। धन्यवाद।",
     example: ["आपके पट्टे (अनुरोध AB12CD) की अवधि 15/11/2026 को पूरी हो रही है। नवीनीकरण करवाना हो तो हाँ करवाना है लिखें।"],
   },
+  rating: {
+    name: "service_rating_request",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते, अनुरोध नंबर {{1}} का काम पूरा हुआ। नागरिक सेवा केंद्र की सेवा कैसी लगी? 1 से 5 में जवाब दें। धन्यवाद।",
+    example: ["AB12CD"],
+  },
 } as const satisfies Record<string, WaTemplateDef>;
 
 export type WaReasonCode =
