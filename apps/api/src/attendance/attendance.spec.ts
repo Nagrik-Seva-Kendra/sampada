@@ -1,4 +1,5 @@
-import { ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
+import { DEFAULT_ATTENDANCE_SETTINGS } from "@sampada/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StaffModeService } from "../whatsapp/staff-mode.service.js";
 import { AttendanceJobsService, matchStaffNames } from "./attendance-jobs.service.js";
@@ -141,6 +142,51 @@ describe("salary access (server-side, OWNER only)", () => {
     spy.mockRestore();
     expect(logs.join("\n")).toContain("salary sheet 2026-09 finalized");
     expect(logs.join("\n")).not.toMatch(/15[,.]?500/);
+  });
+});
+
+describe("office internet: desktop attendance without GPS", () => {
+  const at = (hhmm: string) => new Date(`2026-10-01T${hhmm}:00+05:30`);
+  const OFFICE_IP = "49.36.10.20";
+
+  it("owner adds the office network (from the office); a desktop there marks IN / OUT without GPS; elsewhere it cannot", async () => {
+    const w = await world("OWNER");
+    await expect(w.attendance.addOfficeNetwork("192.168.1.5")).rejects.toBeInstanceOf(BadRequestException);
+    const net = await w.attendance.addOfficeNetwork(OFFICE_IP);
+    expect(net).toMatchObject({ yourIp: OFFICE_IP, yourIpMatches: true, networks: [{ ip: OFFICE_IP }] });
+    await w.attendance.addOfficeNetwork(OFFICE_IP); // twice → still one
+    expect((await w.attendance.officeNetwork(OFFICE_IP)).networks).toHaveLength(1);
+
+    // Saving the settings form keeps the networks.
+    await w.attendance.saveSettings({ ...DEFAULT_ATTENDANCE_SETTINGS, officeLat: OFFICE.lat, officeLng: OFFICE.lng, startTime: "10:00" });
+    expect((await w.attendance.officeNetwork(OFFICE_IP)).networks).toHaveLength(1);
+    expect((await w.attendance.settings(ORG)).officeLat).toBe(OFFICE.lat);
+
+    // Desktop at home (another address), no location → refused.
+    expect((await w.attendance.punch(ORG, "rahul", { kind: "IN" }, "web", at("10:01"), "103.5.6.7")).code).toBe("noGps");
+    // Desktop in the office: rough 150 km guess or no location at all → counted.
+    const r = await w.attendance.punch(ORG, "rahul", { kind: "IN", lat: 28.6, lng: 77.2, accuracyM: 150_000 }, "web", at("10:02"), OFFICE_IP);
+    expect(r).toMatchObject({ ok: true, code: "haazir", officeNet: true });
+    const rec = w.prisma.tables.attendanceRecord.at(-1);
+    expect(rec).toMatchObject({ inside: true, source: "web-office-network", distanceM: null });
+    expect((await w.attendance.punch(ORG, "rahul", { kind: "OUT" }, "web", at("19:00"), OFFICE_IP))).toMatchObject({ ok: true, code: "out" });
+    expect(w.prisma.tables.attendanceRecord.at(-1)).toMatchObject({ lat: null, lng: null });
+    // WhatsApp presses never use an address.
+    expect((await w.attendance.punch(ORG, "amit", { kind: "IN", lat: 28.6, lng: 77.2 }, "whatsapp", at("10:03"), OFFICE_IP)).code).toBe("tooFar");
+
+    expect((await w.attendance.removeOfficeNetwork(OFFICE_IP, OFFICE_IP)).networks).toHaveLength(0);
+    expect(await w.attendance.onOfficeNetwork(ORG, OFFICE_IP)).toBe(false);
+  });
+
+  it("only OWNER / ADMIN manage networks; staff see whether they are on it", async () => {
+    const w = await world("EMPLOYEE");
+    await expect(w.attendance.addOfficeNetwork(OFFICE_IP)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(w.attendance.officeNetwork(OFFICE_IP)).rejects.toBeInstanceOf(ForbiddenException);
+    w.prisma.tables.attendanceConfig[0].config.officeNet = [{ ip: OFFICE_IP, addedAt: "2026-10-01T00:00:00Z", addedById: "owner" }];
+    expect((await w.attendance.myToday(OFFICE_IP)).onOfficeNetwork).toBe(true);
+    expect((await w.attendance.myToday("103.5.6.7")).onOfficeNetwork).toBe(false);
+    // The extra key does not break the settings (strict schema).
+    expect((await w.attendance.settings(ORG)).officeLat).toBe(OFFICE.lat);
   });
 });
 

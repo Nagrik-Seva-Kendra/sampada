@@ -17,8 +17,10 @@ describe("geofence", () => {
     expect(far.distanceM).toBeGreaterThan(1000);
   });
 
-  it("no GPS → no attendance (lat/lng required); office not set → noOffice", () => {
-    expect(PunchInput.safeParse({ kind: "IN" }).success).toBe(false);
+  it("no GPS → no attendance (unless on the office internet); office not set → noOffice", () => {
+    expect(PunchInput.safeParse({ kind: "IN" }).success).toBe(true); // a computer without location may still press
+    expect(PunchInput.safeParse({ kind: "IN", lat: 26.2 }).success).toBe(false); // lat without lng
+    expect(punchDecision({ kind: "IN", now: new Date(), settings: S, today: [] }).code).toBe("noGps");
     expect(PunchInput.safeParse({ kind: "IN", lat: 26.2, lng: 78.1 }).success).toBe(true);
     expect(punchDecision({ kind: "IN", now: new Date(), lat: 1, lng: 1, settings: DEFAULT_ATTENDANCE_SETTINGS, today: [] }).code).toBe("noOffice");
   });
@@ -40,6 +42,24 @@ describe("rough location (computer without GPS)", () => {
     expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 25, settings: S, today: [] })).toMatchObject({ ok: true, code: "haazir" });
     expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 1000, settings: S, today: [] }).ok).toBe(true);
     expect(punchDecision({ kind: "FIELD", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 150_000, reason: "तहसील", settings: S, today: [] })).toMatchObject({ ok: true, code: "field" });
+  });
+});
+
+describe("office internet (computer without GPS)", () => {
+  const now = ist("2026-10-05", "10:00");
+  it("IN / OUT count as in the office from the office network: no location, or a 150 km guess", () => {
+    expect(punchDecision({ kind: "IN", now, officeNet: true, settings: S, today: [] })).toMatchObject({ ok: true, code: "haazir", inside: true, distanceM: null });
+    expect(punchDecision({ kind: "IN", now, lat: 28.6, lng: 77.2, accuracyM: 150_000, officeNet: true, settings: S, today: [] })).toMatchObject({ ok: true, inside: true });
+    // Even before the office GPS point is set.
+    expect(punchDecision({ kind: "IN", now, officeNet: true, settings: DEFAULT_ATTENDANCE_SETTINGS, today: [] }).ok).toBe(true);
+    const inAt = [{ kind: "IN" as const, at: ist("2026-10-05", "08:00") }];
+    expect(punchDecision({ kind: "OUT", now, officeNet: true, settings: S, today: inAt }).code).toBe("out");
+    expect(punchDecision({ kind: "OUT", now, settings: S, today: inAt }).code).toBe("noGps");
+    // Not on the office network: the old rules.
+    expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 150_000, settings: S, today: [] }).code).toBe("lowAccuracy");
+    expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat + 0.01, lng: OFFICE.lng, settings: S, today: [] }).code).toBe("tooFar");
+    // Field work still needs a location and a reason.
+    expect(punchDecision({ kind: "FIELD", now, officeNet: true, reason: "तहसील", settings: S, today: [] }).code).toBe("noGps");
   });
 });
 

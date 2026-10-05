@@ -16,6 +16,8 @@ import {
   useHolidayMutations,
   useLeaves,
   useMyToday,
+  useOfficeNetwork,
+  useOfficeNetworkActions,
   usePunch,
   useSalaryHistory,
   useSalaryMutations,
@@ -118,14 +120,21 @@ function MinePanel() {
     setMsg(null);
     setBusy(true);
     try {
-      let pos;
-      try {
-        pos = await currentPosition();
-      } catch {
-        setMsg({ text: punchMessage(t, { code: "noGps" }), ok: false });
-        return;
+      // On the office internet IN / OUT need no location (desktops have no GPS); otherwise read it once.
+      // A computer that cannot give one still sends the press: the server decides (office network or "noGps").
+      let pos: { lat: number; lng: number; accuracyM: number } | null = null;
+      if (kind === "FIELD" || !d?.onOfficeNetwork) {
+        try {
+          pos = await currentPosition();
+        } catch {
+          pos = null;
+        }
       }
-      const r = await punch.mutateAsync({ kind, lat: pos.lat, lng: pos.lng, accuracyM: pos.accuracyM, ...(kind === "FIELD" ? { reason: reason.trim() } : {}) });
+      const r = await punch.mutateAsync({
+        kind,
+        ...(pos ? { lat: pos.lat, lng: pos.lng, accuracyM: pos.accuracyM } : {}),
+        ...(kind === "FIELD" ? { reason: reason.trim() } : {}),
+      });
       setMsg({ text: punchMessage(t, r), ok: r.ok });
       if (r.code === "tooFar") setFieldOpen(true);
       if (r.ok && kind === "FIELD") {
@@ -154,16 +163,22 @@ function MinePanel() {
                 .join(" · ")}
             </div>
             {d.closedReason && <p className="doc-sub">{t("atClosedToday", { r: d.closedReason })}</p>}
-            {!d.officeConfigured && <p className="modal-error">{t("atNoOffice")}</p>}
+            {d.onOfficeNetwork ? (
+              <p className="doc-sub" style={{ fontWeight: 700 }}>
+                🏢 {t("atOnOfficeNet")}
+              </p>
+            ) : (
+              !d.officeConfigured && <p className="modal-error">{t("atNoOffice")}</p>
+            )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
               {!d.in && (
                 <button type="button" className="btn-calc" style={{ fontSize: 18, padding: "14px 22px" }} disabled={busy} onClick={() => press("IN")}>
-                  {busy ? t("atGettingGps") : t("atIn")}
+                  {busy ? t(d.onOfficeNetwork ? "waSending" : "atGettingGps") : t("atIn")}
                 </button>
               )}
               {d.in && !d.out && (
                 <button type="button" className="btn-calc" style={{ fontSize: 18, padding: "14px 22px" }} disabled={busy} onClick={() => press("OUT")}>
-                  {busy ? t("atGettingGps") : t("atOut")}
+                  {busy ? t(d.onOfficeNetwork ? "waSending" : "atGettingGps") : t("atOut")}
                 </button>
               )}
               <button type="button" className="doc-btn" onClick={() => setFieldOpen((v) => !v)}>
@@ -413,6 +428,65 @@ function MonthPanel({ canManage }: { canManage: boolean }) {
   );
 }
 
+/** OWNER/ADMIN: the office internet — computers on it mark IN / OUT without GPS. Added from the office itself. */
+function OfficeNetworkPanel() {
+  const { t } = useWaT();
+  const q = useOfficeNetwork(true);
+  const a = useOfficeNetworkActions();
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setMsg(null);
+    try {
+      await fn();
+      setMsg({ text: ok, ok: true });
+    } catch (err) {
+      setMsg({ text: await apiErrorMessage(err, t("atSaveError")), ok: false });
+    }
+  };
+  const d = q.data;
+  return (
+    <div className="dr-form" style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 800 }}>🏢 {t("atNetTitle")}</div>
+      <p className="doc-sub" style={{ margin: "4px 0 8px" }}>
+        {t("atNetHint")}
+      </p>
+      {q.isError && <p className="modal-error">{t("atSaveError")}</p>}
+      {d && (
+        <>
+          <p className="doc-sub">
+            {t("atNetYourIp", { ip: d.yourIp ?? "—" })} {d.yourIpMatches ? `✅ ${t("atNetIsOffice")}` : ""}
+          </p>
+          {d.networks.length === 0 ? (
+            <p className="doc-sub">{t("atNetNone")}</p>
+          ) : (
+            <ul style={{ margin: "6px 0", paddingLeft: 18 }}>
+              {d.networks.map((n) => (
+                <li key={n.ip} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <code>{n.ip}</code>
+                  <span className="doc-sub">{new Date(n.addedAt).toLocaleDateString("en-IN")}</span>
+                  <button type="button" className="doc-btn" disabled={a.remove.isPending} onClick={() => run(() => a.remove.mutateAsync(n.ip), t("atSaved"))}>
+                    {t("atNetRemove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!d.yourIpMatches && (
+            <button type="button" className="btn-calc" disabled={a.add.isPending || !d.yourIp} onClick={() => run(() => a.add.mutateAsync(), t("atNetAdded"))}>
+              {t("atNetAdd")}
+            </button>
+          )}
+        </>
+      )}
+      {msg && (
+        <p className={msg.ok ? "doc-sub" : "modal-error"} role="status">
+          {msg.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; holidays: { id: string; date: string; name: string }[] }) {
   const { t } = useWaT();
   const save = useSaveSettings();
@@ -428,6 +502,11 @@ function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; h
   async function here() {
     try {
       const p = await currentPosition();
+      // A computer's guess (100+ km off) would put the office in the wrong place.
+      if (p.accuracyM > 1000) {
+        setMsg({ text: t("atOfficeHereRough", { km: Math.round(p.accuracyM / 1000) }), ok: false });
+        return;
+      }
       setF({ ...f, officeLat: Number(p.lat.toFixed(6)), officeLng: Number(p.lng.toFixed(6)) });
     } catch {
       setMsg({ text: t("atRes_noGps"), ok: false });
@@ -507,6 +586,7 @@ function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; h
         </button>
         {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
       </form>
+      <OfficeNetworkPanel />
       <div className="dr-form">
         <div style={{ fontWeight: 800, marginBottom: 8 }}>{t("atHolidays")}</div>
         {holidays.map((x) => (

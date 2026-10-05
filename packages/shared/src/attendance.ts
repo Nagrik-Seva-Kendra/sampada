@@ -48,17 +48,35 @@ export interface Holiday {
   name: string;
 }
 
+/**
+ * One button press. lat/lng may be missing on a computer that cannot give a
+ * location: IN / OUT then count only from the office internet (see OfficeNetwork).
+ */
 export const PunchInput = z
   .object({
     kind: z.enum(["IN", "OUT", "FIELD"]),
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
     // Any reading is accepted; a computer without GPS reports 100+ km (IP / Wi-Fi guess), refused as "lowAccuracy".
     accuracyM: z.number().min(0).finite().optional(),
     reason: z.string().trim().max(500).optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => (v.lat == null) === (v.lng == null), { message: "lat और lng दोनों साथ भेजें।", path: ["lng"] });
 export type PunchInput = z.infer<typeof PunchInput>;
+
+/**
+ * The office's internet connection(s): a press from a computer on this
+ * network counts as "in the office" without GPS. IPv4 must match exactly;
+ * IPv6 by its /64 network. Added by OWNER/ADMIN from the office itself.
+ */
+export interface OfficeNetwork {
+  /** The address this request came from (what "add" would save). */
+  yourIp: string | null;
+  /** That address is one of the office networks. */
+  yourIpMatches: boolean;
+  networks: { ip: string; addedAt: string }[];
+}
 
 export type DayStatus = "present" | "late" | "halfDay" | "field" | "absent" | "leave" | "halfLeave" | "off" | "holiday" | "future";
 
@@ -75,10 +93,12 @@ export interface PunchRecord {
 
 export interface PunchResult {
   ok: boolean;
-  /** "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "lowAccuracy" | "closed" */
+  /** "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "lowAccuracy" | "noGps" | "closed" */
   code: string;
   record?: PunchRecord;
   distanceM?: number;
+  /** Counted as in the office because the press came from the office internet. */
+  officeNet?: boolean;
   /** The reading's accuracy (metres) when it was too rough ("lowAccuracy"). */
   accuracyM?: number;
 }
@@ -90,6 +110,8 @@ export interface MyAttendanceToday {
   field: PunchRecord[];
   status: DayStatus;
   officeConfigured: boolean;
+  /** This computer/phone is on the office internet: IN / OUT work without GPS. */
+  onOfficeNetwork: boolean;
   closedReason: string | null;
 }
 

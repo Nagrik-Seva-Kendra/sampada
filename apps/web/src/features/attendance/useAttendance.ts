@@ -7,6 +7,7 @@ import type {
   LeaveApplyInput,
   LeaveRequestItem,
   MyAttendanceToday,
+  OfficeNetwork,
   PunchInput,
   PunchResult,
   SalaryAdjustInput,
@@ -73,6 +74,30 @@ export function usePunch() {
     mutationFn: (input) => api.post("attendance/punch", { headers: authHeaders(token), json: input }).json<PunchResult>(),
     onSuccess: invalidate,
   });
+}
+
+/** OWNER/ADMIN: the office internet connections (desktop attendance without GPS). */
+export function useOfficeNetwork(enabled: boolean) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ["attendance", "office-network"],
+    enabled: enabled && !!token,
+    queryFn: () => api.get("attendance/office-network", { headers: authHeaders(token) }).json<OfficeNetwork>(),
+  });
+}
+
+export function useOfficeNetworkActions() {
+  const token = useToken();
+  const invalidate = useInvalidate();
+  const add = useMutation<OfficeNetwork, Error, void>({
+    mutationFn: () => api.post("attendance/office-network", { headers: authHeaders(token) }).json<OfficeNetwork>(),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation<OfficeNetwork, Error, string>({
+    mutationFn: (ip) => api.delete(`attendance/office-network/${encodeURIComponent(ip)}`, { headers: authHeaders(token) }).json<OfficeNetwork>(),
+    onSuccess: invalidate,
+  });
+  return { add, remove };
 }
 
 export function useApplyLeave() {

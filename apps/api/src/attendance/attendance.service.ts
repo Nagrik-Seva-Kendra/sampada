@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
 import {
   type AttendanceMonth,
@@ -12,6 +12,7 @@ import {
   type LeaveStatus,
   type LeaveType,
   type MyAttendanceToday,
+  type OfficeNetwork,
   type PunchInput,
   type PunchRecord,
   type PunchResult,
@@ -22,7 +23,12 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { WaOutboxService } from "../whatsapp/wa-outbox.service.js";
 import { alertNumbers } from "../whatsapp/wa-alerts.js";
+import { isPrivateIp, sameNetwork } from "../common/client-ip.js";
 import { closedDay, dayStatus, istDay, monthDays, punchDecision } from "./attendance-rules.js";
+
+/** Office internet addresses, kept in AttendanceConfig.config.officeNet (outside the settings form). */
+type OfficeNet = { ip: string; addedAt: string; addedById: string | null };
+const MAX_OFFICE_NETS = 10;
 
 export const isAttendanceManager = (role: string) => role === "OWNER" || role === "ADMIN";
 const TYPE_HI: Record<LeaveType, string> = { CASUAL: "आकस्मिक", SICK: "बीमारी", OTHER: "अन्य" };
@@ -68,8 +74,68 @@ export class AttendanceService {
   // ---------- settings ----------
   async settings(organizationId: string): Promise<AttendanceSettings> {
     const row = await this.prisma.attendanceConfig.findUnique({ where: { organizationId } });
-    const parsed = AttendanceSettingsInput.safeParse({ ...DEFAULT_ATTENDANCE_SETTINGS, ...((row?.config as object) ?? {}) });
+    const { officeNet: _nets, ...config } = ((row?.config as Record<string, unknown>) ?? {}) as Record<string, unknown>;
+    const parsed = AttendanceSettingsInput.safeParse({ ...DEFAULT_ATTENDANCE_SETTINGS, ...config });
     return parsed.success ? parsed.data : DEFAULT_ATTENDANCE_SETTINGS;
+  }
+
+  private async officeNets(organizationId: string): Promise<OfficeNet[]> {
+    const row = await this.prisma.attendanceConfig.findUnique({ where: { organizationId } });
+    const list = (row?.config as { officeNet?: unknown } | null)?.officeNet;
+    return Array.isArray(list) ? list.filter((n): n is OfficeNet => !!n && typeof (n as OfficeNet).ip === "string") : [];
+  }
+
+  /** Is this address one of the office's internet connections? */
+  async onOfficeNetwork(organizationId: string, ip: string | null | undefined): Promise<boolean> {
+    if (!ip) return false;
+    return (await this.officeNets(organizationId)).some((n) => sameNetwork(n.ip, ip));
+  }
+
+  private async writeNets(organizationId: string, userId: string, nets: OfficeNet[]) {
+    const row = await this.prisma.attendanceConfig.findUnique({ where: { organizationId } });
+    const config = { ...((row?.config as object) ?? DEFAULT_ATTENDANCE_SETTINGS), officeNet: nets };
+    await this.prisma.attendanceConfig.upsert({
+      where: { organizationId },
+      create: { organizationId, config, updatedById: userId },
+      update: { config, updatedById: userId },
+    });
+  }
+
+  // ---------- office internet (computers without GPS) ----------
+  async officeNetwork(ip: string | null): Promise<OfficeNetwork> {
+    const t = this.manager();
+    const nets = await this.officeNets(t.organizationId);
+    return {
+      yourIp: ip,
+      yourIpMatches: !!ip && nets.some((n) => sameNetwork(n.ip, ip)),
+      networks: nets.map((n) => ({ ip: n.ip, addedAt: n.addedAt })),
+    };
+  }
+
+  /** OWNER/ADMIN, pressed in the office: this request's address becomes an office network. */
+  async addOfficeNetwork(ip: string | null): Promise<OfficeNetwork> {
+    const t = this.manager();
+    if (!ip) throw new BadRequestException("इस कनेक्शन का पता नहीं मिला।");
+    if (isPrivateIp(ip)) throw new BadRequestException("यह पता निजी (private) है — सर्वर का proxy सेटअप जाँचें (TRUST_PROXY_HOPS / CLIENT_IP_HEADER)।");
+    const nets = await this.officeNets(t.organizationId);
+    if (!nets.some((n) => sameNetwork(n.ip, ip))) {
+      if (nets.length >= MAX_OFFICE_NETS) throw new ConflictException(`अधिकतम ${MAX_OFFICE_NETS} नेटवर्क — पहले कोई पुराना हटाएँ।`);
+      nets.push({ ip, addedAt: new Date().toISOString(), addedById: t.userId });
+      await this.writeNets(t.organizationId, t.userId, nets);
+      this.log.log(`office network added by user ${t.userId} (${nets.length} total)`);
+    }
+    return this.officeNetwork(ip);
+  }
+
+  async removeOfficeNetwork(remove: string, ip: string | null): Promise<OfficeNetwork> {
+    const t = this.manager();
+    const nets = await this.officeNets(t.organizationId);
+    const left = nets.filter((n) => n.ip !== remove);
+    if (left.length !== nets.length) {
+      await this.writeNets(t.organizationId, t.userId, left);
+      this.log.log(`office network removed by user ${t.userId} (${left.length} left)`);
+    }
+    return this.officeNetwork(ip);
   }
 
   async holidays(organizationId: string): Promise<Holiday[]> {
@@ -90,10 +156,13 @@ export class AttendanceService {
 
   async saveSettings(input: AttendanceSettings) {
     const t = this.manager();
+    // The office networks live in the same row but are not part of the form: keep them.
+    const nets = await this.officeNets(t.organizationId);
+    const config = { ...input, officeNet: nets };
     await this.prisma.attendanceConfig.upsert({
       where: { organizationId: t.organizationId },
-      create: { organizationId: t.organizationId, config: input, updatedById: t.userId },
-      update: { config: input, updatedById: t.userId },
+      create: { organizationId: t.organizationId, config, updatedById: t.userId },
+      update: { config, updatedById: t.userId },
     });
     this.log.log(`settings updated by user ${t.userId}`);
     return this.getSettings();
@@ -116,13 +185,15 @@ export class AttendanceService {
   }
 
   // ---------- punching ----------
-  async punchWeb(input: PunchInput): Promise<PunchResult> {
+  async punchWeb(input: PunchInput, ip: string | null = null): Promise<PunchResult> {
     const t = requireTenantContext(this.cls);
-    return this.punch(t.organizationId, t.userId, input, "web");
+    return this.punch(t.organizationId, t.userId, input, "web", new Date(), ip);
   }
 
-  async punch(organizationId: string, userId: string, input: PunchInput, source: "web" | "whatsapp", now = new Date()): Promise<PunchResult> {
+  /** `ip` only for web presses: from the office internet, IN / OUT need no GPS. */
+  async punch(organizationId: string, userId: string, input: PunchInput, source: "web" | "whatsapp", now = new Date(), ip: string | null = null): Promise<PunchResult> {
     const settings = await this.settings(organizationId);
+    const officeNet = source === "web" && (await this.onOfficeNetwork(organizationId, ip));
     const day = istDay(now);
     const today = await this.prisma.attendanceRecord.findMany({ where: { organizationId, userId, day } });
     const d = punchDecision({
@@ -132,10 +203,11 @@ export class AttendanceService {
       lng: input.lng,
       reason: input.reason,
       accuracyM: input.accuracyM,
+      officeNet,
       settings,
       today: today.map((r) => ({ kind: r.kind as "IN" | "OUT" | "FIELD", at: r.at })),
     });
-    this.log.log(`punch ${input.kind} by user ${userId}: ${d.code}`);
+    this.log.log(`punch ${input.kind} by user ${userId}: ${d.code}${officeNet ? " (office network)" : ""}`);
     if (!d.ok) {
       return {
         ok: false,
@@ -151,20 +223,21 @@ export class AttendanceService {
         day,
         kind: input.kind,
         at: now,
-        lat: input.lat,
-        lng: input.lng,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
         accuracyM: input.accuracyM ?? null,
         distanceM: d.distanceM,
         inside: d.inside,
         reason: input.reason?.trim() || null,
-        source,
+        source: officeNet ? "web-office-network" : source,
       },
     });
-    return { ok: true, code: d.code, record: toPunch(rec), ...(d.distanceM != null ? { distanceM: d.distanceM } : {}) };
+    return { ok: true, code: d.code, record: toPunch(rec), ...(d.distanceM != null ? { distanceM: d.distanceM } : {}), ...(officeNet ? { officeNet: true } : {}) };
   }
 
-  async myToday(): Promise<MyAttendanceToday> {
+  async myToday(ip: string | null = null): Promise<MyAttendanceToday> {
     const t = requireTenantContext(this.cls);
+    const onOfficeNetwork = await this.onOfficeNetwork(t.organizationId, ip);
     const settings = await this.settings(t.organizationId);
     const day = istDay(new Date());
     const [recs, hol] = await Promise.all([
@@ -181,6 +254,7 @@ export class AttendanceService {
       field: recs.filter((r) => r.kind === "FIELD").map(toPunch),
       status: st.status,
       officeConfigured: settings.officeLat != null,
+      onOfficeNetwork,
       closedReason: closed === "holiday" ? (hol.find((h) => h.date === day)?.name ?? "छुट्टी") : closed === "off" ? "साप्ताहिक अवकाश" : null,
     };
   }

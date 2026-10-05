@@ -827,13 +827,14 @@ model AttendanceRecord {
   /// IN | OUT | FIELD
   kind           String
   at             DateTime @default(now())
-  lat            Float
-  lng            Float
+  /// null: pressed on a computer without a location, from the office internet (source "web-office-network")
+  lat            Float?
+  lng            Float?
   accuracyM      Float?
   distanceM      Int?
   inside         Boolean
   reason         String?
-  /// web | whatsapp
+  /// web | whatsapp | web-office-network
   source         String   @default("web")
 
   @@index([organizationId, day])
