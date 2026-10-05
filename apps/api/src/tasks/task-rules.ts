@@ -208,3 +208,56 @@ export function digestText(tasks: DigestTask[], now: Date): string {
   out.push("", 'पूरा होने पर "3 हो गया", तारीख बदलने के लिए "3 कल" लिखें।');
   return out.join("\n");
 }
+
+// ---------- is this a task at all? ----------
+/** Letters/digits only, lower-case, Devanagari digits as ASCII; emoji and punctuation dropped. */
+const bare = (text: string) =>
+  norm(text)
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const SMALL_TALK = new RegExp(
+  "^(?:" +
+    [
+      "hello+|helo|hlo|hii*|hey+|hy|yo",
+      "namaste|namaskar|namaskaar|pranam|ram ram|jai shri ram|jai shree ram|radhe radhe",
+      "नमस्ते|नमस्कार|प्रणाम|राम राम|जय श्री राम|राधे राधे|हेलो|हैलो|हाय",
+      "good (?:morning|afternoon|evening|night)|gm|gn|सुप्रभात|शुभ (?:प्रभात|रात्रि|संध्या)",
+      "ok+|okay|okk+|k|kk|ओके|ठीक है जी|accha|achha|acha|अच्छा|hmm+|हम्म",
+      "thanks?|thank you|thanku|thankyou|thx|ty|धन्यवाद|शुक्रिया|dhanyavad|dhanyawad|shukriya",
+      "ji|जी|haan ji|हाँ जी|sir|सर|bhai|भाई",
+      "test|testing|टेस्ट|kaise ho|कैसे हो|how are you",
+    ].join("|") +
+    ")(?: (?:ji|जी|sir|सर|bhai|भाई|there|all))*$",
+  "iu",
+);
+
+/** A greeting / "ok" / "thanks" / emoji-only / a letter or two: never a task. */
+export function isSmallTalk(text: string): boolean {
+  const s = bare(text);
+  if (!s) return true;
+  if (s.replace(/\s/g, "").length < 3) return true;
+  return SMALL_TALK.test(s);
+}
+
+const WORK_WORDS =
+  /रजिस्ट्री|registry|बैनामा|bainama|विक्रय|vikray|sale|बिक्री|बंधक|mortgage|लोन|loan|अनुबंध|agreement|एग्रीमेंट|पट्टा|patta|lease|नामांतरण|namantaran|mutation|नकल|nakal|copy|कॉपी|फोन|फ़ोन|phone|कॉल|call|कागज़|कागज|kagaz|kagaj|papers?|डीड|deed|ड्राफ्ट|draft|स्टाम्प|stamp|प्लॉट|प्लाट|plot|मकान|makan|जमीन|ज़मीन|zameen|jameen|खसरा|khasra|बैंक|bank|पैसे|paise|payment|फीस|fees?|बनाना|बनानी|बनाने|बनाओ|banana|banani|banao|करना|करनी|करने|करो|karna|karni|karo|भेजना|भेजनी|भेजो|bhejna|bhejo|लेना|लेने|लो|lena|लाना|lana|देना|देने|dena|मिलना|milna|जाना|jana|तक|tak|याद|yaad|remind|reminder|task|काम|kaam/i;
+
+/**
+ * Does a fresh owner message (nothing pending) read like work to note down?
+ * A date, a mobile, a work word, or a real sentence (4+ words) → yes;
+ * "Hello", "ok", "कहाँ हो" → no.
+ */
+export function looksLikeTask(text: string, now: Date): boolean {
+  if (isSmallTalk(text)) return false;
+  const s = bare(text);
+  if (WORK_WORDS.test(s)) return true;
+  if (parseDue(text, now)) return true;
+  if (/(?:\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}/.test(norm(text))) return true;
+  return s.split(" ").filter((w) => w.length >= 2).length >= 4;
+}
+
+/** Short help for the owner when a message is not a task. */
+export const OWNER_HELP =
+  'नमस्ते! 🙏 नया काम लिखें या बोलें, जैसे: "रमेश शर्मा की रजिस्ट्री सोमवार तक"।\nसूची के लिए "काम", पूरा होने पर "3 हो गया", ग्राहक की तरह आज़माने के लिए "ग्राहक मोड" लिखें।';

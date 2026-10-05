@@ -5,16 +5,16 @@ import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } 
 import { PrismaService } from "../prisma/prisma.service.js";
 import { SpeechService } from "../tasks/speech.service.js";
 import { TaskExtractorService } from "../tasks/task-extractor.service.js";
-import { confirmText, digestText, formatDueHi, parseOwnerCommand, parseStaffDone, type TaskDraft } from "../tasks/task-rules.js";
+import { confirmText, digestText, formatDueHi, isSmallTalk, looksLikeTask, OWNER_HELP, parseOwnerCommand, parseStaffDone, type TaskDraft } from "../tasks/task-rules.js";
 import { normalizePhone, TasksService } from "../tasks/tasks.service.js";
 import { alertNumbers } from "./wa-alerts.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import { maskPhone } from "./webhook-diagnostics.js";
 
 const YES = /^(हाँ|हां|हा|ha|haan|han|yes|y|ok|ठीक है|ठीक|theek|thik|sahi|सही)[\s!.।]*$/i;
-const NO = /^(नहीं|नही|no|n|nahi|nahin|mat|मत)[\s!.।]*$/i;
+const NO = /^(नहीं|नही|ना|no|nope|n|nahi|nahin|nhi|na|mat|मत|नहीं चाहिए|nahi chahiye|mat karo|मत करो)[\s!.।]*$/i;
 const CHANGE = /^(बदलें|बदलो|बदल|badlen|badlo|badal|change|edit)[\s!.।]*$/i;
-const CANCEL = /^(रद्द|radd|cancel|cancelled|रहने दो|rehne do)[\s!.।]*$/i;
+const CANCEL = /^(रद्द|रद्द करो|रद्द करें|radd|radd karo|cancel|cancel it|cancel karo|cancelled|रहने दो|rehne do|छोड़ो|छोड़ दो|chhodo|chodo|chhod do|stop)[\s!.।]*$/i;
 export const CUSTOMER_TEST_MS = 30 * 60 * 1000;
 export const AUDIO_KEEP_MS = 7 * 24 * 3600 * 1000;
 
@@ -101,6 +101,8 @@ export class OwnerAssistantService {
         return ["ठीक है, यह काम दर्ज नहीं किया।"];
       }
       if (CHANGE.test(text)) return ["क्या बदलना है? सही बात लिखें या बोलें (जैसे: तारीख सोमवार, नाम रमेश शर्मा)।"];
+      // A greeting is its own message, not a correction: answer it and remind what is waiting.
+      if (isSmallTalk(text)) return [OWNER_HELP, 'पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'];
       // Anything else is a correction of the same task.
       if (!parseOwnerCommand(text, now)) return this.propose(phone, `${state.transcript}\nसुधार: ${text}`, state.source, now);
     }
@@ -148,8 +150,13 @@ export class OwnerAssistantService {
       }
     }
     // A lone "हाँ/नहीं/रद्द" with nothing waiting for it is not a new task.
-    if (YES.test(text) || NO.test(text) || CANCEL.test(text) || CHANGE.test(text)) {
+    if (NO.test(text) || CANCEL.test(text) || CHANGE.test(text) || (YES.test(text) && !isSmallTalk(text))) {
       return ['अभी कोई काम पुष्टि के लिए नहीं है। नया काम लिखें या बोलें, या सूची के लिए "काम" लिखें।'];
+    }
+    // Greetings, "ok", "thanks", a word or two without any work in it: a short help, no task prompt.
+    if (!looksLikeTask(text, now)) {
+      this.log.log(`owner message: not a task (${source})`);
+      return source === "voice" ? [`🎙️ सुना: "${text.slice(0, 200)}"`, OWNER_HELP] : [OWNER_HELP];
     }
     return this.propose(phone, text, source, now);
   }
