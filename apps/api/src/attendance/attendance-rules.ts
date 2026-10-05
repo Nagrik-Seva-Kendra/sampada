@@ -42,12 +42,19 @@ export interface Punch {
   at: Date;
 }
 
-export type PunchCode = "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason";
+export type PunchCode = "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "lowAccuracy";
+
+/**
+ * A reading rougher than this cannot tell "in the office" from "not": computers
+ * without GPS guess from the internet connection (often 100+ km off).
+ */
+export const MAX_PUNCH_ACCURACY_M = 1000;
 
 /**
  * Whether a button press may be recorded. IN must be inside the office
  * radius (else "tooFar" → the app offers "बाहर का काम" with a reason);
  * one IN and one OUT a day, OUT at least 1 hour after IN; FIELD needs a reason.
+ * IN / OUT with a reading rougher than MAX_PUNCH_ACCURACY_M → "lowAccuracy".
  */
 export function punchDecision(input: {
   kind: "IN" | "OUT" | "FIELD";
@@ -55,6 +62,7 @@ export function punchDecision(input: {
   lat: number;
   lng: number;
   reason?: string;
+  accuracyM?: number | null;
   settings: AttendanceSettings;
   today: Punch[];
 }): { ok: boolean; code: PunchCode; inside: boolean; distanceM: number | null; lateMin: number } {
@@ -67,6 +75,7 @@ export function punchDecision(input: {
     return { ...base, ok: true, code: "field" };
   }
   if (distanceM == null) return { ...base, ok: false, code: "noOffice" };
+  if (input.accuracyM != null && input.accuracyM > MAX_PUNCH_ACCURACY_M) return { ...base, ok: false, code: "lowAccuracy" };
   const hasIn = input.today.find((p) => p.kind === "IN");
   if (input.kind === "IN") {
     if (hasIn) return { ...base, ok: false, code: "already" };
@@ -271,6 +280,8 @@ export function punchTextHi(r: { ok: boolean; code: string; distanceM?: number; 
       return "ऑफिस की लोकेशन अभी सेट नहीं है — मालिक से सेट करवाएँ।";
     case "needReason":
       return "बाहर के काम का कारण लिखें।";
+    case "lowAccuracy":
+      return "📍 लोकेशन सही नहीं मिली — फ़ोन का GPS चालू करके दोबारा भेजें।";
     default:
       return "हाज़िरी दर्ज नहीं हो सकी।";
   }

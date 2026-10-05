@@ -39,7 +39,8 @@ const COLOR: Partial<Record<DayStatus, string>> = { present: "#16a34a", late: "#
 export function punchMessage(t: WaT, r: PunchResult | { code: "noGps" }): string {
   const at = "record" in r && r.record ? hm(r.record.at) : "";
   const m = "distanceM" in r && r.distanceM != null ? Math.round(r.distanceM) : "?";
-  return t(`atRes_${r.code}` as StringKey, { t: at, m });
+  const km = "accuracyM" in r && r.accuracyM != null ? Math.max(1, Math.round(r.accuracyM / 1000)) : "?";
+  return t(`atRes_${r.code}` as StringKey, { t: at, m, km });
 }
 
 /**

@@ -31,6 +31,10 @@ export const attendanceStrings = {
   atRes_noIn: { en: "Mark IN first.", hi: "पहले हाज़िरी (IN) लगाएँ।" },
   atRes_noOffice: { en: "The office location is not set yet.", hi: "ऑफिस की लोकेशन अभी सेट नहीं है।" },
   atRes_needReason: { en: "Write a reason for the field work.", hi: "बाहर के काम का कारण लिखें।" },
+  atRes_lowAccuracy: {
+    en: "Your location is too rough (off by about {km} km) — a computer without GPS guesses it from the internet. Mark attendance from your phone with location (GPS) on.",
+    hi: "लोकेशन सही नहीं मिली (लगभग {km} km तक का अंतर) — बिना GPS वाला कंप्यूटर इंटरनेट से अंदाज़ा लगाता है। फ़ोन से, लोकेशन (GPS) चालू करके हाज़िरी लगाएँ।",
+  },
   atRes_noGps: { en: "Location not available — attendance needs GPS. Allow location and try again.", hi: "लोकेशन नहीं मिली — बिना GPS हाज़िरी नहीं लगती। लोकेशन की अनुमति देकर दोबारा दबाएँ।" },
   atSt_present: { en: "Present", hi: "हाज़िर" },
   atSt_late: { en: "Late", hi: "देर" },

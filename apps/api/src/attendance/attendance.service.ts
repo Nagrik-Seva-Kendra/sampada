@@ -131,11 +131,19 @@ export class AttendanceService {
       lat: input.lat,
       lng: input.lng,
       reason: input.reason,
+      accuracyM: input.accuracyM,
       settings,
       today: today.map((r) => ({ kind: r.kind as "IN" | "OUT" | "FIELD", at: r.at })),
     });
     this.log.log(`punch ${input.kind} by user ${userId}: ${d.code}`);
-    if (!d.ok) return { ok: false, code: d.code, ...(d.distanceM != null ? { distanceM: d.distanceM } : {}) };
+    if (!d.ok) {
+      return {
+        ok: false,
+        code: d.code,
+        ...(d.distanceM != null && d.code !== "lowAccuracy" ? { distanceM: d.distanceM } : {}),
+        ...(d.code === "lowAccuracy" ? { accuracyM: Math.round(input.accuracyM!) } : {}),
+      };
+    }
     const rec = await this.prisma.attendanceRecord.create({
       data: {
         organizationId,

@@ -149,6 +149,10 @@ describe("attendance punch", () => {
 
   it("records IN inside the radius, refuses outside it, and requires 1 hour before OUT", async () => {
     const w = await world();
+    // Computer without GPS: a 150 km guess is not saved, and the reply says why (in km, no distance).
+    const rough = await w.attendance.punch(ORG, "rahul", { kind: "IN", lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 150_432.7 }, "web", at("10:04"));
+    expect(rough).toEqual({ ok: false, code: "lowAccuracy", accuracyM: 150_433 });
+    expect(w.prisma.tables.attendanceRecord ?? []).toHaveLength(0);
     const far = await w.attendance.punch(ORG, "rahul", { kind: "IN", lat: OFFICE.lat + 0.01, lng: OFFICE.lng }, "web", at("10:05"));
     expect(far).toMatchObject({ ok: false, code: "tooFar" });
     const ok = await w.attendance.punch(ORG, "rahul", { kind: "IN", lat: OFFICE.lat, lng: OFFICE.lng }, "web", at("10:07"));
