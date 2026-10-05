@@ -64,7 +64,7 @@ export function alertMessage(a: AlertInput): { text: string; template: TemplateC
     template: {
       name: WA_TEMPLATES.alert.name,
       language: WA_TEMPLATES.alert.language,
-      params: [a.ref, deedText, who, mobile, a.needsStaff ? "हाँ" : "नहीं", link],
+      params: [a.ref, deedText, who, a.needsStaff ? "हाँ" : "नहीं"],
     },
   };
 }

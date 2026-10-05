@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { WaRegistryWhen, WaWorkStatus } from "@sampada/shared";
+import type { WaRegistryWhen, WaTemplateSubmitResult, WaWorkStatus } from "@sampada/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
@@ -24,13 +24,21 @@ function TemplatesPanel() {
   const templates = useWaTemplates(true);
   const submit = useSubmitWaTemplates();
   const [msg, setMsg] = useState<string | null>(null);
+  const [rows, setRows] = useState<WaTemplateSubmitResult[]>([]);
+  // A double click lands before the button re-renders as disabled: only one submission at a time.
+  const busy = useRef(false);
   async function onSubmit() {
+    if (busy.current) return;
+    busy.current = true;
     setMsg(null);
+    setRows([]);
     try {
       const out = await submit.mutateAsync();
-      setMsg(out.map((o) => `${o.name}: ${templateResult(o, t)}`).join(" · "));
+      setRows(out);
     } catch (err) {
       setMsg(await apiErrorMessage(err, t("waTplSubmitError")));
+    } finally {
+      busy.current = false;
     }
   }
   return (
@@ -52,7 +60,22 @@ function TemplatesPanel() {
         <button type="button" className="doc-btn" style={{ marginTop: 6 }} disabled={submit.isPending} onClick={onSubmit}>
           {submit.isPending ? t("waSending") : t("waTplSubmit")}
         </button>
-        {msg && <p className="doc-sub">{msg}</p>}
+        {msg && <p className="modal-error">{msg}</p>}
+        {rows.length > 0 && (
+          <ul className="doc-sub" style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {rows.map((o) => (
+              <li key={o.key} className={o.code === "error" || o.code === "invalid" ? "modal-error" : undefined}>
+                <code>{o.name}</code>: {templateResult(o, t)}
+                {o.code === "error" && (o.errorTitle || o.errorMessage) && (
+                  <div>
+                    {o.errorTitle && <strong>{o.errorTitle}: </strong>}
+                    {o.errorMessage}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </details>
   );
@@ -361,9 +384,10 @@ export function WhatsappRequestsPage() {
 }
 
 /** Result of one template submission, in the chosen language. */
-function templateResult(o: { code?: string; status?: string | null; errorCode?: string | number | null; result: string }, t: WaT): string {
+function templateResult(o: WaTemplateSubmitResult, t: WaT): string {
   if (o.code === "exists") return t("waTplResultExists");
   if (o.code === "submitted") return t("waTplResultSubmitted", { status: o.status ?? "PENDING" });
-  if (o.code === "error") return t("waTplResultError", { code: String(o.errorCode ?? "-") });
+  if (o.code === "error") return t("waTplResultError", { code: `${o.errorCode ?? "-"}${o.errorSubcode ? ` / ${o.errorSubcode}` : ""}` });
+  if (o.code === "invalid") return t("waTplResultInvalid", { problems: (o.problems ?? []).join(", ") });
   return o.result;
 }
