@@ -44,9 +44,9 @@ describe("owner alert helpers", () => {
     );
     expect(m.text).not.toContain("9876543210");
     expect(m.template).toEqual({
-      name: "new_request_alert",
+      name: "new_request_alert_v2",
       language: "hi",
-      params: ["XYZ123", "बंधक पत्र", "सीता देवी", "********3210", "हाँ", "https://app.nsk.mpe-registry.com/whatsapp-requests/cmg1abcdefxyz123"],
+      params: ["XYZ123", "बंधक पत्र", "सीता देवी", "हाँ"],
     });
     const plain = alertMessage({ id: "i", ref: "R", phone: "919876543210", customerName: "राम", data: {}, needsStaff: false });
     expect(plain.text).not.toContain("स्टाफ जाँच");

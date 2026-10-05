@@ -76,6 +76,7 @@ export const waStrings = {
   waTplResultExists: { en: "already submitted", hi: "पहले से भेजा हुआ" },
   waTplResultSubmitted: { en: "submitted ({status})", hi: "भेजा गया ({status})" },
   waTplResultError: { en: "error (code {code})", hi: "त्रुटि (कोड {code})" },
+  waTplResultInvalid: { en: "not sent — breaks Meta's rules ({problems})", hi: "नहीं भेजा — Meta के नियम पूरे नहीं ({problems})" },
 
   // ---------- delete ----------
   waDeleteRequest: { en: "Delete request", hi: "अनुरोध हटाएँ" },

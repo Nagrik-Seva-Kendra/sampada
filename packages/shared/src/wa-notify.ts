@@ -47,12 +47,14 @@ export const WA_TEMPLATES = {
     body: "नमस्ते, नागरिक सेवा केंद्र से सूचना: अनुरोध नंबर {{1}} — {{2}}। धन्यवाद।",
     example: ["AB12CD", "आपका ड्राफ्ट तैयार है, स्टाफ जल्द संपर्क करेगा"],
   },
+  // v2: the first version (6 variables in a short body, a masked number with "*" as an example)
+  // was refused by Meta with code 100. Fewer variables, more text, plain examples, new name.
   alert: {
-    name: "new_request_alert",
+    name: "new_request_alert_v2",
     language: "hi",
     category: "UTILITY",
-    body: "नया WhatsApp अनुरोध {{1}} — दस्तावेज़: {{2}}, ग्राहक: {{3}} ({{4}}), स्टाफ जाँच: {{5}}। देखें: {{6}} धन्यवाद।",
-    example: ["AB12CD", "विक्रय पत्र", "अमित शर्मा", "********3210", "नहीं", "https://app.nsk.mpe-registry.com/whatsapp-requests/abc123"],
+    body: "नमस्ते, नागरिक सेवा केंद्र में नया WhatsApp अनुरोध आया है। अनुरोध नंबर {{1}}, दस्तावेज़ {{2}}, ग्राहक {{3}}। स्टाफ जाँच ज़रूरी: {{4}}। कृपया ऐप में WhatsApp अनुरोध पेज खोलकर इसे देखें। धन्यवाद।",
+    example: ["AB12CD", "विक्रय पत्र", "अमित शर्मा", "नहीं"],
   },
   draft: {
     name: "draft_review_ready",
@@ -126,6 +128,45 @@ export const WA_TEMPLATES = {
   },
 } as const satisfies Record<string, WaTemplateDef>;
 
+/** Meta's template rules we can check before submitting (a refused submission costs a review round). */
+export type WaTemplateProblem =
+  | "name"
+  | "bodyLength"
+  | "startsWithVariable"
+  | "endsWithVariable"
+  | "adjacentVariables"
+  | "variableNumbering"
+  | "exampleCount"
+  | "exampleFormat"
+  | "tooManyVariables";
+
+/**
+ * Problems Meta would refuse (code 100) a template for: lower-case name, body
+ * ≤ 1024 characters, no variable at the very start or end, no two variables
+ * side by side, {{1}}..{{n}} in order, one plain example per variable, and
+ * enough words around the variables (Meta refuses "too many variables for the
+ * length"; we ask for at least 3 words per variable).
+ */
+export function templateProblems(t: Pick<WaTemplateDef, "name" | "body" | "example">): WaTemplateProblem[] {
+  const out: WaTemplateProblem[] = [];
+  if (!/^[a-z0-9_]{1,512}$/.test(t.name)) out.push("name");
+  if (!t.body.trim() || t.body.length > 1024) out.push("bodyLength");
+  const body = t.body.trim();
+  if (/^\{\{\d+\}\}/.test(body)) out.push("startsWithVariable");
+  if (/\{\{\d+\}\}[\s.!।]*$/.test(body)) out.push("endsWithVariable");
+  if (/\{\{\d+\}\}\s*\{\{\d+\}\}/.test(body)) out.push("adjacentVariables");
+  const nums = [...body.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+  if (nums.some((n, i) => n !== i + 1)) out.push("variableNumbering");
+  if (t.example.length !== nums.length) out.push("exampleCount");
+  if (t.example.some((e) => !e.trim() || /[\n\t*_~`]|\s{4,}/.test(e))) out.push("exampleFormat");
+  const words = body
+    .replace(/\{\{\d+\}\}/g, " ")
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  if (nums.length && words < 3 * nums.length) out.push("tooManyVariables");
+  return out;
+}
+
 export type WaReasonCode =
   | "notConfigured"
   | "windowClosedTemplate"
@@ -173,8 +214,14 @@ export interface WaTemplateStatus {
 export interface WaTemplateSubmitResult {
   key: string;
   name: string;
-  code: "exists" | "submitted" | "error";
+  code: "exists" | "submitted" | "error" | "invalid";
   status?: string;
   errorCode?: string | number;
+  /** Meta's error_subcode / error_user_title / error_user_msg (no tokens or numbers). */
+  errorSubcode?: string | number;
+  errorTitle?: string;
+  errorMessage?: string;
+  /** code "invalid": rules broken before submitting (not sent to Meta). */
+  problems?: WaTemplateProblem[];
   result: string;
 }
