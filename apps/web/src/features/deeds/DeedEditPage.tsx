@@ -88,7 +88,8 @@ export function DeedEditPage() {
   // Emptying the box is also the way to dismiss the note about it.
   const [sampleCleared, setSampleCleared] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfFailed, setPdfFailed] = useState(false);
+  /** Why the export failed, so the drafter is told what to do instead. */
+  const [pdfFailed, setPdfFailed] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [linkCopyFailed, setLinkCopyFailed] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -148,11 +149,11 @@ export function DeedEditPage() {
 
   async function onDownloadPdf() {
     setPdfBusy(true);
-    setPdfFailed(false);
+    setPdfFailed(null);
     try {
       await downloadDeedPdf(title.trim() || untitled, content);
-    } catch {
-      setPdfFailed(true);
+    } catch (e) {
+      setPdfFailed(e instanceof Error && e.message ? e.message : t("deedsPdfFailed"));
     } finally {
       setPdfBusy(false);
     }
@@ -411,7 +412,7 @@ export function DeedEditPage() {
               el.setSelectionRange(start, end);
             }}
           />
-          {pdfFailed && <p className="modal-error">{t("deedsPdfFailed")}</p>}
+          {pdfFailed && <p className="modal-error">{pdfFailed}</p>}
           {linkCopyFailed && <p className="modal-error">{t("deedsLinkCopyFailed")}</p>}
           <div className="deed-edit-actions">
             <button className="btn-calc" type="submit" disabled={status === "saving"}>

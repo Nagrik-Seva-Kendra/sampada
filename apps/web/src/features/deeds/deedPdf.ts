@@ -21,12 +21,37 @@ const PAGE_MARGIN_PT = 48;
 const PAGE_WIDTH_PX = 794;
 /** Render at 3x for print-sharp text (~280dpi). */
 const SCALE = 3;
+/**
+ * A browser refuses a canvas past its own limits, and a long deed at 3x gets
+ * there: 40 pages is already 2382 x 48000 px. Chrome allows about 32767 px on
+ * a side and some 2.68e8 px in all, Safari rather less, and a machine short on
+ * memory gives up sooner -- so the scale comes down until the canvas is one a
+ * browser will make. Sharpness is lost before the export is.
+ */
+const MAX_CANVAS_SIDE = 32000;
+const MAX_CANVAS_AREA = 2.3e8;
+
+export function safeScale(widthPx: number, heightPx: number): number {
+  const bySide = Math.min(MAX_CANVAS_SIDE / widthPx, MAX_CANVAS_SIDE / heightPx);
+  const byArea = Math.sqrt(MAX_CANVAS_AREA / (widthPx * heightPx));
+  // Below 1x the text turns to mush; a deed that long is better off printed.
+  return Math.max(1, Math.min(SCALE, bySide, byArea));
+}
 
 /** The deed's pixels, plus the y offsets (canvas px) where a page may safely break. */
 interface DeedRaster {
   canvas: HTMLCanvasElement;
   /** Ascending offsets, each the bottom edge of a rendered line of text. */
   lineBreaks: number[];
+}
+
+/** A canvas a browser could not make or read back, in words a drafter can act on. */
+function rasterFailure(e: unknown): Error {
+  const why = e instanceof Error ? e.message : String(e);
+  return new Error(
+    `The deed could not be drawn for the PDF (${why.slice(0, 120)}). It may be too long for this browser — ` +
+      `try "Print Deed" and save as PDF from there.`,
+  );
 }
 
 /** Rasterises the deed's print layout — the pixels that become the PDF's pages. */
@@ -39,15 +64,17 @@ async function renderDeedCanvas(title: string, content: string): Promise<DeedRas
     // has to be loaded before the snapshot — otherwise the deed rasterises in
     // a fallback font. Mounting the node first makes the browser fetch it.
     await ensureFontsReady();
+    const scale = safeScale(node.offsetWidth || PAGE_WIDTH_PX, node.offsetHeight || 1);
     // Measure the lines while the node is still mounted: once it's gone, the
     // canvas is just pixels and we'd have no idea where a line ends.
-    const lineBreaks = measureLineBreaks(node);
-    const canvas = await html2canvas(node, {
-      scale: SCALE,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-    });
-    return { canvas, lineBreaks };
+    const lineBreaks = measureLineBreaks(node, scale);
+    try {
+      const canvas = await html2canvas(node, { scale, backgroundColor: "#ffffff", useCORS: true });
+      if (!canvas.width || !canvas.height) throw new Error("the canvas came back empty");
+      return { canvas, lineBreaks };
+    } catch (e) {
+      throw rasterFailure(e);
+    }
   } finally {
     node.remove();
   }
@@ -106,7 +133,7 @@ async function buildDeedPdf(title: string, content: string, watermark?: string) 
     slice.width = canvas.width;
     slice.height = sliceHeight;
     const ctx = slice.getContext("2d");
-    if (!ctx) throw new Error("Canvas 2D context unavailable.");
+    if (!ctx) throw rasterFailure(new Error("no 2D canvas available"));
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, slice.width, slice.height);
     ctx.drawImage(canvas, 0, top, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
@@ -115,14 +142,13 @@ async function buildDeedPdf(title: string, content: string, watermark?: string) 
     if (index > 0) pdf.addPage();
     // JPEG, not PNG: a page of black-on-white text is ~250KB instead of ~2MB,
     // and at quality .95 the artefacts aren't visible at 3x.
-    pdf.addImage(
-      slice.toDataURL("image/jpeg", 0.95),
-      "JPEG",
-      0,
-      PAGE_MARGIN_PT,
-      A4_WIDTH_PT,
-      sliceHeight / pxPerPt,
-    );
+    let page: string;
+    try {
+      page = slice.toDataURL("image/jpeg", 0.95);
+    } catch (e) {
+      throw rasterFailure(e);
+    }
+    pdf.addImage(page, "JPEG", 0, PAGE_MARGIN_PT, A4_WIDTH_PT, sliceHeight / pxPerPt);
   }
 
   return pdf;
@@ -217,7 +243,7 @@ function findBlankFold(
  * line box includes its leading, its bottom edge sits below the glyphs, clear of
  * Devanagari's below-base marks.
  */
-function measureLineBreaks(node: HTMLElement): number[] {
+function measureLineBreaks(node: HTMLElement, scale: number): number[] {
   const nodeTop = node.getBoundingClientRect().top;
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
   const bottoms: number[] = [];
@@ -226,8 +252,8 @@ function measureLineBreaks(node: HTMLElement): number[] {
     const range = document.createRange();
     range.selectNodeContents(text);
     for (const rect of Array.from(range.getClientRects())) {
-      // Rects are CSS px; html2canvas rasterises at SCALE, so that's the factor.
-      if (rect.height > 0) bottoms.push((rect.bottom - nodeTop) * SCALE);
+      // Rects are CSS px; html2canvas rasterises at `scale`, so that's the factor.
+      if (rect.height > 0) bottoms.push((rect.bottom - nodeTop) * scale);
     }
   }
 
