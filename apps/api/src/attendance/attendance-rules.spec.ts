@@ -24,6 +24,25 @@ describe("geofence", () => {
   });
 });
 
+describe("rough location (computer without GPS)", () => {
+  const now = ist("2026-10-05", "10:00");
+  it("a 150 km reading is accepted by the API (no raw 'accuracyM' error) but IN / OUT is refused as lowAccuracy", () => {
+    expect(PunchInput.safeParse({ kind: "IN", lat: 26.2, lng: 78.1, accuracyM: 150_000 }).success).toBe(true);
+    expect(PunchInput.safeParse({ kind: "IN", lat: 26.2, lng: 78.1, accuracyM: -1 }).success).toBe(false);
+    // Even when the rough guess lands on the office, it does not count.
+    const r = punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 150_000, settings: S, today: [] });
+    expect(r).toMatchObject({ ok: false, code: "lowAccuracy" });
+    const out = punchDecision({ kind: "OUT", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 5000, settings: S, today: [{ kind: "IN", at: ist("2026-10-05", "08:00") }] });
+    expect(out.code).toBe("lowAccuracy");
+  });
+
+  it("a phone GPS reading (≤ 1 km) works as before; field work with a reason is still recorded", () => {
+    expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 25, settings: S, today: [] })).toMatchObject({ ok: true, code: "haazir" });
+    expect(punchDecision({ kind: "IN", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 1000, settings: S, today: [] }).ok).toBe(true);
+    expect(punchDecision({ kind: "FIELD", now, lat: OFFICE.lat, lng: OFFICE.lng, accuracyM: 150_000, reason: "तहसील", settings: S, today: [] })).toMatchObject({ ok: true, code: "field" });
+  });
+});
+
 describe("IN / OUT rules, late, half day", () => {
   const at = (h: string) => ist("2026-10-01", h);
   const p = (kind: "IN" | "OUT", h: string) => ({ kind, at: at(h) });

@@ -53,7 +53,8 @@ export const PunchInput = z
     kind: z.enum(["IN", "OUT", "FIELD"]),
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
-    accuracyM: z.number().min(0).max(100000).optional(),
+    // Any reading is accepted; a computer without GPS reports 100+ km (IP / Wi-Fi guess), refused as "lowAccuracy".
+    accuracyM: z.number().min(0).finite().optional(),
     reason: z.string().trim().max(500).optional(),
   })
   .strict();
@@ -74,10 +75,12 @@ export interface PunchRecord {
 
 export interface PunchResult {
   ok: boolean;
-  /** "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "closed" */
+  /** "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "lowAccuracy" | "closed" */
   code: string;
   record?: PunchRecord;
   distanceM?: number;
+  /** The reading's accuracy (metres) when it was too rough ("lowAccuracy"). */
+  accuracyM?: number;
 }
 
 export interface MyAttendanceToday {
