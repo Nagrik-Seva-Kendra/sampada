@@ -17,6 +17,22 @@ export function AiSettingsPage() {
   const a = useAiSettingsActions();
   const [error, setError] = useState<string | null>(null);
   const [starInput, setStarInput] = useState("");
+  const [starMsg, setStarMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  // The id, link or title goes to the server as typed (it reads links with ?query and titles too);
+  // the answer is shown right here, not at the top of the page.
+  const addStar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ref = starInput.trim();
+    if (!ref || a.star.isPending) return;
+    setStarMsg(null);
+    try {
+      await a.star.mutateAsync({ deedId: ref, starred: true });
+      setStarInput("");
+      setStarMsg({ text: t("aiStarAdded"), ok: true });
+    } catch (err) {
+      setStarMsg({ text: await apiErrorMessage(err, t("aiError")), ok: false });
+    }
+  };
   const run = async (p: Promise<unknown>) => {
     setError(null);
     try {
@@ -126,21 +142,29 @@ export function AiSettingsPage() {
             </div>
           ))}
           {owner && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <input className="dr-action-select" style={{ flex: "1 1 280px" }} placeholder={t("aiStarHint")} value={starInput} onChange={(e) => setStarInput(e.target.value)} />
-              <button
-                type="button"
-                className="btn-calc"
-                disabled={!starInput.trim() || a.star.isPending}
-                onClick={() => {
-                  const id = starInput.trim().split("/").filter(Boolean).pop() ?? "";
-                  run(a.star.mutateAsync({ deedId: id, starred: true }).then(() => setStarInput("")));
+            <form onSubmit={addStar} style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <input
+                className="dr-action-select"
+                style={{ flex: "1 1 280px" }}
+                placeholder={t("aiStarHint")}
+                aria-label={t("aiStarHint")}
+                value={starInput}
+                onChange={(e) => {
+                  setStarInput(e.target.value);
+                  setStarMsg(null);
                 }}
-              >
-                {t("aiAdd")}
+              />
+              <button type="submit" className="btn-calc" disabled={a.star.isPending}>
+                {a.star.isPending ? "…" : t("aiAdd")}
               </button>
-            </div>
+            </form>
           )}
+          {owner && starMsg && (
+            <p className={starMsg.ok ? "doc-sub" : "modal-error"} role="status" style={{ marginTop: 6 }}>
+              {starMsg.text}
+            </p>
+          )}
+          {owner && !starMsg && !d.starred.length && <p className="doc-sub" style={{ marginTop: 6 }}>{t("aiStarHow")}</p>}
         </div>
       </div>
     </section>

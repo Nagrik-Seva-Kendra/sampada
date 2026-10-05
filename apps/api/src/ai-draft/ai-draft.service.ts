@@ -74,6 +74,17 @@ export type CallFn = (o: { system: string; user: string; maxTokens: number; effo
  * cost, no personal data). Off per property type until the eval passes and
  * the owner switches it on.
  */
+/**
+ * The deed id in what the owner pasted: a bare id, or an app link
+ * (".../deeds/sale-deed/edit/<id>?new=1", ".../d/<id>#x"). null for plain text.
+ */
+export function deedIdFromRef(ref: string): string | null {
+  const s = ref.trim();
+  const path = s.replace(/^[a-z]+:\/\/[^/]+/i, "").split(/[?#]/)[0]!;
+  const last = path.split("/").filter(Boolean).pop() ?? "";
+  return /^[a-z0-9_-]{3,64}$/i.test(last) && (path.includes("/") || !/\s/.test(s)) ? last : null;
+}
+
 @Injectable()
 export class AiDraftService {
   private readonly log = new Logger("AiDraft");
@@ -143,12 +154,25 @@ export class AiDraftService {
   }
 
   /** OWNER: mark an archive deed "आदर्श" (preferred example). */
-  async star(deedId: string, starred: boolean): Promise<AiDraftSettings> {
+  /** `ref`: the deed's id, an app link to it (edit or share link, with ?query / #hash), or its title. */
+  async star(ref: string, starred: boolean): Promise<AiDraftSettings> {
     const t = this.owner();
-    const deed = await this.prisma.deedTemplate.findFirst({ where: { id: deedId }, select: { id: true, type: true, content: true, updatedAt: true } });
-    if (!deed) throw new NotFoundException("डीड नहीं मिली।");
+    const select = { id: true, type: true, title: true, content: true, updatedAt: true } as const;
+    const id = deedIdFromRef(ref);
+    let deed = id ? await this.prisma.deedTemplate.findFirst({ where: { id }, select }) : null;
+    if (!deed) {
+      // Not an id/link of this office's deed: try the title.
+      const q = ref.trim().toLowerCase();
+      const hits = (
+        await this.prisma.deedTemplate.findMany({ where: { status: "active", title: { contains: ref.trim(), mode: "insensitive" } }, select, take: 20 })
+      ).filter((d) => d.title.toLowerCase().includes(q));
+      const exact = hits.filter((d) => d.title.trim().toLowerCase() === q);
+      if (exact.length === 1 || hits.length === 1) deed = exact[0] ?? hits[0]!;
+      else if (hits.length > 1) throw new BadRequestException(`इस नाम से ${hits.length} डीड मिलीं — डीड का लिंक डालें (डीड खोलकर ऊपर का पता कॉपी करें)।`);
+    }
+    if (!deed) throw new NotFoundException("डीड नहीं मिली — डीड खोलकर ब्राउज़र के ऊपर का पूरा लिंक कॉपी करके डालें।");
     await this.indexOne(t.organizationId, deed);
-    await this.prisma.deedArchiveIndex.update({ where: { deedId }, data: { starred } });
+    await this.prisma.deedArchiveIndex.update({ where: { deedId: deed.id }, data: { starred } });
     return this.settings();
   }
 
