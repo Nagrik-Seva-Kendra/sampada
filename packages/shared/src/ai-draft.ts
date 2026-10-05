@@ -20,7 +20,8 @@ export interface AiDraftSettings {
 }
 
 export const AiDraftToggleInput = z.object({ propertyType: AiPropertyType, enabled: z.boolean() }).strict();
-export const AiStarInput = z.object({ deedId: z.string().trim().min(1).max(64), starred: z.boolean() }).strict();
+/** deedId: the deed's id, any app link to it (edit / share link, with ?query), or its title. */
+export const AiStarInput = z.object({ deedId: z.string().trim().min(1).max(500), starred: z.boolean() }).strict();
 export const AiEvalStartInput = z.object({ propertyType: AiPropertyType, deedType: z.enum(["sale-deed", "equitable-mortgage-deed"]).default("sale-deed") }).strict();
 
 export interface AiExampleUsed {

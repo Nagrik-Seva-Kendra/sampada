@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from "@nes
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encrypt } from "../whatsapp/pii-crypto.js";
 import { aiPropertyTypeOf, classifyPropertyType, leakCount, locationScore, maskArchive, pickExamples, placeOf } from "./archive-text.js";
-import { AiDraftService, factsShown, parseReview, syntheticInput, targetPlace } from "./ai-draft.service.js";
+import { AiDraftService, deedIdFromRef, factsShown, parseReview, syntheticInput, targetPlace } from "./ai-draft.service.js";
 import { readStream } from "./claude.js";
 import { costUsd, substituteTokens, validateDraft } from "./draft-rules.js";
 import { editRatio, generalize, lineDiff, rulesPrompt, suggestionsFrom } from "./learning.js";
@@ -287,6 +287,21 @@ describe("AiDraftService", () => {
     expect(ev).toMatchObject({ status: "DONE", passed: 12, score: 1, done: 12 });
     expect(calls).toHaveLength(12);
     expect(calls.every((c) => !c.user.includes("रामलाल") && c.user.includes("परीक्षण क्रेता"))).toBe(true);
+  });
+
+  it("ideal deed: id, edit / share link (with ?query, #hash) or title; ambiguous title asks for the link", async () => {
+    const star = async (ref: string) => (await svc().star(ref, true)).starred.map((x: any) => x.deedId);
+    expect(await star("old-3")).toContain("old-3");
+    expect(await star("https://app.nsk.mpe-registry.com/deeds/sale-deed/edit/old-4?new=1&sample=x")).toContain("old-4");
+    expect(await star("https://app.nsk.mpe-registry.com/d/old-5#top")).toContain("old-5");
+    expect(await star("  कृषि  ")).toContain("agri-1");
+    await expect(svc().star("पुरानी", true)).rejects.toBeInstanceOf(BadRequestException); // 12 deeds match
+    await expect(svc().star("https://app.nsk.mpe-registry.com/deeds/sale-deed/edit/nope123", true)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc("ADMIN").star("old-3", true)).rejects.toBeInstanceOf(ForbiddenException);
+    expect((await svc().star("old-3", false)).starred.map((x: any) => x.deedId)).not.toContain("old-3");
+    expect(deedIdFromRef("cmg1abcdefxyz123")).toBe("cmg1abcdefxyz123");
+    expect(deedIdFromRef("/deeds/sale-deed/edit/cmg1abc?new=1")).toBe("cmg1abc");
+    expect(deedIdFromRef("राम लाल का बैनामा")).toBeNull();
   });
 });
 

@@ -49,7 +49,12 @@ export const aiStrings = {
   aiEvalFailed: { en: "failed", hi: "विफल" },
   aiEvalFailures: { en: "What failed", hi: "क्या कमी रही" },
   aiStarred: { en: "Ideal deeds (preferred as examples)", hi: "आदर्श डीड (उदाहरण में पहले ली जाती हैं)" },
-  aiStarHint: { en: "Paste a deed link or id", hi: "डीड का लिंक या id डालें" },
+  aiStarHint: { en: "Paste a deed link, id or its title", hi: "डीड का लिंक, id या उसका नाम डालें" },
+  aiStarAdded: { en: "Added as an ideal deed ★", hi: "आदर्श डीड में जुड़ गई ★" },
+  aiStarHow: {
+    en: "Open the deed (All Deeds → the deed), copy the address from the browser bar and paste it here — or type the deed's title. Press Add or Enter.",
+    hi: "डीड खोलें (सभी विलेख → डीड), ब्राउज़र के ऊपर का पता कॉपी करके यहाँ डालें — या डीड का नाम लिखें। फिर जोड़ें या Enter दबाएँ।",
+  },
   aiAdd: { en: "Add", hi: "जोड़ें" },
   aiRemove: { en: "Remove", hi: "हटाएँ" },
   aiOwnerOnly: { en: "Only the owner can change these.", hi: "इन्हें केवल मालिक बदल सकते हैं।" },
