@@ -2,7 +2,7 @@
   "name": "Nagrik Seva Kendra",
   "short_name": "Nagrik Seva",
   "description": "Guideline rates, deed drafting and e-registry in one workspace.",
-  "start_url": "/deeds",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8f3ec",
@@ -26,6 +26,53 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "shortcuts": [
+    {
+      "name": "WhatsApp अनुरोध",
+      "short_name": "अनुरोध",
+      "url": "/whatsapp-requests",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "कॉल और फ़ॉलो-अप",
+      "short_name": "कॉल",
+      "url": "/calls",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "मेरे काम",
+      "short_name": "काम",
+      "url": "/tasks",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "हाज़िरी",
+      "short_name": "हाज़िरी",
+      "url": "/attendance",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useRouterState } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
-import { useAuthStore } from "../../stores/authStore";
+import { useActiveOrganization, useAuthStore, useIsStaff } from "../../stores/authStore";
 import { useUiStore } from "../../stores/uiStore";
 import { translate, type StringKey } from "../../i18n/strings";
 import { BrandMark } from "../../components/icons";
 import { Sidebar } from "./Sidebar";
 import { InstallAppPrompt } from "./InstallAppPrompt";
+import { GlobalSearch } from "../home/GlobalSearch";
+import { useOnline } from "../home/useOnline";
 
 /** Shell for every authenticated app route: top header + per-app sidebar + content. */
 export function DashboardLayout() {
@@ -16,6 +18,9 @@ export function DashboardLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const [navOpen, setNavOpen] = useState(false);
+  const isStaff = useIsStaff();
+  const activeOrganization = useActiveOrganization();
+  const online = useOnline();
 
   // Navigating is the signal that the drawer has done its job.
   useEffect(() => {
@@ -64,6 +69,12 @@ export function DashboardLayout() {
       <Sidebar mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
 
       <div className="sidebar-content">
+        {isStaff && !!activeOrganization && (
+          <div className="search-bar">
+            <GlobalSearch />
+          </div>
+        )}
+        {!online && <p className="offline-banner" role="status">{t("offlineBanner")}</p>}
         <InstallAppPrompt />
         <Outlet />
       </div>
