@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
-import type { Response } from "express";
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Res, StreamableFile, UseGuards } from "@nestjs/common";
+import type { Request, Response } from "express";
+import { clientIp } from "../common/client-ip.js";
 import { AttendanceSettingsInput, HolidayInput, LeaveApplyInput, LeaveStatus, PunchInput, SalaryAdjustInput, SalarySetInput } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
 import { AttendanceService } from "./attendance.service.js";
@@ -46,13 +47,30 @@ export class AttendanceController {
   }
 
   @Get("me/today")
-  myToday() {
-    return this.service.myToday();
+  myToday(@Req() req: Request) {
+    return this.service.myToday(clientIp(req));
   }
 
   @Post("punch")
-  punch(@Body() body: unknown) {
-    return this.service.punchWeb(PunchInput.parse(body));
+  punch(@Body() body: unknown, @Req() req: Request) {
+    return this.service.punchWeb(PunchInput.parse(body), clientIp(req));
+  }
+
+  /** OWNER/ADMIN: the office internet connections (computers without GPS). */
+  @Get("office-network")
+  officeNetwork(@Req() req: Request) {
+    return this.service.officeNetwork(clientIp(req));
+  }
+
+  /** OWNER/ADMIN, from the office: add the network this request comes from. */
+  @Post("office-network")
+  addOfficeNetwork(@Req() req: Request) {
+    return this.service.addOfficeNetwork(clientIp(req));
+  }
+
+  @Delete("office-network/:ip")
+  removeOfficeNetwork(@Param("ip") ip: string, @Req() req: Request) {
+    return this.service.removeOfficeNetwork(ip, clientIp(req));
   }
 
   @Get("month")

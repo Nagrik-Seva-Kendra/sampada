@@ -42,7 +42,20 @@ export interface Punch {
   at: Date;
 }
 
-export type PunchCode = "haazir" | "late" | "halfDay" | "out" | "field" | "tooFar" | "already" | "tooSoon" | "noIn" | "noOffice" | "needReason" | "lowAccuracy";
+export type PunchCode =
+  | "haazir"
+  | "late"
+  | "halfDay"
+  | "out"
+  | "field"
+  | "tooFar"
+  | "already"
+  | "tooSoon"
+  | "noIn"
+  | "noOffice"
+  | "needReason"
+  | "lowAccuracy"
+  | "noGps";
 
 /**
  * A reading rougher than this cannot tell "in the office" from "not": computers
@@ -51,35 +64,47 @@ export type PunchCode = "haazir" | "late" | "halfDay" | "out" | "field" | "tooFa
 export const MAX_PUNCH_ACCURACY_M = 1000;
 
 /**
- * Whether a button press may be recorded. IN must be inside the office
- * radius (else "tooFar" → the app offers "बाहर का काम" with a reason);
- * one IN and one OUT a day, OUT at least 1 hour after IN; FIELD needs a reason.
- * IN / OUT with a reading rougher than MAX_PUNCH_ACCURACY_M → "lowAccuracy".
+ * Whether a button press may be recorded. IN / OUT count as in the office
+ * when the press comes from the office internet (`officeNet`), else the GPS
+ * reading must be inside the office radius ("tooFar" → the app offers
+ * "बाहर का काम" with a reason), not rougher than MAX_PUNCH_ACCURACY_M
+ * ("lowAccuracy"), and present ("noGps"). One IN and one OUT a day, OUT at
+ * least 1 hour after IN; FIELD needs a reason and a location.
  */
 export function punchDecision(input: {
   kind: "IN" | "OUT" | "FIELD";
   now: Date;
-  lat: number;
-  lng: number;
+  lat?: number | null;
+  lng?: number | null;
   reason?: string;
   accuracyM?: number | null;
+  officeNet?: boolean;
   settings: AttendanceSettings;
   today: Punch[];
 }): { ok: boolean; code: PunchCode; inside: boolean; distanceM: number | null; lateMin: number } {
   const s = input.settings;
-  const distanceM = s.officeLat != null && s.officeLng != null ? haversineM(s.officeLat, s.officeLng, input.lat, input.lng) : null;
-  const inside = distanceM != null && distanceM <= s.radiusM;
+  const hasPos = input.lat != null && input.lng != null;
+  const rough = input.accuracyM != null && input.accuracyM > MAX_PUNCH_ACCURACY_M;
+  const distanceM = hasPos && !rough && s.officeLat != null && s.officeLng != null ? haversineM(s.officeLat, s.officeLng, input.lat!, input.lng!) : null;
+  const inside = !!input.officeNet || (distanceM != null && distanceM <= s.radiusM);
   const base = { inside, distanceM, lateMin: 0 };
   if (input.kind === "FIELD") {
     if (!input.reason?.trim()) return { ...base, ok: false, code: "needReason" };
+    if (!hasPos) return { ...base, ok: false, code: "noGps" };
     return { ...base, ok: true, code: "field" };
   }
-  if (distanceM == null) return { ...base, ok: false, code: "noOffice" };
-  if (input.accuracyM != null && input.accuracyM > MAX_PUNCH_ACCURACY_M) return { ...base, ok: false, code: "lowAccuracy" };
   const hasIn = input.today.find((p) => p.kind === "IN");
+  const where = (): PunchCode | null => {
+    if (input.officeNet) return null;
+    if (s.officeLat == null || s.officeLng == null) return "noOffice";
+    if (!hasPos) return "noGps";
+    if (rough) return "lowAccuracy";
+    return inside ? null : "tooFar";
+  };
   if (input.kind === "IN") {
     if (hasIn) return { ...base, ok: false, code: "already" };
-    if (!inside) return { ...base, ok: false, code: "tooFar" };
+    const bad = where();
+    if (bad) return { ...base, ok: false, code: bad };
     const lateMin = Math.max(0, istMinutes(input.now) - hhmmToMin(s.startTime));
     const code: PunchCode = lateMin > s.halfDayAfterMin ? "halfDay" : lateMin > s.lateAfterMin ? "late" : "haazir";
     return { ...base, ok: true, code, lateMin };
@@ -87,6 +112,12 @@ export function punchDecision(input: {
   if (!hasIn) return { ...base, ok: false, code: "noIn" };
   if (input.today.some((p) => p.kind === "OUT")) return { ...base, ok: false, code: "already" };
   if (input.now.getTime() - hasIn.at.getTime() < 3600_000) return { ...base, ok: false, code: "tooSoon" };
+  // OUT is recorded wherever it is pressed (as before), but needs a usable reading or the office internet.
+  if (!input.officeNet) {
+    if (s.officeLat == null || s.officeLng == null) return { ...base, ok: false, code: "noOffice" };
+    if (!hasPos) return { ...base, ok: false, code: "noGps" };
+    if (rough) return { ...base, ok: false, code: "lowAccuracy" };
+  }
   return { ...base, ok: true, code: "out" };
 }
 
@@ -281,6 +312,7 @@ export function punchTextHi(r: { ok: boolean; code: string; distanceM?: number; 
     case "needReason":
       return "बाहर के काम का कारण लिखें।";
     case "lowAccuracy":
+    case "noGps":
       return "📍 लोकेशन सही नहीं मिली — फ़ोन का GPS चालू करके दोबारा भेजें।";
     default:
       return "हाज़िरी दर्ज नहीं हो सकी।";
