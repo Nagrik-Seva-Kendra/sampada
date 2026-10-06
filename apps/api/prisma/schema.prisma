@@ -773,6 +773,10 @@ model Task {
   remindedAt      DateTime?
   /// When the bot asked the party for papers on WhatsApp (owner said हाँ).
   outreachAt      DateTime?
+  /// File the owner sent with the task on WhatsApp (media storage key; never logged).
+  documentKey     String?
+  documentName    String?
+  documentMime    String?
   doneAt          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

@@ -11,6 +11,8 @@ import {
 } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
+import { readMedia } from "../whatsapp/wa-media.js";
+import { applyFill, type TaskFileFill } from "./task-rules.js";
 
 export const isTaskManager = (role: string) => role === "OWNER" || role === "ADMIN";
 
@@ -29,6 +31,8 @@ type Row = {
   status: string;
   assigneeId: string | null;
   linkedRequestId: string | null;
+  documentKey?: string | null;
+  documentName?: string | null;
   createdAt: Date;
   doneAt: Date | null;
 };
@@ -50,6 +54,7 @@ export function toTaskItem(r: Row, assigneeName: string | null): TaskItem {
     assigneeId: r.assigneeId,
     assigneeName,
     linkedRequestId: r.linkedRequestId,
+    documentName: r.documentKey ? (r.documentName ?? "फ़ाइल") : null,
     createdAt: r.createdAt.toISOString(),
     doneAt: r.doneAt?.toISOString() ?? null,
   };
@@ -68,6 +73,8 @@ export interface NewTask {
   assigneeId?: string | null;
   createdById?: string | null;
   broadcastId?: string | null;
+  /** A file the owner sent with the task on WhatsApp. */
+  document?: { key: string; name: string; mime: string } | null;
 }
 
 /**
@@ -164,6 +171,9 @@ export class TasksService {
             assigneeId: t.assigneeId ?? null,
             createdById: t.createdById ?? null,
             broadcastId: t.broadcastId ?? null,
+            documentKey: t.document?.key ?? null,
+            documentName: t.document?.name ?? null,
+            documentMime: t.document?.mime ?? null,
           },
         });
         this.log.log(`task #${row.number} created (source=${t.source})`);
@@ -173,6 +183,35 @@ export class TasksService {
       }
     }
     throw new BadRequestException("काम नहीं बन सका, कृपया दोबारा कोशिश करें।");
+  }
+
+  /** The owner's WhatsApp task made in the last minutes (a file sent right after it belongs to it). */
+  recentFromWhatsapp(organizationId: string, since: Date) {
+    return this.prisma.task.findFirst({ where: { organizationId, source: { in: ["text", "voice"] }, createdAt: { gte: since } }, orderBy: { createdAt: "desc" } });
+  }
+
+  /** A file for a task: stored with it, and what was read fills only empty fields. */
+  async attachDocument(id: string, doc: { key: string; name: string; mime: string }, fill: TaskFileFill | null): Promise<Row> {
+    const row = await this.prisma.task.findUniqueOrThrow({ where: { id } });
+    const d = applyFill(
+      { title: row.title, partyName: row.partyName, place: row.place, workType: row.workType as TaskWorkType, note: row.note },
+      fill,
+    );
+    return this.prisma.task.update({
+      where: { id },
+      data: { documentKey: doc.key, documentName: doc.name, documentMime: doc.mime, title: d.title, partyName: d.partyName, place: d.place, workType: d.workType, note: d.note },
+    });
+  }
+
+  /** Web: the task's file (managers, or the staff member it is given to). */
+  async documentWeb(id: string): Promise<{ data: Buffer; mimeType: string; fileName: string }> {
+    const t = requireTenantContext(this.cls);
+    const canManage = isTaskManager(t.role);
+    const row = await this.prisma.task.findFirst({ where: { id, organizationId: t.organizationId, ...(canManage ? {} : { assigneeId: t.userId }) } });
+    if (!row?.documentKey) throw new NotFoundException("फ़ाइल नहीं मिली।");
+    const data = await readMedia(row.documentKey).catch(() => null);
+    if (!data) throw new NotFoundException("फ़ाइल नहीं मिली।");
+    return { data, mimeType: row.documentMime ?? "application/octet-stream", fileName: row.documentName ?? "file" };
   }
 
   findByNumber(organizationId: string, number: number) {

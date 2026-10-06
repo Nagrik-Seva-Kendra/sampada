@@ -7,7 +7,7 @@ import { apiErrorMessage } from "../../lib/api";
 import { useWaAssignees } from "../whatsapp/useWhatsappRequests";
 import { useWaT } from "../whatsapp/waI18n";
 import { formatDate } from "../whatsapp/waLabels";
-import { useCreateTask, useTasks, useUpdateTask } from "./useTasks";
+import { useCreateTask, useTaskDocumentOpener, useTasks, useUpdateTask } from "./useTasks";
 import "../whatsapp/waRequests.css";
 
 type Tab = "today" | "overdue" | "upcoming" | "nodate" | "done";
@@ -25,6 +25,7 @@ const WORK_KEY: Record<TaskWorkType, StringKey> = {
   patta: "tkTypePatta",
   mutation: "tkTypeMutation",
   copy: "tkTypeCopy",
+  will: "tkTypeWill",
   call: "tkTypeCall",
   collect_papers: "tkTypeCollect",
   other: "tkTypeOther",
@@ -141,6 +142,7 @@ export function TasksPage() {
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                {x.documentName && <TaskFileButton id={x.id} name={x.documentName} />}
                 {x.partyPhone && (
                   <a className="doc-btn" href={`tel:+${x.partyPhone}`}>
                     📞
@@ -281,5 +283,43 @@ function TaskDialog({
         </form>
       </div>
     </div>
+  );
+}
+
+/** Opens the file the owner sent with the task on WhatsApp (new tab; falls back to a download). */
+function TaskFileButton({ id, name }: { id: string; name: string }) {
+  const { t } = useWaT();
+  const open = useTaskDocumentOpener();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function go() {
+    setBusy(true);
+    setErr(null);
+    // Opened before the fetch so the browser does not block it as a pop-up.
+    const win = window.open("", "_blank");
+    try {
+      const url = await open(id);
+      if (win) win.location.href = url;
+      else {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      win?.close();
+      setErr(await apiErrorMessage(e, t("tkLoadError")));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span>
+      <button type="button" className="doc-btn" disabled={busy} onClick={go} title={name}>
+        {busy ? "…" : t("tkFile")}
+      </button>
+      {err && <span className="modal-error"> {err}</span>}
+    </span>
   );
 }

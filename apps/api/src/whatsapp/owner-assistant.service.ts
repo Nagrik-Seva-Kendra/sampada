@@ -3,6 +3,8 @@ import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
 import { AttendanceService } from "../attendance/attendance.service.js";
+import { DeedExtractorService } from "./deed-extractor.service.js";
+import { deleteMedia } from "./wa-media.js";
 import { buildInfoText } from "../common/build-info.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { SpeechService } from "../tasks/speech.service.js";
@@ -20,7 +22,10 @@ import {
   parseOwnerCommand,
   parseStaffDone,
   QUESTION_HELP,
+  applyFill,
+  fileFill,
   resolveAssignee,
+  type TaskFileFill,
   TASK_OR_QUESTION,
   type TaskDraft,
 } from "../tasks/task-rules.js";
@@ -36,11 +41,26 @@ const CANCEL = /^(रद्द|रद्द करो|रद्द करें|
 export const CUSTOMER_TEST_MS = 30 * 60 * 1000;
 export const AUDIO_KEEP_MS = 7 * 24 * 3600 * 1000;
 
+/** A file the owner sent for a task: where it is stored and what was read from it. */
+export interface OwnerFile {
+  doc: { key: string; name: string; mime: string };
+  fill: TaskFileFill | null;
+}
+
+const defaultFileName = (mime: string) => (mime === "application/pdf" ? "file.pdf" : mime.startsWith("image/") ? `photo.${mime.split("/")[1] || "jpg"}` : "file");
+
+/** "📎 फ़ाइल: x.pdf — पढ़ा: वसीयत · रमेश शर्मा · सिटी सेंटर" */
+export function fileLine(f: OwnerFile): string {
+  const read = f.fill ? [f.fill.workType ? TASK_WORK_LABEL_HI[f.fill.workType] : null, f.fill.partyName, f.fill.place].filter(Boolean).join(" · ") : "";
+  return `📎 फ़ाइल: ${f.doc.name}${read ? ` — पढ़ा: ${read}` : " (इससे नाम/जगह नहीं पढ़ी जा सकी)"}`;
+}
+
 /** An unanswered "ठीक?" older than this is dropped. */
 export const CONFIRM_STALE_MS = 10 * 60 * 1000;
 
 type OwnerState =
-  | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text"; at?: string }
+  | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text"; at?: string; file?: OwnerFile }
+  | { mode: "task-file"; file: OwnerFile; at: string }
   | { mode: "task-outreach"; taskId: string }
   | { mode: "task-or-question"; text: string; source: "voice" | "text" }
   | null;
@@ -75,6 +95,7 @@ export class OwnerAssistantService {
     private readonly extractor: TaskExtractorService,
     private readonly outbox: WaOutboxService,
     @Optional() private readonly attendance?: AttendanceService,
+    @Optional() private readonly deeds?: DeedExtractorService,
   ) {}
 
   isOwner(phone: string): boolean {
@@ -137,6 +158,26 @@ export class OwnerAssistantService {
       state = null; // something new: handled as a fresh message
     }
 
+    // A file waiting for "which work?": a number attaches it, a note makes a new task with it.
+    if (state?.mode === "task-file") {
+      const n = text.trim().match(/^#?(\d{1,4})$/)?.[1];
+      if (now.getTime() - Date.parse(state.at) > CONFIRM_STALE_MS) {
+        await this.setState(phone, null);
+        state = null;
+      } else if (n) {
+        const t = await this.tasks.findByNumber(this.orgId, Number(n));
+        if (!t) return [`काम #${n} नहीं मिला। सही नंबर लिखें, या नया काम लिखें/बोलें।`];
+        await this.setState(phone, null);
+        return this.attach(t.id, state.file);
+      } else if (CANCEL.test(text) || NO.test(text)) {
+        await this.setState(phone, null);
+        await deleteMedia(state.file.doc.key).catch(() => undefined);
+        return ["ठीक है, फ़ाइल हटा दी।"];
+      } else if (!parseOwnerCommand(text, now)) {
+        return this.propose(phone, text, source, now, state.file);
+      }
+    }
+
     if (state?.mode === "task-confirm") {
       if (YES.test(text)) return this.save(phone, state, now);
       if (CANCEL.test(text) || NO.test(text)) {
@@ -147,7 +188,7 @@ export class OwnerAssistantService {
       // A greeting is its own message, not a correction: answer it and remind what is waiting.
       if (isSmallTalk(text)) return [OWNER_HELP, 'पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'];
       // Anything else is a correction of the same task.
-      if (!parseOwnerCommand(text, now)) return this.propose(phone, `${state.transcript}\nसुधार: ${text}`, state.source, now);
+      if (!parseOwnerCommand(text, now)) return this.propose(phone, `${state.transcript}\nसुधार: ${text}`, state.source, now, state.file);
     }
     if (state?.mode === "task-outreach") {
       if (YES.test(text)) return this.outreach(phone, state.taskId);
@@ -214,18 +255,61 @@ export class OwnerAssistantService {
   }
 
   /** Read the note into a task and ask "ठीक?". */
-  private async propose(phone: string, transcript: string, source: "voice" | "text", now: Date): Promise<string[]> {
+  private async propose(phone: string, transcript: string, source: "voice" | "text", now: Date, file?: OwnerFile): Promise<string[]> {
     const staff = await this.staff().catch(() => []);
-    const draft = await this.extractor.extract(transcript, now, staff.map((s) => s.name));
-    if (!draft) return ["माफ़ कीजिए, काम समझ नहीं आया। कृपया पार्टी, काम और तारीख के साथ दोबारा लिखें या बोलें।"];
+    const read = await this.extractor.extract(transcript, now, staff.map((s) => s.name));
+    if (!read) return ["माफ़ कीजिए, काम समझ नहीं आया। कृपया पार्टी, काम और तारीख के साथ दोबारा लिखें या बोलें।"];
+    // What the file says fills only what the note left empty.
+    const draft = file ? applyFill(read, file.fill) : read;
     if (draft.assigneeName) {
       const who = resolveAssignee(draft.assigneeName, staff);
       if (who) Object.assign(draft, { assigneeId: who.userId, assigneeName: who.name, assigneeUnknown: null });
       else Object.assign(draft, { assigneeId: null, assigneeUnknown: draft.assigneeName, assigneeName: null });
     }
-    await this.setState(phone, { mode: "task-confirm", draft, transcript: transcript.slice(0, 4000), source, at: now.toISOString() });
+    await this.setState(phone, { mode: "task-confirm", draft, transcript: transcript.slice(0, 4000), source, at: now.toISOString(), ...(file ? { file } : {}) });
     const heard = source === "voice" ? [`🎙️ सुना: "${transcript.slice(0, 500)}"`] : [];
-    return [...heard, confirmText(draft)];
+    return [...heard, ...(file ? [fileLine(file)] : []), confirmText(draft)];
+  }
+
+  /**
+   * A PDF / photo from the owner: read it (deed extractor) and keep it with the
+   * task -- the one waiting for हाँ, else a new one from the caption, else the
+   * owner's task of the last 10 minutes, else ask which task. Never the
+   * customer flow. Logs say where it went, never what it says.
+   */
+  async handleFile(phone: string, file: { key: string; buf: Buffer; mime: string; fileName?: string | null }, caption: string, now = new Date()): Promise<string[]> {
+    const doc = { key: file.key, name: (file.fileName || defaultFileName(file.mime)).slice(0, 120), mime: file.mime };
+    const deed = this.deeds ? await this.deeds.extract(file.buf, file.mime).catch(() => null) : null;
+    const of: OwnerFile = { doc, fill: fileFill(deed) };
+    const c = await this.prisma.waContact.findUnique({ where: { phone } });
+    const state = (c?.state as OwnerState) ?? null;
+    if (state?.mode === "task-confirm" && state.at && now.getTime() - Date.parse(state.at) <= CONFIRM_STALE_MS) {
+      const draft = applyFill(state.draft, of.fill);
+      await this.setState(phone, { ...state, draft, file: of, at: now.toISOString() });
+      this.log.log("owner file: added to the task waiting for हाँ");
+      return [fileLine(of), confirmText(draft)];
+    }
+    if (caption.trim()) {
+      this.log.log("owner file: new task from its caption");
+      return this.propose(phone, caption.trim(), "text", now, of);
+    }
+    const recent = await this.tasks.recentFromWhatsapp(this.orgId, new Date(now.getTime() - CONFIRM_STALE_MS));
+    if (recent && !recent.documentKey) return this.attach(recent.id, of);
+    await this.setState(phone, { mode: "task-file", file: of, at: now.toISOString() });
+    this.log.log("owner file: asked which task");
+    return [fileLine(of), 'यह फ़ाइल किस काम की है? काम का नंबर लिखें (जैसे 12), या नया काम लिखें/बोलें। हटाने के लिए "रद्द"।'];
+  }
+
+  /** Keeps the file with a saved task; what was read fills its empty fields. */
+  private async attach(taskId: string, f: OwnerFile): Promise<string[]> {
+    const row = await this.tasks.attachDocument(taskId, f.doc, f.fill);
+    this.log.log(`owner file: attached to task #${row.number}`);
+    const label = TASK_WORK_LABEL_HI[row.workType as TaskWorkType] ?? row.workType;
+    const lines = [
+      `📎 फ़ाइल काम #${row.number} से जोड़ दी (ऐप में "मेरे काम" पर खुलेगी)।`,
+      `काम: ${row.title}${row.title.includes(label) ? "" : ` (${label})`}${row.partyName ? ` · पार्टी: ${row.partyName}` : ""}${row.place ? ` · जगह: ${row.place}` : ""}`,
+    ];
+    return [lines.join("\n")];
   }
 
   private async save(phone: string, state: Extract<OwnerState, { mode: "task-confirm" }>, now: Date): Promise<string[]> {
@@ -243,8 +327,9 @@ export class OwnerAssistantService {
       transcript: state.transcript,
       createdById,
       assigneeId: d.assigneeId ?? null,
+      document: state.file?.doc ?? null,
     });
-    const out = [`✅ काम #${row.number} दर्ज हो गया। पूरा होने पर "${row.number} हो गया" लिखें।`];
+    const out = [`✅ काम #${row.number} दर्ज हो गया। पूरा होने पर "${row.number} हो गया" लिखें।${state.file ? ` 📎 फ़ाइल साथ रखी गई।` : ""}`];
     if (d.assigneeId) out.push(await this.tellAssignee(d.assigneeId, row.number, d));
     // Papers can be asked for on WhatsApp straight away -- only after the owner says हाँ.
     if (DEED_TASK_TYPES.includes(d.workType) && d.partyPhone) {
