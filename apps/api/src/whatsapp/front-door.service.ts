@@ -12,12 +12,15 @@ import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
-import { normDigits, parseAmount } from "./intake-rules.js";
+import { normDigits } from "./intake-rules.js";
 import { requestLink } from "./wa-alerts.js";
 import { deleteMedia } from "./wa-media.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
 import {
+  asksGuideline,
   COST_AMOUNT_ASK,
+  COST_AMOUNT_UNCLEAR,
+  COST_GUIDELINE_NOTE,
   COST_KIND_ASK,
   flatFeeText,
   isAbusive,
@@ -26,6 +29,7 @@ import {
   MENU_TEXT,
   menuText,
   parseCostKind,
+  parseMoney,
   parseMenuChoice,
   registryCostText,
 } from "./wa-smart.js";
@@ -66,10 +70,12 @@ export type FrontRoute =
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
+  /** An answer to the customer's own question: never dropped by the no-repeat filter. */
+  force?: boolean;
 }
 
 type State =
-  | { mode: "cost"; step: "KIND" | "AMOUNT"; guideline?: { value: number; sdPct: number } | null }
+  | { mode: "cost"; step: "KIND" | "AMOUNT"; guideline?: { value: number; sdPct: number } | null; amount?: number | null }
   | { mode: "call"; step: "CHOICE" }
   | { mode: "callback"; step: "WHEN" }
   | { mode: "callback"; step: "PURPOSE"; at: string | null; atText: string | null }
@@ -214,20 +220,28 @@ export class FrontDoorService {
       if (!leaves) return this.call(phone, state, text, now);
     }
     if (state?.mode === "cost") {
-      // Inside the cost questions a bare number answers them ("1" = रजिस्ट्री); words of
-      // another menu option ("स्टाफ से बात") or "4" switch to that option instead.
+      // Inside the cost questions a bare number answers them ("1" = रजिस्ट्री), and so does
+      // any amount ("33,47,000 ... guideline bata do") or words of option 2 itself -- we are
+      // already in it. Words of another option ("स्टाफ से बात"), "4" or a greeting leave.
       const bareDigit = /^\s*[1-4]\s*$/.test(normDigits(text));
-      const switches = (choice !== null && !bareDigit) || (bareDigit && choice === 4);
+      const hasAmount = !bareDigit && parseMoney(text) !== null;
+      const greeting = isGreeting(text);
+      const switches = !hasAmount && (greeting || (choice !== null && choice !== 2 && !bareDigit) || (bareDigit && choice === 4));
       if (!switches) return this.cost(phone, state, text);
+      if (greeting) await this.setContact(phone, { state: null });
     }
 
     switch (choice) {
       case 1:
         await this.setContact(phone, { state: null });
         return { replies: [DRAFT_HOWTO], route: "draft-howto" };
-      case 2:
+      case 2: {
+        // "33 लाख की रजिस्ट्री का खर्च / गाइडलाइन": the amount is already here.
+        const amount = /^\s*2\s*[.)।]?\s*$/.test(normDigits(text)) ? null : parseMoney(text);
+        if (amount) return this.costEstimate(phone, { mode: "cost", step: "AMOUNT" }, amount, text, await this.fees());
         await this.setContact(phone, { state: { mode: "cost", step: "KIND" } });
         return { replies: [COST_KIND_ASK], route: "cost" };
+      }
       case 3:
         await this.setContact(phone, { state: null });
         return { replies: [await this.myRequests(phone)], route: "status" };
@@ -357,27 +371,32 @@ export class FrontDoorService {
     // Not part of any request: the customer's file is not kept.
     await deleteMedia(file.key).catch(() => this.log.warn(`cost: uploaded file not deleted (${maskPhone(phone)})`));
     const g = deed?.property ? await this.guideline.lookup(deed.property, { owners: deed.buyers?.length }).catch(() => null) : null;
+    const amount = state.amount ?? null;
     if (!g) {
-      await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline: null } });
+      await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline: null, amount } });
       return { replies: ["इस दस्तावेज़ से गाइडलाइन अपने-आप नहीं मिल पाई।\n" + COST_AMOUNT_ASK], route: "cost" };
     }
     const guideline = { value: g.marketValue, sdPct: g.stamp.sdPct };
-    await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline } });
+    await this.setContact(phone, { state: amount ? null : { mode: "cost", step: "AMOUNT", guideline } });
     const fees = await this.fees();
     return {
       replies: [
-        registryCostText({ amount: null, guideline }, fees),
-        "रजिस्ट्री गाइडलाइन से ज़्यादा राशि पर होगी तो वह राशि लिखें, अनुमान उसी पर बता देंगे।",
+        registryCostText({ amount, guideline }, fees),
+        ...(amount ? [] : ["रजिस्ट्री गाइडलाइन से ज़्यादा राशि पर होगी तो वह राशि लिखें, अनुमान उसी पर बता देंगे।"]),
       ],
       route: "cost",
+      force: true,
     };
   }
 
   private async cost(phone: string, state: Extract<NonNullable<State>, { mode: "cost" }>, text: string): Promise<FrontReply> {
     const fees = await this.fees();
+    const amount = parseMoney(text);
     if (state.step === "KIND") {
+      // "60 लाख की रजिस्ट्री": an amount means a registry (checked first -- "लाख और ..." is not "other").
+      if (amount) return this.costEstimate(phone, state, amount, text, fees);
       const kind = parseCostKind(text);
-      if (!kind) return { replies: [COST_KIND_ASK], route: "cost" };
+      if (!kind) return { replies: [COST_KIND_ASK], route: "cost", force: true };
       if (kind === "registry") {
         await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT" } });
         return { replies: [COST_AMOUNT_ASK], route: "cost" };
@@ -385,10 +404,32 @@ export class FrontDoorService {
       await this.setContact(phone, { state: null });
       return { replies: [flatFeeText(kind, fees)], route: "cost" };
     }
-    const amount = parseAmount(text);
-    if (!amount) return { replies: ["राशि समझ नहीं आई। जैसे 1500000 या 15 लाख लिखें, या पुरानी रजिस्ट्री की PDF/फ़ोटो भेजें।"], route: "cost" };
-    await this.setContact(phone, { state: null });
-    return { replies: [registryCostText({ amount, guideline: state.guideline ?? null }, fees)], route: "cost" };
+    // Waiting for the amount: never silent.
+    if (!amount) return { replies: [COST_AMOUNT_UNCLEAR], route: "cost", force: true };
+    return this.costEstimate(phone, state, amount, text, fees);
+  }
+
+  /**
+   * The estimate for an amount. A guideline asked in words (colony / ward /
+   * area) is not guessed: the customer is asked for the old registry, and the
+   * amount is kept so the estimate from that file uses it.
+   */
+  private async costEstimate(
+    phone: string,
+    state: Extract<NonNullable<State>, { mode: "cost" }>,
+    amount: number,
+    text: string,
+    fees: WaOfficeFees,
+  ): Promise<FrontReply> {
+    const guideline = state.guideline ?? null;
+    const replies = [registryCostText({ amount, guideline }, fees)];
+    if (!guideline && asksGuideline(text)) {
+      replies.push(COST_GUIDELINE_NOTE);
+      await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline: null, amount } });
+    } else {
+      await this.setContact(phone, { state: null });
+    }
+    return { replies, route: "cost", force: true };
   }
 
   /** This number's own requests only (menu 3); with `ref`, just that one or null. */
