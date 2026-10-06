@@ -38,9 +38,9 @@ export const ColonyProjectInput = z
     developer: z.string().trim().max(200),
     partners: z.array(ColonyPartner).max(6),
     /** Two development-permission references (T&CP / colony permission ...). */
-    devPermissions: z.array(z.string().trim().max(400)).max(2),
+    devPermissions: z.array(z.string().trim().max(3000)).max(2),
     /** Two maintenance clauses. */
-    maintenanceClauses: z.array(z.string().trim().max(1500)).max(2),
+    maintenanceClauses: z.array(z.string().trim().max(3000)).max(2),
     /** Fallback only, when no guideline row is chosen: ₹ per square metre. */
     guidelineRatePerSqm: z.number().min(0).max(10_000_000).nullable(),
     /** Colony standard text with {{BUYER}} {{PLOT}} {{BOUNDARY}} {{PAYMENT}}. */

@@ -40,6 +40,37 @@ export function ColonyPage() {
     if (!projectId && projects.data?.length) setProjectId(projects.data[0]!.id);
   }, [projects.data, projectId]);
   const project = projects.data?.find((p) => p.id === projectId) ?? null;
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newKind, setNewKind] = useState<"PLOT" | "SHOP">("PLOT");
+  async function createProject() {
+    setError(null);
+    try {
+      const p = await a.create.mutateAsync({
+        name: newName.trim(),
+        kind: newKind,
+        village: "",
+        ward: "",
+        surveyNos: "",
+        aliases: "",
+        guidelineSno: null,
+        developer: "",
+        partners: [],
+        devPermissions: ["", ""],
+        maintenanceClauses: ["", ""],
+        guidelineRatePerSqm: null,
+        template: "",
+        templateDeedId: null,
+        companyNumbers: [],
+      });
+      setProjectId(p.id);
+      setTab("setup");
+      setNewOpen(false);
+      setNewName("");
+    } catch (e) {
+      setError(await apiErrorMessage(e, t("coSaveError")));
+    }
+  }
 
   return (
     <section className="page">
@@ -73,10 +104,29 @@ export function ColonyPage() {
             )}
           </div>
         )}
+        {isOwner && (projects.data ?? []).length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+            <button type="button" className="doc-btn" onClick={() => setNewOpen((v) => !v)}>
+              + {t("coNewProject")}
+            </button>
+            {newOpen && (
+              <>
+                <input className="dr-action-select" style={{ flex: "1 1 240px" }} placeholder={t("coSetupName")} value={newName} onChange={(e) => setNewName(e.target.value)} />
+                <select className="dr-action-select" value={newKind} onChange={(e) => setNewKind(e.target.value as "PLOT" | "SHOP")} aria-label={t("coKind")}>
+                  <option value="PLOT">{t("coKindPLOT")}</option>
+                  <option value="SHOP">{t("coKindSHOP")}</option>
+                </select>
+                <button type="button" className="btn-calc" disabled={newName.trim().length < 2 || a.create.isPending} onClick={createProject}>
+                  {t("coCreate")}
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {project && (
           <>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-              {(projects.data ?? []).length > 1 && (
+              {((projects.data ?? []).length > 1 || isOwner) && (
                 <select className="dr-action-select" value={project.id} onChange={(e) => setProjectId(e.target.value)}>
                   {projects.data!.map((p) => (
                     <option key={p.id} value={p.id}>
