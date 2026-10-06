@@ -96,6 +96,60 @@ export const COST_AMOUNT_ASK =
   "रजिस्ट्री किस राशि पर होगी? राशि लिखें (जैसे 15 लाख)।\n" +
   "गाइडलाइन मूल्य भी जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
 
+// ---------- amounts in free text (cost flow) ----------
+const MONEY_UNIT = "करोड़|करोड|crores?|cr|लाख|lakhs?|lacs?|हज़ार|हजार|ha[zj]{1,2}a{1,2}r|thousand|k";
+const MONEY_TOKEN = new RegExp(`(\\d+(?:\\.\\d+)?)(?:\\s*(${MONEY_UNIT})(?![a-z\\u0900-\\u097F]))?`, "g");
+const unitValue = (u: string | undefined): number =>
+  !u ? 1 : /करोड|cr/.test(u) ? 1e7 : /लाख|lakh|lac/.test(u) ? 1e5 : 1e3;
+/** Numbers that are not money: an area right after, or a label (ward, plot, survey ...) right before. */
+const AREA_AFTER = /^\s*(sq\.?\s*(ft|feet|m|mt|mtr|meter|metre|yd|yard)|sqft|sqm|square|वर्ग|फुट|फ़ुट|फीट|feet|ft\b|गज|gaj|बीघा|bigha|हेक्टेयर|hectare|एकड़|acre)/i;
+const LABEL_BEFORE = /(ward|वार्ड|survey|सर्वे|plot|प्लॉट|प्लाट|khasra|खसरा|house|मकान|flat|फ्लैट|no\.?|नंबर|number|नं\.?|क्रमांक)\s*[:.#-]?\s*$/i;
+
+/**
+ * The amount in a customer's text: "33,47,000/-", "₹33,47,000", "3347000",
+ * "33 lakh 47 hajaar", "33 लाख 47 हज़ार", "33.47 lakh", also inside a
+ * sentence. Ward / plot / survey numbers and areas ("2770 sqft") are skipped;
+ * a bare number must be at least 10,000 (and not a 10-digit phone number).
+ */
+export function parseMoney(text: string): number | null {
+  const s = normDigits(text).toLowerCase().replace(/(\d),(?=\d)/g, "$1");
+  const tokens = [...s.matchAll(MONEY_TOKEN)].map((m) => ({ start: m.index!, end: m.index! + m[0].length, n: parseFloat(m[1]!), raw: m[1]!, mult: unitValue(m[2]) }));
+  for (let i = 0; i < tokens.length; i++) {
+    const first = tokens[i]!;
+    let value = first.n * first.mult;
+    let end = first.end;
+    // "33 lakh 47 hajaar", "1 करोड़ 20 लाख": bigger unit, then smaller ones.
+    let j = i;
+    while (first.mult > 1 && j + 1 < tokens.length) {
+      const next = tokens[j + 1]!;
+      const gap = s.slice(tokens[j]!.end, next.start);
+      if (next.mult > 1 && next.mult < tokens[j]!.mult && /^\s*(,|और|aur|or|\+)?\s*$/.test(gap)) {
+        value += next.n * next.mult;
+        end = next.end;
+        j++;
+      } else break;
+    }
+    const before = s.slice(0, first.start);
+    const after = s.slice(end);
+    i = j;
+    if (LABEL_BEFORE.test(before) || AREA_AFTER.test(after)) continue;
+    if (first.mult === 1 && (value < 10_000 || first.raw.replace(/\D/g, "").length >= 10)) continue;
+    value = Math.round(value);
+    if (value >= 1000) return value;
+  }
+  return null;
+}
+
+/** The customer also asks for the guideline (colony / ward / area / rate). */
+export const asksGuideline = (text: string): boolean =>
+  /guide\s*line|गाइड\s*लाइन|\brate\b|रेट|sq\.?\s*ft|sqft|वर्ग\s*फ़?ुट|ward|वार्ड|colony|कॉलोनी|कालोनी/i.test(normDigits(text));
+
+export const COST_AMOUNT_UNCLEAR =
+  "राशि समझ नहीं आई, कृपया जैसे 33,47,000 या 33 लाख 47 हज़ार लिखें।\n" +
+  "गाइडलाइन मूल्य जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
+export const COST_GUIDELINE_NOTE =
+  "ℹ️ कॉलोनी / वार्ड / क्षेत्रफल से गाइडलाइन मूल्य हम अंदाज़े से नहीं बताते। सही गाइडलाइन (और उस पर स्टाम्प शुल्क) के लिए उसी संपत्ति की पुरानी रजिस्ट्री की PDF या सभी पन्नों की फ़ोटो यहीं भेजें।";
+
 export function parseCostKind(text: string): WaFeeKind | null {
   const s = normDigits(text).trim().toLowerCase();
   if (/^1\b|रजिस्ट्री|विक्रय|registry|sale|बैनामा/.test(s)) return "registry";

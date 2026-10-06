@@ -202,9 +202,11 @@ export class WhatsappService {
         this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=${viaCost ? "cost" : "flow"} replies=${replies.length}`);
         return;
       }
-      default:
-        await this.send(from, await this.front.withoutRepeats(from, ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"]));
-        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=unsupported`);
+      default: {
+        const replies = await this.front.withoutRepeats(from, ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"]);
+        await this.send(from, replies);
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=unsupported replies=${replies.length}${replies.length ? "" : " silent=repeat-suppressed"}`);
+      }
     }
   }
 
@@ -214,6 +216,7 @@ export class WhatsappService {
     const ctx = { phone: from, name: batch.name };
     let route: string;
     let replies: string[];
+    let silent = "no-reply"; // why nothing was sent, for the log
     if (await this.front.isBlocked(from)) {
       // Blocked while these texts were waiting (spam burst): stay silent.
       route = "blocked";
@@ -233,13 +236,14 @@ export class WhatsappService {
       } else {
         const r = await this.front.handle(from, text, () => this.intake.handleText(ctx, text));
         route = r.route;
-        // Generic answers are never repeated within 10 minutes.
-        replies = await this.front.withoutRepeats(from, r.replies);
+        // Generic answers are never repeated within 10 minutes; answers to the customer's own question always go.
+        replies = r.force ? r.replies : await this.front.withoutRepeats(from, r.replies);
+        if (r.replies.length && !replies.length) silent = "repeat-suppressed";
       }
     }
     await this.send(from, replies);
     if (route !== "abuse" && route !== "blocked") await this.afterReply(from);
-    this.log.log(`text batch from ${maskPhone(from)} messages=${batch.texts.length} route=${route} replies=${replies.length}`);
+    this.log.log(`text batch from ${maskPhone(from)} messages=${batch.texts.length} route=${route} replies=${replies.length}${replies.length ? "" : ` silent=${silent}`}`);
   }
 
   /** Papers from a party the owner asked for (task outreach): link the request to that task. */
