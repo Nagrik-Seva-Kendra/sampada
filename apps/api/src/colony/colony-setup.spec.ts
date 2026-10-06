@@ -55,11 +55,11 @@ describe("Setup from old deeds", () => {
     expect(f.kind).toBe("PLOT");
   });
 
-  it("many deeds → variants per partner pair (named after the changing partner), sources shown, no party ids in the standard text", () => {
+  it("many deeds → variants per partner pair (named by the pair, most used first), sources shown, no party ids in the standard text", () => {
     const s = buildSetupSuggestion(DEEDS, ["FLORA CITY", "फ्लोरा सिटी"]);
     expect(s.partners.map((p) => [p.key, p.label, p.from.map((x) => x.deedId)])).toEqual([
-      ["रोहित", "रोहित", ["d1", "d2"]],
-      ["अमित", "अमित", ["d3"]],
+      ["महेश-रोहित", "महेश-रोहित", ["d1", "d2"]],
+      ["महेश-अमित", "महेश-अमित", ["d3"]],
     ]);
     expect(s.partners[0]!.text).toContain("भागीदार श्री महेश गुप्ता");
     expect(s.developer).toMatchObject({ value: expect.stringContaining("मेसर्स ग्रीन इन्फ्राटेक"), from: [{ deedId: "d1" }, { deedId: "d2" }, { deedId: "d3" }] });
@@ -71,7 +71,7 @@ describe("Setup from old deeds", () => {
     expect(s.maintenanceChoices).toEqual([{ chosenStart: "रजिस्ट्री दिनांक से", droppedStarts: ["1 अप्रैल 2026 से"] }]);
     expect(s.warnings.join("\n")).toContain('रखरखाव वाला पैरा दो बार है (एक में "1 अप्रैल 2026 से", दूसरे में "रजिस्ट्री दिनांक से") — मानक टेक्स्ट में एक ही रखा गया ("रजिस्ट्री दिनांक से" देय वाला)');
     expect(s.warnings.join("\n")).toContain("चतुःसीमा में वही प्लाट नंबर (20)");
-    expect(s.warnings.join("\n")).toContain("साझा भागीदार: महेश गुप्ता");
+    expect(s.warnings.join("\n")).toContain("भागीदारों की 2 जोड़ियाँ मिलीं: महेश-रोहित (2 डीड), महेश-अमित (1 डीड)");
     // Standard text: all markers, nothing personal.
     const tpl = s.template!.value;
     expect(s.template!.missing).toEqual([]);
@@ -155,7 +155,11 @@ describe("ColonyService: Setup suggestion, sold plots, company number on two pro
       colonyProject: { findFirst: async ({ where: w }: any) => projects.find((p) => where(p, w)) ?? null, findMany: async () => projects },
       colonySale: { findMany: async () => [{ deedId: "generated-1" }] },
       deedTemplate: {
-        findMany: vi.fn(async ({ where: w }: any) => (w.id ? [] : [...DEEDS, { id: "generated-1", title: "विक्रय पत्र — FLORA CITY ब्लॉक E प्लाट 99", content: DEEDS[0]!.content }].map((d) => ({ ...d, updatedAt: new Date() })))),
+        findMany: vi.fn(async ({ where: w }: any) =>
+          [...DEEDS, { id: "generated-1", title: "विक्रय पत्र — FLORA CITY ब्लॉक E प्लाट 99", content: DEEDS[0]!.content }]
+            .filter((d) => !w.id || w.id.in.includes(d.id))
+            .map((d) => ({ ...d, createdAt: new Date() })),
+        ),
       },
       colonyPlot: {
         findFirst: async ({ where: w }: any) => plots.find((p) => where(p, w)) ?? null,
@@ -168,7 +172,7 @@ describe("ColonyService: Setup suggestion, sold plots, company number on two pro
           return { count: hit.length };
         },
       },
-      $unscoped: { $queryRaw: async () => [{ id: "d3" }] },
+      $unscoped: { $queryRaw: vi.fn(async () => [{ id: "d1" }, { id: "d2" }, { id: "d3" }, { id: "generated-1" }]) },
     };
     return { prisma, plots };
   }
@@ -199,7 +203,7 @@ describe("ColonyService: Setup suggestion, sold plots, company number on two pro
     expect(await svc.readiness(p)).toEqual([]);
     const twice = await svc.readiness({ ...p, template: `${p.template}\n\n${MAINT_A}` });
     expect(twice.join(" ")).toContain("रखरखाव वाला पैरा डीड में दो बार आएगा");
-    expect(await svc.readiness({ ...p, maintenanceClauses: ["", ""] })).toContain("रखरखाव की शर्त भरें (एक काफ़ी है)।");
+    expect((await svc.readiness({ ...p, maintenanceClauses: ["", ""] })).join(" ")).toContain("{{MAINTENANCE}} है पर रखरखाव की शर्त खाली है");
   });
 
   it("9713257891 on Flora City and Woods: the name picks the project, otherwise it asks; then remembers", async () => {

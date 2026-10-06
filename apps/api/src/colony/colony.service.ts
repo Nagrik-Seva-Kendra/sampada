@@ -18,7 +18,7 @@ import {
   type ColonySoldPlotsInput,
   type Instalment,
 } from "@sampada/shared";
-import { boundaryNamesSelf, buildSetupSuggestion, colonyGuideline, duplicateClauses, guidelineCandidates } from "./colony-setup.js";
+import { boundaryNamesSelf, buildSetupSuggestion, colonyGuideline, devanagariForms, duplicateClauses, guidelineCandidates, templateLeftovers } from "./colony-setup.js";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
@@ -84,12 +84,19 @@ export class ColonyService {
     if (miss.length) out.push(`मानक टेक्स्ट में ये हिस्से चिह्नित नहीं: ${miss.join(", ")}`);
     const partners = (p.partners as ColonyPartner[]) ?? [];
     if (!partners.length || partners.some((x) => x.text.includes("____"))) out.push("भागीदारों का पूरा विवरण भरें।");
-    if (((p.devPermissions as string[]) ?? []).filter((x) => x.trim()).length < 2) out.push("दोनों विकास अनुमति के संदर्भ भरें।");
+    const tpl = String(p.template ?? "");
+    const filled = (k: "devPermissions" | "maintenanceClauses") => ((p[k] as string[]) ?? []).some((x) => x.trim());
+    // A marker with empty fields would drop the whole paragraph from every deed.
+    if (tpl.includes("{{DEV_PERMISSION}}") && !filled("devPermissions")) out.push("मानक टेक्स्ट में {{DEV_PERMISSION}} है पर विकास अनुमति के खाने खाली हैं — पूरा पैरा डीड से छूट जाएगा।");
+    if (!tpl.includes("{{DEV_PERMISSION}}") && !filled("devPermissions") && !/अनुमति|स्वीकृति|अनुज्ञा/.test(tpl)) out.push("विकास अनुमति न मानक टेक्स्ट में है न खानों में — भरें।");
     // One maintenance clause is enough (the second is optional); it must appear only once in the deed.
-    if (!((p.maintenanceClauses as string[]) ?? []).some((x) => x.trim())) out.push("रखरखाव की शर्त भरें (एक काफ़ी है)।");
+    if (tpl.includes("{{MAINTENANCE}}") && !filled("maintenanceClauses")) out.push("मानक टेक्स्ट में {{MAINTENANCE}} है पर रखरखाव की शर्त खाली है — भरें (एक काफ़ी है)।");
+    if (!tpl.includes("{{MAINTENANCE}}") && !filled("maintenanceClauses") && !/रखरखाव|रख-रखाव|मेंटेनेंस/.test(tpl)) out.push("रखरखाव की शर्त भरें (एक काफ़ी है)।");
+    const left = templateLeftovers(tpl);
+    if (left.length) out.push(`मानक टेक्स्ट में किसी पुरानी बिक्री की बातें बची हैं: ${left.join(", ")}।`);
     const dup = contentChecks({ ...p, template: p.template ?? "" }, null).find((c) => c.code === "duplicateClause");
     if (dup) out.push(dup.message);
-    if (!(await this.prisma.colonyPlot.count({ where: { projectId: p.id } }))) out.push("प्लाट मास्टर (Excel/CSV) आयात करें।");
+    if (!(await this.prisma.colonyPlot.count({ where: { projectId: p.id } }))) out.push('प्लाट मास्टर भरें — Excel/CSV आयात, या सेटअप → "पुरानी डीड से Setup भरें" → बिके प्लाट आयात।');
     return out;
   }
 
@@ -124,8 +131,15 @@ export class ColonyService {
     return Promise.all(rows.map((r) => this.projectItem(r)));
   }
 
+  /** Saving a standard text that still carries one old sale's amount / UTR / cheque / DD / block line is refused. */
+  private checkTemplate(template: string) {
+    const left = templateLeftovers(template);
+    if (left.length) throw new BadRequestException(`मानक टेक्स्ट में किसी पुरानी बिक्री की बातें बची हैं: ${left.join(", ")} — इन्हें {{PLOT}} / {{PAYMENT}} से बदलें।`);
+  }
+
   async create(input: ColonyProjectInput): Promise<ColonyProject> {
     const t = this.manager();
+    this.checkTemplate(input.template);
     if (await this.prisma.colonyProject.findFirst({ where: { organizationId: t.organizationId, name: input.name } })) {
       throw new BadRequestException("इस नाम का प्रोजेक्ट पहले से है।");
     }
@@ -136,6 +150,7 @@ export class ColonyService {
 
   async update(id: string, input: ColonyProjectInput): Promise<ColonyProject> {
     const t = this.manager();
+    this.checkTemplate(input.template);
     await this.project(id, t.organizationId);
     const row = await this.prisma.colonyProject.update({ where: { id }, data: this.projectData(input) });
     return this.projectItem(row);
@@ -507,34 +522,38 @@ export class ColonyService {
   async setupSuggest(projectId: string, extra = ""): Promise<ColonySetupSuggestion> {
     const t = this.manager();
     const p = await this.project(projectId, t.organizationId);
-    const names = [...ColonyService.names(p), ...extra.split(",").map((x) => x.trim()).filter((x) => x.length >= 3)];
+    const base = [...ColonyService.names(p), ...extra.split(",").map((x) => x.trim()).filter((x) => x.length >= 3)];
+    // A Latin name also in Devanagari ("FLORA CITY" → "फ्लोरा सिटी", "फ्लोरा"): most deeds are written in Hindi.
+    const names = [...new Set([...base, ...base.flatMap((n) => devanagariForms(n))])];
     const generated = new Set(
       (await this.prisma.colonySale.findMany({ where: { projectId, deedId: { not: null } }, select: { deedId: true } })).map((x) => x.deedId),
     );
-    const byText = await this.prisma.deedTemplate.findMany({
-      where: { status: "active", OR: names.flatMap((n) => [{ title: { contains: n, mode: "insensitive" as const } }, { content: { contains: n, mode: "insensitive" as const } }]) },
-      select: { id: true, title: true, content: true, updatedAt: true },
-      orderBy: { updatedAt: "desc" },
-      take: 80,
-    });
-    // Titles spelt differently ("phlora siti"): trigram similarity, this office only.
-    let similar: { id: string }[] = [];
+    // Sale deeds only (never mortgage / agreement deeds); invisible joiners ignored; similar titles too ("phlora siti").
+    let ids: string[] = [];
     try {
-      similar = await this.prisma.$unscoped.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "DeedTemplate"
-        WHERE "organizationId" = ${t.organizationId} AND status = 'active' AND similarity(title, ${p.name}) > 0.25
-        ORDER BY "updatedAt" DESC LIMIT 40`;
+      const patterns = names.map((n) => `%${n.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      ids = (
+        await this.prisma.$unscoped.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "DeedTemplate"
+          WHERE "organizationId" = ${t.organizationId} AND status = 'active' AND type = 'sale-deed'
+            AND (translate(title || ' ' || content, chr(8203) || chr(8204) || chr(8205) || chr(65279), '') ILIKE ANY (${patterns})
+                 OR similarity(title, ${p.name}) > 0.25)
+          ORDER BY "createdAt" DESC LIMIT 400`
+      ).map((x) => x.id);
     } catch {
-      similar = [];
+      ids = (
+        await this.prisma.deedTemplate.findMany({
+          where: { status: "active", type: "sale-deed", OR: names.flatMap((n) => [{ title: { contains: n, mode: "insensitive" as const } }, { content: { contains: n, mode: "insensitive" as const } }]) },
+          select: { id: true },
+          orderBy: { createdAt: "desc" },
+          take: 400,
+        })
+      ).map((x) => x.id);
     }
-    const missing = similar.map((x) => x.id).filter((id) => !byText.some((d) => d.id === id));
-    const more = missing.length
-      ? await this.prisma.deedTemplate.findMany({ where: { id: { in: missing } }, select: { id: true, title: true, content: true, updatedAt: true } })
+    const rows = ids.length
+      ? await this.prisma.deedTemplate.findMany({ where: { id: { in: ids.filter((id) => !generated.has(id)) }, type: "sale-deed" }, select: { id: true, title: true, content: true, createdAt: true } })
       : [];
-    const deeds = [...byText, ...more]
-      .filter((d) => !generated.has(d.id))
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      .slice(0, 80);
+    const deeds = rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((d) => ({ id: d.id, title: d.title, content: d.content, date: d.createdAt }));
     const suggestion = buildSetupSuggestion(deeds, names);
     this.log.log(`setup suggestion for ${p.name}: ${deeds.length} deed(s), ${suggestion.plots.length} plot(s), ${suggestion.partners.length} partner variant(s)`);
     return suggestion;
