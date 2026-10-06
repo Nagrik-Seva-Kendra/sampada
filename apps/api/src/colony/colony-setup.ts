@@ -42,7 +42,7 @@ const BUYER_HEAD = /^\s*(क्रेता|क्रयकर्ता)\s*(प�
 const DEV_RE = /(अनुमति|स्वीकृति|अनुज्ञा|अनुज्ञप्ति|परमिशन|permission|नगर तथा ग्राम निवेश|टी\.?\s*एन\.?\s*सी\.?\s*पी|T\s*&\s*C\s*P|रेरा|RERA|कॉलोनी\s*सेल|विकास\s*अनुमति)/i;
 const DEV_REF_RE = /(क्रमांक|क्र\.|नं\.|No\.?|दिनांक)/i;
 const MAINT_RE = /(रखरखाव|रख-रखाव|रख रखाव|मेंटेनेंस|मेन्टेनेन्स|मेंटेनेन्स|अनुरक्षण|maintenance)/i;
-const PLOT_LINE = /^\s*(ब्लॉक|ब्लाक|block\b|प्ला(ट|ॅट)\s*(क्रमांक|नं|नंबर|क्र)|क्षेत्रफल|रकबा|(दुकान|शॉप|shop|यूनिट|इकाई)\s*(क्रमांक|नं|नंबर|no)?|(भूतल|प्रथम|द्वितीय|तृतीय|चतुर्थ|पंचम)\s*तल|तल\s*[-:]|मंजिल|मंज़िल|प्रकोष्ठ\s*\/?\s*(?:SHOP\s*)?(?:क्रमांक|नं)|फ्लोर\s*[-:]|एरिया\s*[-:])/i;
+const PLOT_LINE = /^\s*(कुल\s*(?:क्षेत्रफल|एरिया)|ब्लॉक|ब्लाक|block\b|प्ला(ट|ॅट)\s*(क्रमांक|नं|नंबर|क्र)|क्षेत्रफल|रकबा|(दुकान|शॉप|shop|यूनिट|इकाई)\s*(क्रमांक|नं|नंबर|no)?|(भूतल|प्रथम|द्वितीय|तृतीय|चतुर्थ|पंचम)\s*तल|तल\s*[-:]|मंजिल|मंज़िल|प्रकोष्ठ\s*\/?\s*(?:SHOP\s*)?(?:क्रमांक|नं)|फ्लोर\s*[-:]|एरिया\s*[-:])/i;
 const DIRS = "(पूर्व|पूरब|पश्चिम|पश्चिमी|उत्तर|दक्षिण)";
 const BOUNDARY_LINE = new RegExp(`^\\s*${DIRS}\\s*(में|दिशा में|दिशा)?\\s*[-:]`);
 const BOUNDARY_HEAD = /चतुःसीमा|चतुर्सीमा|चौहद्दी|चतुरसीमा/;
@@ -182,6 +182,61 @@ export function blockAndPlot(text: string, title = ""): { block: string; plotNo:
   return p ? { block: p.block ?? "", plotNo: p.plotNo } : null;
 }
 
+// ---------- shop units ----------
+const UNIT_PREFIX_FLOOR: Record<string, string> = { LG: "Lower Ground", UG: "Upper Ground", GF: "Ground", FF: "First", SF: "Second", TF: "Third" };
+const HUNDREDS_FLOOR = ["Ground", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth"];
+const UNIT_ITEM = "(?:(LG|UG|GF|FF|SF|TF)\\s*-?\\s*)?(\\d{1,4})(?:\\s*\\(\\s*([A-Z])\\s*\\)|\\s?([A-Z])(?![A-Za-z]))?(?:\\s*\\(\\s*([\\d.,]+)\\s*(?:वर्गफुट|वर्ग\\s*फुट|वर्गफीट|sq\\.?\\s*ft)\\s*\\))?";
+const UNIT_SEP = "\\s*(?:,|&|एवं|और|तथा|व(?=\\s))\\s*";
+
+export interface SoldUnitRef {
+  /** Stored / compared form: "FF-4", "SF-1A", "428A" -- or null when it cannot be read. */
+  unitNo: string | null;
+  /** As the deed writes it ("FF - 004", "228 (A)"). */
+  written: string;
+  /** The unit's own area from "(108.66 वर्गफुट)", else null. */
+  areaSqft: number | null;
+  /** From the prefix (GF/FF/SF/TF) or the hundreds digit of a 3-digit number. */
+  floor: string | null;
+}
+
+/**
+ * The unit(s) a shop deed sells, from its "प्रकोष्‍ठ/SHOP क्रमांक - …" line (else the
+ * title): several per deed ("TF - 16 (108.66 वर्गफुट) व TF - 17 (118.42 वर्गफुट)",
+ * "FF - 004 व 005"); a bare number after व / एवं / , inherits the previous prefix;
+ * leading zeros are dropped ("FF-004" = "FF-4"); a letter suffix is kept
+ * ("SF - 01 (A)" → SF-1A, "428 A" → 428A, "228 (A)" → 228A). A unit is either
+ * <GF|FF|SF|TF|LG|UG>-<n>[letter] or a 3-digit number [letter]; anything else is
+ * unreadable (unitNo null) -- fill by hand.
+ */
+export function soldUnitsOf(text: string, title = ""): SoldUnitRef[] {
+  const LABEL = /(?:प्रकोष्ठ\s*\/?\s*(?:SHOP)?|दुकान|शॉप\s*(?:SHOP)?|shop|यूनिट|unit)\s*(?:क्रमांक|नं\.?|नंबर|no\.?)\s*[-:]?\s*/i;
+  const lines = asciiDigits(cleanText(text)).split("\n");
+  let line = lines.find((l) => !BOUNDARY_LINE.test(l) && LABEL.test(l));
+  if (!line) {
+    const t = asciiDigits(cleanText(title));
+    if (!LABEL.test(t)) return [];
+    line = t;
+  }
+  const rest = line.slice(line.search(LABEL)).replace(LABEL, "").toUpperCase();
+  const list = rest.match(new RegExp(`^\\s*${UNIT_ITEM}(?:${UNIT_SEP}${UNIT_ITEM})*`))?.[0] ?? "";
+  const items = [...list.matchAll(new RegExp(UNIT_ITEM, "g"))].filter((m) => m[2]);
+  if (!items.length) return [{ unitNo: null, written: rest.trim().slice(0, 40) || "?", areaSqft: null, floor: null }];
+  let prefix: string | null = null;
+  return items.map((m, i) => {
+    const own = m[1] ?? null;
+    if (own) prefix = own;
+    const p = own ?? (i > 0 ? prefix : null);
+    const digits = m[2]!;
+    const n = String(Number(digits));
+    const suffix = m[3] ?? m[4] ?? "";
+    const written = m[0].replace(/\s*\(\s*[\d.,]+\s*(?:वर्गफुट|वर्ग\s*फुट|वर्गफीट|SQ\.?\s*FT)\s*\)\s*$/i, "").trim();
+    const area = m[5] ? Number(m[5].replace(/,/g, "")) : null;
+    if (p) return { unitNo: `${p}-${n}${suffix}`, written, areaSqft: area, floor: UNIT_PREFIX_FLOOR[p] ?? null };
+    if (/^\d{3}$/.test(n)) return { unitNo: `${n}${suffix}`, written, areaSqft: area, floor: HUNDREDS_FLOOR[Number(n[0])] ?? null };
+    return { unitNo: null, written, areaSqft: area, floor: null };
+  });
+}
+
 // ---------- seller ----------
 /** The block after a heading line, up to a blank line. */
 function blockAfter(content: string, head: RegExp): string {
@@ -285,7 +340,7 @@ export interface ColonyDeedFacts {
     floor: string | null;
   } | null;
   /** Every plot the deed sells (several: "05 व 06"); blockMissing when the deed does not say the block. */
-  plots: (NonNullable<ColonyDeedFacts["plot"]> & { blockMissing?: boolean; blockFrom: SoldPlotRef["blockFrom"] })[];
+  plots: (NonNullable<ColonyDeedFacts["plot"]> & { blockMissing?: boolean; blockFrom: SoldPlotRef["blockFrom"]; written?: string })[];
   /** The deed's own date ("dd/mm/yyyy" from the last "दिनांक"), null when none. */
   date: string | null;
 }
@@ -320,7 +375,7 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
     return m ? m[1]!.replace(/[।]\s*$/, "").trim() : null;
   };
   let plot: ColonyDeedFacts["plot"] = null;
-  const unitNo = kind === "SHOP" ? shop![3]!.replace(/\s+/g, "").toUpperCase() : bp?.plotNo;
+  const unitNo = kind === "SHOP" ? (soldUnitsOf(text, title)[0]?.unitNo ?? shop![3]!.replace(/\s+/g, "").toUpperCase()) : bp?.plotNo;
   // Several plots in one deed: size and boundaries are of the whole parcel, not of each plot.
   const multi = kind === "PLOT" && sold.plots.length > 1;
   if (unitNo) {
@@ -348,10 +403,21 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
   }
   const dates = [...ascii.matchAll(/(?:दिनांक|दि\.)\s*(\d{1,2})[./-](\d{1,2})[./-](\d{4})/g)];
   const last = dates.at(-1);
+  // Shop deeds: every unit on the "प्रकोष्ठ/SHOP क्रमांक" line, with its own area when the deed gives one.
+  const units = kind === "SHOP" ? soldUnitsOf(text, title) : [];
+  const deedFloor = ascii.match(/फ्लोर\s*[-:]\s*([A-Za-z][A-Za-z ]{1,20}?)\s*$/m)?.[1] ?? null;
   const plots: ColonyDeedFacts["plots"] = !plot
     ? []
     : kind === "SHOP"
-      ? [{ ...plot, blockFrom: null }]
+      ? units.map((u) => ({
+          ...plot!,
+          plotNo: u.unitNo ?? u.written,
+          written: u.written,
+          areaSqft: u.areaSqft ?? (units.length === 1 ? plot!.areaSqft : null),
+          floor: units.length === 1 && deedFloor ? deedFloor : (u.floor ?? plot!.floor),
+          blockMissing: u.unitNo == null,
+          blockFrom: null,
+        }))
       : sold.plots.map((x) => ({ ...plot!, block: x.block ?? "", plotNo: x.plotNo, blockMissing: x.block == null, blockFrom: x.blockFrom }));
   return {
     plots,
@@ -438,6 +504,7 @@ export function templateLeftovers(template: string): string[] {
   if (/(चैक|चेक)\s*(क्रमांक|नं|नंबर)/.test(t)) out.push("चैक क्रमांक");
   if (/डी\.\s*डी\./.test(t)) out.push("डी.डी.");
   if (/^\s*(ब्लॉक|ब्लाक)\s*[-:]/m.test(t)) out.push('"ब्लॉक -" वाली पंक्ति');
+  if (/^\s*(?:कुल\s*)?(?:क्षेत्रफल|एरिया|रकबा)\s*[-:]?\s*\d[\d.,]*\s*(?:वर्गफुट|वर्ग\s*फुट|वर्गफीट|वर्गमीटर|वर्ग\s*मीटर)/m.test(t)) out.push('क्षेत्रफल की पंक्ति (जैसे "कुल क्षेत्रफल 227.08 वर्गफुट …")');
   return out;
 }
 
@@ -666,9 +733,9 @@ export function buildSetupSuggestion(
     const { d, f } = x;
     if (MASTER_DEED.test(norm(d.title))) continue;
     for (const pl of f.plots) {
-      const { blockMissing, blockFrom: _bf, ...plotData } = pl;
+      const { blockMissing, blockFrom: _bf, written, ...plotData } = pl;
       if (blockMissing) {
-        unplaced.push({ plotNo: pl.plotNo, from: src(d) });
+        unplaced.push({ plotNo: written ?? pl.plotNo, from: src(d), reason: f.kind === "SHOP" ? "यूनिट नंबर पढ़ा नहीं जा सका" : "ब्लॉक नहीं मिला" });
         continue;
       }
       const k = `${pl.block}|${pl.plotNo}`;
@@ -679,11 +746,17 @@ export function buildSetupSuggestion(
         continue;
       }
       byKey.set(k, [me]);
-      plots.push({ ...plotData, from: src(d) });
+      plots.push({ ...plotData, ...(written && written.replace(/\s+/g, "") !== pl.plotNo ? { written } : {}), from: src(d) });
       if (boundaryNamesSelf(pl)) warnings.push(`"${d.title}" की चतुःसीमा में वही ${f.kind === "SHOP" ? "यूनिट" : "प्लाट"} नंबर (${pl.plotNo}) लिखा है जो बिक रहा है।`);
     }
   }
-  if (unplaced.length) warnings.push(`${unplaced.length} प्लाट का ब्लॉक डीड से पता नहीं चला — "ब्लॉक नहीं मिला" सूची में देखें और हाथ से भरें (ये आयात नहीं होंगे)।`);
+  if (unplaced.length) {
+    warnings.push(
+      kindValue === "SHOP"
+        ? `${unplaced.length} यूनिट का नंबर डीड से पढ़ा नहीं जा सका — "हाथ से भरें" सूची में देखें (ये आयात नहीं होंगे)।`
+        : `${unplaced.length} प्लाट का ब्लॉक डीड से पता नहीं चला — "ब्लॉक नहीं मिला" सूची में देखें और हाथ से भरें (ये आयात नहीं होंगे)।`,
+    );
+  }
   for (const [k, list] of byKey) {
     if (list.length < 2) continue;
     const [block, plotNo] = k.split("|");

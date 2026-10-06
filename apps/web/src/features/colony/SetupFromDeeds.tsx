@@ -151,7 +151,8 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
               </div>
               {s.unplaced.map((u) => (
                 <div key={`${u.from.deedId}|${u.plotNo}`} style={{ fontSize: 13, borderTop: "1px solid var(--border)", padding: "3px 0" }}>
-                  {t("coPlot")} {u.plotNo} · <Sources from={[u.from]} />
+                  {u.plotNo}
+                  {u.reason ? ` — ${u.reason}` : ""} · <Sources from={[u.from]} />
                 </div>
               ))}
             </>
@@ -166,6 +167,7 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
                   <div key={`${p.block}|${p.plotNo}`} style={{ borderTop: "1px solid var(--border)", padding: "3px 0" }}>
                     {p.block ? `${p.block}-` : ""}
                     {p.plotNo}
+                    {p.written ? ` (${p.written})` : ""}
                     {p.floor ? ` · ${p.floor}` : ""} · {p.areaSqft ?? "—"} वर्गफुट{p.corner ? ` · ${t("coCorner")}` : ""} · <span className="doc-sub">{p.from.title}</span>
                   </div>
                 ))}

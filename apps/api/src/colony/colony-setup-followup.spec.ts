@@ -44,7 +44,7 @@ describe("follow-up: blocks, several plots, neighbours, partners, corner", () =>
     expect(soldPlotsOf(prop("प्लाट क्रमांक - 37", null), "विक्रय पत्र E-37").plots[0]).toMatchObject({ block: "E", blockFrom: "title" });
     const s = buildSetupSuggestion([{ id: "x", title: "अनूप तिवारी एचयूएफ", content: prop("प्लाट क्रमांक - 37", null) }], ["FLORA CITY"]);
     expect(s.plots).toEqual([]);
-    expect(s.unplaced).toEqual([{ plotNo: "37", from: { deedId: "x", title: "अनूप तिवारी एचयूएफ" } }]);
+    expect(s.unplaced).toEqual([{ plotNo: "37", from: { deedId: "x", title: "अनूप तिवारी एचयूएफ" }, reason: "ब्लॉक नहीं मिला" }]);
     expect(s.warnings.join("\n")).toContain("ब्लॉक डीड से पता नहीं चला");
   });
 
