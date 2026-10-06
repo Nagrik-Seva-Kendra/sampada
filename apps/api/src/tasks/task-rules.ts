@@ -258,6 +258,40 @@ export function looksLikeTask(text: string, now: Date): boolean {
   return s.split(" ").filter((w) => w.length >= 2).length >= 4;
 }
 
+// ---------- questions, not tasks ----------
+const Q_WORDS = String.raw`क्या|kya|kyaa|कौन|कौनसा|kaun|kon|किस|किसने|किसको|किसका|किसकी|kis|kisne|kisko|kiska|kiski|कितने|कितना|कितनी|kitne|kitna|kitni|कब|kab|कहाँ|कहां|kahan|kaha|क्यों|kyon|kyu|kyun`;
+const QUESTION = new RegExp(String.raw`[?？]|(^|[\s,-])(${Q_WORDS})(?=$|[\s,?-])`, "i");
+const ATT_WORDS =
+  /अटेंडेंस|अटेंडन्स|attendance|attendence|atendance|हाज़िरी|हाजिरी|हाज़री|हाजरी|हाजिर|haziri|hazri|hajiri|hajri|present|absent|गैरहाज़िर|गैरहाजिर|छुट्टी|chhutti|chutti|leave|पंच|punch|(^|[\s/])(in|out|इन|आउट)(?=$|[\s/?,])/i;
+const CAME = /(^|\s)(आया|आए|आये|आई|aaya|aaye|aayi|aya|aye|ayi)(?=$|[\s?,])/i;
+const ASKS = /बताओ|बताइए|बताना|batao|bata|btao|list|लिस्ट|report|रिपोर्ट|बाकी|baki|baaki|नहीं|nahi|nhi|lagai|lagayi|lagaya|lagao|लगाई|लगाया|लगाओ/i;
+
+/**
+ * "अटेंडेंस किस-किस ने नहीं lagao", "कौन आया", "कौन छुट्टी पर है",
+ * "IN/OUT किसका बाकी": a question about today's attendance.
+ */
+export function isAttendanceQuestion(text: string): boolean {
+  const s = norm(text);
+  if (ATT_WORDS.test(s)) return QUESTION.test(s) || ASKS.test(s);
+  return CAME.test(s) && QUESTION.test(s);
+}
+
+/** A clear instruction to note work down: a due date, a mobile number or a "do this" verb. */
+const DO_WORDS =
+  /बनाना|बनानी|बनाने|बनाओ|banana|banani|banane|banao|करना|करनी|करने|करवाना|करवानी|करो|karna|karni|karne|karwana|karo|भेजना|भेजनी|भेजो|bhejna|bhejni|bhejo|याद|yaad|remind|लाना|लाओ|lana|lao|देना|देनी|dena|deni|लेना|लेनी|lena|leni|जाना|jana|मिलना|milna|बुलाना|bulana|दर्ज|darj|note/i;
+export function hasTaskInstruction(text: string, now: Date): boolean {
+  if (DO_WORDS.test(norm(text))) return true;
+  if (parseDue(text, now)) return true;
+  return /(?:\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}/.test(norm(text));
+}
+
+/** "किसका ... ?" with nothing to do in it: answer or ask, never a task by itself. */
+export const isQuestion = (text: string): boolean => QUESTION.test(norm(text));
+
+export const TASK_OR_QUESTION = "यह काम दर्ज करूँ या सवाल का जवाब चाहिए? नंबर लिखें:\n1. काम दर्ज करें\n2. सवाल था";
+export const QUESTION_HELP =
+  'अभी मैं इन सवालों के जवाब दे सकता हूँ: आज की हाज़िरी ("हाज़िरी किसने नहीं लगाई", "कौन छुट्टी पर है") और काम की सूची ("काम")। बाकी के लिए ऐप देखें।';
+
 /** Short help for the owner when a message is not a task. */
 export const OWNER_HELP =
   'नमस्ते! 🙏 नया काम लिखें या बोलें, जैसे: "रमेश शर्मा की रजिस्ट्री सोमवार तक"।\nसूची के लिए "काम", पूरा होने पर "3 हो गया", ग्राहक की तरह आज़माने के लिए "ग्राहक मोड" लिखें।';

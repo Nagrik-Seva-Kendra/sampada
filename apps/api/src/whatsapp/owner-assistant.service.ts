@@ -1,11 +1,27 @@
 import { randomUUID } from "node:crypto";
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
+import { AttendanceService } from "../attendance/attendance.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { SpeechService } from "../tasks/speech.service.js";
 import { TaskExtractorService } from "../tasks/task-extractor.service.js";
-import { confirmText, digestText, formatDueHi, isSmallTalk, looksLikeTask, OWNER_HELP, parseOwnerCommand, parseStaffDone, type TaskDraft } from "../tasks/task-rules.js";
+import {
+  confirmText,
+  digestText,
+  formatDueHi,
+  hasTaskInstruction,
+  isAttendanceQuestion,
+  isQuestion,
+  isSmallTalk,
+  looksLikeTask,
+  OWNER_HELP,
+  parseOwnerCommand,
+  parseStaffDone,
+  QUESTION_HELP,
+  TASK_OR_QUESTION,
+  type TaskDraft,
+} from "../tasks/task-rules.js";
 import { normalizePhone, TasksService } from "../tasks/tasks.service.js";
 import { alertNumbers } from "./wa-alerts.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
@@ -21,6 +37,7 @@ export const AUDIO_KEEP_MS = 7 * 24 * 3600 * 1000;
 type OwnerState =
   | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text" }
   | { mode: "task-outreach"; taskId: string }
+  | { mode: "task-or-question"; text: string; source: "voice" | "text" }
   | null;
 
 /** WA_OWNER_NUMBERS (default WA_ALERT_NUMBERS): messages from these are the owner's, not a customer's. */
@@ -52,6 +69,7 @@ export class OwnerAssistantService {
     private readonly speech: SpeechService,
     private readonly extractor: TaskExtractorService,
     private readonly outbox: WaOutboxService,
+    @Optional() private readonly attendance?: AttendanceService,
   ) {}
 
   isOwner(phone: string): boolean {
@@ -92,7 +110,20 @@ export class OwnerAssistantService {
     if (!text) return [];
 
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
-    const state = (c?.state as OwnerState) ?? null;
+    let state = (c?.state as OwnerState) ?? null;
+
+    // "हाज़िरी किसने नहीं लगाई": today's attendance, never a task (a waiting task stays waiting).
+    if (isAttendanceQuestion(text) && this.attendance && this.orgId) {
+      this.log.log(`owner question: attendance (${source})`);
+      const report = await this.attendance.todayReport(this.orgId, now);
+      return state?.mode === "task-confirm" ? [report, 'पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'] : [report];
+    }
+    if (state?.mode === "task-or-question") {
+      if (/^\s*(1|हाँ|हां|haan|han|yes|काम|kaam)\s*[.।]?\s*$/i.test(text)) return this.propose(phone, state.text, state.source, now);
+      await this.setState(phone, null);
+      if (/^\s*(2|सवाल|sawal|swal|नहीं|nahi|no)\s*[.।]?\s*$/i.test(text)) return [QUESTION_HELP];
+      state = null; // something new: handled as a fresh message
+    }
 
     if (state?.mode === "task-confirm") {
       if (YES.test(text)) return this.save(phone, state, now);
@@ -157,6 +188,12 @@ export class OwnerAssistantService {
     if (!looksLikeTask(text, now)) {
       this.log.log(`owner message: not a task (${source})`);
       return source === "voice" ? [`🎙️ सुना: "${text.slice(0, 200)}"`, OWNER_HELP] : [OWNER_HELP];
+    }
+    // A question ("किसका ... बाकी है?") without anything to do in it: ask, don't guess.
+    if (isQuestion(text) && !hasTaskInstruction(text, now)) {
+      this.log.log(`owner message: question or task? (${source})`);
+      await this.setState(phone, { mode: "task-or-question", text: text.slice(0, 4000), source });
+      return [TASK_OR_QUESTION];
     }
     return this.propose(phone, text, source, now);
   }
