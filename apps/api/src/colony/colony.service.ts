@@ -85,7 +85,10 @@ export class ColonyService {
     const partners = (p.partners as ColonyPartner[]) ?? [];
     if (!partners.length || partners.some((x) => x.text.includes("____"))) out.push("भागीदारों का पूरा विवरण भरें।");
     if (((p.devPermissions as string[]) ?? []).filter((x) => x.trim()).length < 2) out.push("दोनों विकास अनुमति के संदर्भ भरें।");
-    if (((p.maintenanceClauses as string[]) ?? []).filter((x) => x.trim()).length < 2) out.push("दोनों रखरखाव शर्तें भरें।");
+    // One maintenance clause is enough (the second is optional); it must appear only once in the deed.
+    if (!((p.maintenanceClauses as string[]) ?? []).some((x) => x.trim())) out.push("रखरखाव की शर्त भरें (एक काफ़ी है)।");
+    const dup = contentChecks({ ...p, template: p.template ?? "" }, null).find((c) => c.code === "duplicateClause");
+    if (dup) out.push(dup.message);
     if (!(await this.prisma.colonyPlot.count({ where: { projectId: p.id } }))) out.push("प्लाट मास्टर (Excel/CSV) आयात करें।");
     return out;
   }

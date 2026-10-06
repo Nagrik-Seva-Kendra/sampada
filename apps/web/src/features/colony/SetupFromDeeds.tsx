@@ -121,6 +121,11 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
           <div style={{ fontWeight: 700, marginTop: 8 }}>{t("coPartnerVariants")}</div>
           {s.partners.map((p) => row(p.label, p.text, p.from, () => apply({ partners: [...f.partners.filter((x) => x.key !== p.key), { key: p.key, label: p.label, text: p.text }].slice(0, 6) })))}
           {s.devPermissions.map((d, i) => row(`${t("coDevPermission", { n: i + 1 })}`, d.value, d.from, () => apply({ devPermissions: f.devPermissions.map((x, j) => (j === i ? d.value : x)) })))}
+          {s.maintenanceChoices.map((c, i) => (
+            <p key={`mc${i}`} className="doc-sub" style={{ margin: "6px 0 0", fontWeight: 700 }}>
+              ✅ {t("coMaintChosen", { chosen: c.chosenStart ?? "—", dropped: c.droppedStarts.join(" / ") })}
+            </p>
+          ))}
           {s.maintenanceClauses.map((d, i) => row(`${t("coMaintenance", { n: i + 1 })}`, d.value, d.from, () => apply({ maintenanceClauses: f.maintenanceClauses.map((x, j) => (j === i ? d.value : x)) })))}
           {s.guideline.map((g: ColonyGuidelineRow) =>
             row(`${t("coGuidelineRow")} #${g.sno}`, `${g.hi} (वार्ड ${g.ward}) — ₹${g.plotRes}/वर्गमीटर${g.multiCom ? `, व्यावसायिक बहुमंजिला ₹${g.multiCom}` : ""}`, undefined, () => apply({ guidelineSno: g.sno })),

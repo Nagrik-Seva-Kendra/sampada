@@ -260,6 +260,9 @@ const words = (s: string) => norm(s).split(/\s+/).filter((x) => x.length > 1).le
 /** Two long paragraphs saying (mostly) the same thing -- short clauses that merely share a word are not repeats. */
 export const sameClause = (a: string, b: string) => words(a) >= 8 && words(b) >= 8 && overlap(a, b) >= 0.6;
 
+/** The owner's final maintenance form: payable from the registry date. */
+export const FROM_REGISTRY = /(रजिस्ट्री|पंजीयन)\s*(?:दिनांक|तारीख|की तिथि|तिथि)\s*से/;
+
 /** "1 अप्रैल 2026 से" / "रजिस्ट्री दिनांक से" -- where a maintenance clause starts. */
 const startPhrase = (p: string) => norm(p).match(/([\d]{1,2}\s*[ऀ-ॿ]+\s*\d{4}\s*से|[\d./-]{8,10}\s*से|रजिस्ट्री\s*(?:दिनांक|तारीख|की तिथि)\s*से|पंजीयन\s*(?:दिनांक|तिथि)\s*से|कब्जा\s*(?:दिनांक|तिथि)?\s*से)/)?.[1] ?? null;
 
@@ -318,7 +321,7 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
   if (common.length) warnings.push(`हर डीड में साझा भागीदार: ${common.join(", ")}; दूसरे भागीदार के हिसाब से ${variants.size} रूप बने।`);
 
   const devPermissions = topValues(facts.flatMap(({ d, f }) => f.devPermissions.map((v) => ({ value: v, src: src(d) }))), 2);
-  const maint = topValues(facts.flatMap(({ d, f }) => f.maintenance.map((v) => ({ value: v, src: src(d) }))), 4);
+  const maint = topValues(facts.flatMap(({ d, f }) => f.maintenance.map((v) => ({ value: v, src: src(d) }))), 8);
   // Two maintenance paragraphs in one deed that say the same thing with different start dates: the deed repeated it.
   for (const { d, f } of facts) {
     for (let a = 0; a < f.maintenance.length; a++)
@@ -326,10 +329,31 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
         if (sameClause(f.maintenance[a]!, f.maintenance[b]!)) {
           const s1 = startPhrase(f.maintenance[a]!);
           const s2 = startPhrase(f.maintenance[b]!);
-          warnings.push(`"${d.title}" में रखरखाव वाला पैरा दो बार है${s1 && s2 && s1 !== s2 ? ` (एक में "${s1}", दूसरे में "${s2}")` : ""} — मानक टेक्स्ट में एक ही रखा गया।`);
+          const kept = [f.maintenance[a]!, f.maintenance[b]!].find((x) => FROM_REGISTRY.test(norm(x)));
+          warnings.push(
+            `"${d.title}" में रखरखाव वाला पैरा दो बार है${s1 && s2 && s1 !== s2 ? ` (एक में "${s1}", दूसरे में "${s2}")` : ""} — मानक टेक्स्ट में एक ही रखा गया${kept ? ` ("${startPhrase(kept)}" देय वाला)` : ""}।`,
+          );
         }
   }
-  const maintenanceClauses = maint.filter((m, i) => !maint.slice(0, i).some((x) => overlap(x.value, m.value) >= 0.7)).slice(0, 2);
+  // Forms of the same clause are one family; the owner's final form ("रजिस्ट्री दिनांक से देय")
+  // wins over older ones ("1 अप्रैल 2026 से"), else the most common form.
+  const families: ColonySourced<string>[][] = [];
+  for (const m of maint) {
+    const fam = families.find((f) => f.some((x) => sameClause(x.value, m.value) || overlap(x.value, m.value) >= 0.7));
+    if (fam) fam.push(m);
+    else families.push([m]);
+  }
+  const maintenanceChoices: ColonySetupSuggestion["maintenanceChoices"] = [];
+  const maintenanceClauses = families.slice(0, 2).map((fam) => {
+    const chosen = fam.find((x) => FROM_REGISTRY.test(norm(x.value))) ?? fam[0]!;
+    if (fam.length > 1) {
+      maintenanceChoices.push({
+        chosenStart: startPhrase(chosen.value),
+        droppedStarts: fam.filter((x) => x !== chosen).map((x) => startPhrase(x.value) ?? x.value.slice(0, 40)),
+      });
+    }
+    return chosen;
+  });
 
   // The standard text from the most recent deed that has all four main blocks.
   let template: ColonySetupSuggestion["template"] = null;
@@ -364,6 +388,7 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
     partners: [...variants.values()],
     devPermissions,
     maintenanceClauses,
+    maintenanceChoices,
     template,
     plots,
     guideline: guidelineCandidates(names),

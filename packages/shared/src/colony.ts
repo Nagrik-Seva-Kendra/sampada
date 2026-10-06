@@ -211,6 +211,11 @@ export interface ColonySetupSuggestion {
   partners: (ColonyPartner & { from: ColonySource[] })[];
   devPermissions: ColonySourced<string>[];
   maintenanceClauses: ColonySourced<string>[];
+  /**
+   * When the deeds carry the same maintenance clause in two forms, which one
+   * was kept: the owner's final form is "रजिस्ट्री दिनांक से देय".
+   */
+  maintenanceChoices: { chosenStart: string | null; droppedStarts: string[] }[];
   /** Standard text with the markers; no party Aadhaar / PAN / mobile. */
   template: (ColonySourced<string> & { found: string[]; missing: string[] }) | null;
   /** Sold plots / units read from the deeds (import as SOLD). */

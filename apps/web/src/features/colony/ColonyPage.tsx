@@ -462,6 +462,13 @@ function SaleDialog({ project, sale, onClose }: { project: ColonyProject; sale: 
   );
 }
 
+/** Which form of the maintenance clause this is: the final "from the registry date" or the old "from 1 April 2026". */
+function maintForm(text: string): StringKey | null {
+  if (/(रजिस्ट्री|पंजीयन)\s*(दिनांक|तारीख|तिथि|की तिथि)\s*से/.test(text)) return "coMaintFinal";
+  if (/1\s*अप्रैल\s*2026\s*से|01[./-]04[./-]2026\s*से/.test(text)) return "coMaintOld";
+  return null;
+}
+
 function SetupTab({ project }: { project: ColonyProject }) {
   const { t } = useWaT();
   const a = useColonyActions(project.id);
@@ -518,6 +525,8 @@ function SetupTab({ project }: { project: ColonyProject }) {
     [0, 1].map((i) => (
       <label key={`${k}${i}`} className="modal-field">
         {t(label, { n: i + 1 })}
+        {k === "maintenanceClauses" && i === 1 && ` (${t("coOptional")})`}
+        {k === "maintenanceClauses" && maintForm(f[k][i] ?? "") && <span className="doc-sub"> — {t(maintForm(f[k][i] ?? "")!)}</span>}
         <textarea rows={rows} value={f[k][i] ?? ""} onChange={(e) => setF({ ...f, [k]: f[k].map((x, j) => (j === i ? e.target.value : x)) })} />
       </label>
     ));

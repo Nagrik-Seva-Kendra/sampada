@@ -66,8 +66,10 @@ describe("Setup from old deeds", () => {
     expect(s.village?.value).toBe("डोंगरपुर");
     expect(s.surveyNos?.value).toBe("101, 102/1");
     expect(s.devPermissions.map((d) => d.value)).toEqual([expect.stringContaining("1234/2024"), expect.stringContaining("55/2024")]);
-    expect(s.maintenanceClauses[0]!.value).toBe(MAINT_A);
-    expect(s.warnings.join("\n")).toContain('रखरखाव वाला पैरा दो बार है (एक में "1 अप्रैल 2026 से", दूसरे में "रजिस्ट्री दिनांक से")');
+    // Owner's decision: one maintenance paragraph, the "रजिस्ट्री दिनांक से देय" form -- even though the old form is in more deeds.
+    expect(s.maintenanceClauses.map((m) => m.value)).toEqual([MAINT_B]);
+    expect(s.maintenanceChoices).toEqual([{ chosenStart: "रजिस्ट्री दिनांक से", droppedStarts: ["1 अप्रैल 2026 से"] }]);
+    expect(s.warnings.join("\n")).toContain('रखरखाव वाला पैरा दो बार है (एक में "1 अप्रैल 2026 से", दूसरे में "रजिस्ट्री दिनांक से") — मानक टेक्स्ट में एक ही रखा गया ("रजिस्ट्री दिनांक से" देय वाला)');
     expect(s.warnings.join("\n")).toContain("चतुःसीमा में वही प्लाट नंबर (20)");
     expect(s.warnings.join("\n")).toContain("साझा भागीदार: महेश गुप्ता");
     // Standard text: all markers, nothing personal.
@@ -181,6 +183,23 @@ describe("ColonyService: Setup suggestion, sold plots, company number on two pro
     await new ColonyService(prisma, ctx()).setCorner("p1", "pl1", true);
     expect(plots[0].corner).toBe(true);
     await expect(new ColonyService(prisma, ctx("EMPLOYEE")).setupSuggest("p1")).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("before going live: one maintenance clause is enough; the clause twice in the standard text blocks it", async () => {
+    const { prisma } = fake();
+    prisma.colonyPlot.count = async () => 5;
+    const svc: any = new ColonyService(prisma, ctx());
+    const p = {
+      id: "p1",
+      template: "{{PARTNER}} {{BUYER}} {{PLOT}} {{BOUNDARY}} {{PAYMENT}}\n\n{{MAINTENANCE}}",
+      partners: [{ key: "r", label: "रोहित", text: "मेसर्स ग्रीन इन्फ्राटेक द्वारा भागीदार श्री रोहित" }],
+      devPermissions: ["अनुमति 1", "अनुमति 2"],
+      maintenanceClauses: [MAINT_B, ""],
+    };
+    expect(await svc.readiness(p)).toEqual([]);
+    const twice = await svc.readiness({ ...p, template: `${p.template}\n\n${MAINT_A}` });
+    expect(twice.join(" ")).toContain("रखरखाव वाला पैरा डीड में दो बार आएगा");
+    expect(await svc.readiness({ ...p, maintenanceClauses: ["", ""] })).toContain("रखरखाव की शर्त भरें (एक काफ़ी है)।");
   });
 
   it("9713257891 on Flora City and Woods: the name picks the project, otherwise it asks; then remembers", async () => {

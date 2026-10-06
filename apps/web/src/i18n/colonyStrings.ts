@@ -128,6 +128,13 @@ export const colonyStrings = {
   coSoldPlots: { en: "Sold plots / units in the old deeds", hi: "पुरानी डीड में बिके प्लाट / यूनिट" },
   coImportSold: { en: "Import {n} as SOLD", hi: "{n} को 'बिका' के रूप में आयात करें" },
   coCorner: { en: "Corner", hi: "कॉर्नर" },
+  coOptional: { en: "optional", hi: "वैकल्पिक" },
+  coMaintChosen: {
+    en: 'Maintenance: the deeds had two forms — kept "{chosen}", dropped "{dropped}" (owner\'s final form: payable from the registry date).',
+    hi: 'रखरखाव: डीड में दो रूप मिले — "{chosen}" वाला चुना, "{dropped}" वाला छोड़ा (मालिक का अंतिम रूप: रजिस्ट्री दिनांक से देय)।',
+  },
+  coMaintFinal: { en: "✅ final form: payable from the registry date", hi: "✅ अंतिम रूप: रजिस्ट्री दिनांक से देय" },
+  coMaintOld: { en: "⚠️ old form (1 April 2026) — no longer used", hi: "⚠️ पुराना रूप (1 अप्रैल 2026 से) — अब उपयोग नहीं" },
   coFloor: { en: "Floor", hi: "तल" },
   coUnit: { en: "Unit", hi: "यूनिट" },
 } as const;
