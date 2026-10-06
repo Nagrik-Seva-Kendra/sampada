@@ -4,13 +4,14 @@
  * may mean, the next question, and the answer. Pure (guideline-chat.spec.ts).
  *
  * The value always comes from the office calculator (guideline/calculator.ts:
- * plotValue + stampDuty) and the rows from guidelineCandidates() of the colony
- * setup -- nothing is copied, so the bot and the office tools agree. Nothing
+ * plotValue + stampDuty) on the same guideline table (rows matched by Hindi
+ * or English name, by sound) -- nothing is copied, so the bot and the office
+ * tools agree. Nothing
  * is guessed: a missing locality / row / type / area / corner / boundary is asked, more
  * than one row is listed for the customer to choose.
  */
+import { soundKey, soundsIn } from "./name-sound.js";
 import { officeFeeFor, type WaOfficeFees } from "@sampada/shared";
-import { guidelineCandidates } from "../colony/colony-setup.js";
 import { GUIDELINE_DATA, type GuidelineEntry, plotAreaToSqm, plotValue, stampDuty } from "./guideline/calculator.js";
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
 import { inr, normDigits } from "./intake-rules.js";
@@ -129,24 +130,33 @@ export function guideFacts(text: string): GuideFacts {
 const wardOf = (e: { ward: string }) => (/^\d+$/.test(e.ward.trim()) ? String(Number(e.ward.trim())) : null);
 
 /**
- * Guideline rows for a locality (colony setup's guidelineCandidates), only the
- * ward's if one is given, and only rows containing every word of the name.
- * Never picks one itself.
+ * Guideline rows for a locality: every word of the name must be in the row's
+ * Hindi or English name -- as written, or by sound ("Scindia" = "SHINDIYA",
+ * "सिटी सेंटर" = "CITY CENTER", "gangavihar" = "GANGA VIHAR"); only the ward's
+ * rows if one is given. Never picks one itself.
  */
 export function guideRows(name: string, ward: string | null, data: GuidelineEntry[] = GUIDELINE_DATA): GuidelineEntry[] {
-  const scored = guidelineCandidates([name], data, data.length);
-  const bySno = new Map(data.map((e) => [e.sno, e]));
-  let rows = scored.map((r) => bySno.get(r.sno)!).filter(Boolean);
-  if (ward) rows = rows.filter((e) => wardOf(e) === ward);
-  if (!rows.length) return [];
-  // Every word of the name must be in the row ("VIHAR" alone is not "Ganga Vihar").
-  const tokens = words(normDigits(name).toUpperCase()).filter((t) => t.length >= 3);
-  if (!tokens.length) return [];
-  return rows.filter((e) => {
-    const hay = `${e.hi} ${e.en}`.toUpperCase();
-    return tokens.every((t) => hay.includes(t));
+  const all = words(normDigits(name).toUpperCase().replace(/\./g, ""));
+  const tokens = all.filter((t) => t.length >= 3);
+  // Initials ("DD नगर", "AB रोड") are compared as whole words.
+  const initials = all.filter((t) => t.length === 2 && /^[A-Z]+$/.test(t));
+  // Only common words ("नगर", "colony") say nothing about the place: not found rather than hundreds of rows.
+  if (![...tokens, ...initials].some((t) => !GENERIC.test(soundKey(t)))) return [];
+  const rows = data.filter((e) => {
+    if (ward && wardOf(e) !== ward) return false;
+    const hay = `${e.hi} ${e.en}`;
+    const up = hay.toUpperCase().replace(/\./g, "");
+    if (!initials.every((t) => new RegExp(`(^|[^A-Z])${t}([^A-Z]|$)`).test(up))) return false;
+    return !tokens.length || tokens.every((t) => up.includes(t)) || soundsIn(tokens.join(" "), hay);
   });
+  // The row named after the place first (its name starts with it, then the shorter names), then by number.
+  const first = soundKey(tokens[0] ?? initials[0] ?? "");
+  const leads = (e: GuidelineEntry) => (soundKey(words(e.en)[0] ?? "") === first || soundKey(words(e.hi)[0] ?? "") === first ? 0 : 1);
+  return rows.sort((a, b) => leads(a) - leads(b) || a.en.length - b.en.length || a.sno - b.sno);
 }
+
+/** Sound keys of words found in many place names: nagar, vihar, colony, road, puram ... */
+const GENERIC = /^(ngr|vr|klny|kln|rd|mrg|prm|pr|nklv|ntklv|prk|sktr|vrd|grm|mhl|bst|bjr|mrkt|ck|mn|st|nv|ky|kj|gl|tk|s|k|ks|r|p|pk|dr)$/;
 
 const rowLabel = (e: GuidelineEntry) => {
   const name = e.hi.length > 90 ? `${e.hi.slice(0, 90)}…` : e.hi;
