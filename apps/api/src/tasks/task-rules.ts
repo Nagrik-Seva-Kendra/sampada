@@ -264,6 +264,7 @@ const QUESTION = new RegExp(String.raw`[?？]|(^|[\s,-])(${Q_WORDS})(?=$|[\s,?-]
 const ATT_WORDS =
   /अटेंडेंस|अटेंडन्स|attendance|attendence|atendance|हाज़िरी|हाजिरी|हाज़री|हाजरी|हाजिर|haziri|hazri|hajiri|hajri|present|absent|गैरहाज़िर|गैरहाजिर|छुट्टी|chhutti|chutti|leave|पंच|punch|(^|[\s/])(in|out|इन|आउट)(?=$|[\s/?,])/i;
 const CAME = /(^|\s)(आया|आए|आये|आई|aaya|aaye|aayi|aya|aye|ayi)(?=$|[\s?,])/i;
+const MARKED = /lagai|lagayi|lagaai|lagaya|lagaye|lagao|लगाई|लगायी|लगाया|लगाए|लगाये|लगाओ/i;
 const ASKS = /बताओ|बताइए|बताना|batao|bata|btao|list|लिस्ट|report|रिपोर्ट|बाकी|baki|baaki|नहीं|nahi|nhi|lagai|lagayi|lagaya|lagao|लगाई|लगाया|लगाओ/i;
 
 /**
@@ -272,7 +273,13 @@ const ASKS = /बताओ|बताइए|बताना|batao|bata|btao|list|
  */
 export function isAttendanceQuestion(text: string): boolean {
   const s = norm(text);
-  if (ATT_WORDS.test(s)) return QUESTION.test(s) || ASKS.test(s);
+  if (ATT_WORDS.test(s)) {
+    if (QUESTION.test(s) || ASKS.test(s)) return true;
+    // "attendance", "हाज़िरी", "aaj ki attendance": a few words, nothing to do in them.
+    return s.split(" ").length <= 4 && !DO_WORDS.test(s);
+  }
+  // "kis kis ne nahi lagai": for the owner, "लगाना" with किस / कौन is the attendance.
+  if (MARKED.test(s) && QUESTION.test(s)) return true;
   return CAME.test(s) && QUESTION.test(s);
 }
 
