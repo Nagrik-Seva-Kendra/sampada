@@ -221,9 +221,9 @@ export interface ColonySetupSuggestion {
   /** Standard text with the markers; no party Aadhaar / PAN / mobile. */
   template: (ColonySourced<string> & { found: string[]; missing: string[] }) | null;
   /** Sold plots / units read from the deeds (import as SOLD). */
-  plots: (Omit<ColonyPlot, "id" | "status"> & { from: ColonySource })[];
+  plots: (Omit<ColonyPlot, "id" | "status"> & { from: ColonySource; /** As the deed writes it when it differs ("FF - 004"). */ written?: string })[];
   /** Plots whose block the deed does not say (no block line, title or neighbours): fill by hand, never imported. */
-  unplaced: { plotNo: string; from: ColonySource }[];
+  unplaced: { plotNo: string; from: ColonySource; reason?: string }[];
   /** Guideline rows matching the project name (office calculator). */
   guideline: ColonyGuidelineRow[];
   /** Things the owner should look at (Hindi). */
