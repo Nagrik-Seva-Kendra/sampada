@@ -228,6 +228,14 @@ function TaskDialog({
             ✕
           </button>
         </div>
+        {task?.documentName && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 10px" }}>
+            <TaskFileButton id={task.id} name={task.documentName} />
+            <span className="doc-sub" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {task.documentName}
+            </span>
+          </div>
+        )}
         <form className="modal-form" onSubmit={onSubmit}>
           <label className="modal-field">
             {t("tkFieldTitle")}
