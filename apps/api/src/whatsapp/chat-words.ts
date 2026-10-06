@@ -55,3 +55,6 @@ export const CLOSED_TEXT = 'ठीक है, बंद कर दिया। �
 export const THANKS_TEXT = '🙏 धन्यवाद! कुछ और चाहिए तो "मेनू" लिखें।';
 /** Sent once instead of the whole menu again (the menu was just sent). */
 export const MENU_NUDGE = "कृपया ऊपर के मेनू में से नंबर लिखें — 1 ड्राफ्ट, 2 खर्च / गाइडलाइन, 3 मेरा काम, 4 स्टाफ से बात।";
+
+/** The owner's alerts show the whole number ("+91 78984 75646") so it can be called or saved; logs keep it masked. */
+export const fullPhone = (p: string): string => (/^91\d{10}$/.test(p) ? `+91 ${p.slice(2, 7)} ${p.slice(7)}` : `+${p}`);

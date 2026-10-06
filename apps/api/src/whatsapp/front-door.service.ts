@@ -12,7 +12,7 @@ import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
-import { CLOSED_TEXT, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
+import { CLOSED_TEXT, fullPhone, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
 import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
 import { normDigits } from "./intake-rules.js";
 import { requestLink } from "./wa-alerts.js";
@@ -157,7 +157,7 @@ export class FrontDoorService {
     this.log.warn(`${maskPhone(phone)} blocked (${reason})`);
     await this.outbox
       .alertOwners(
-        `⚠️ WhatsApp नंबर ${maskPhone(phone)} को बॉट ने ${reason === "spam" ? "बहुत ज़्यादा संदेशों (स्पैम)" : "अपशब्दों"} के कारण रोक दिया है। ` +
+        `⚠️ WhatsApp नंबर ${fullPhone(phone)} को बॉट ने ${reason === "spam" ? "बहुत ज़्यादा संदेशों (स्पैम)" : "अपशब्दों"} के कारण रोक दिया है। ` +
           `ज़रूरत हो तो खोलें: ${requestLink("").replace(/\/$/, "")}`,
       )
       .catch(() => undefined);
@@ -231,7 +231,7 @@ export class FrontDoorService {
     }
     // "नामांतरण करवाना है": not a draft the bot makes -- staff calls back.
     if (!state && /नामांतरण|नामान्तरण|namantaran|mutation|दाखिल\s*खारिज|dakhil\s*kharij/i.test(text)) {
-      await this.outbox.alertOwners(`📞 WhatsApp नंबर ${maskPhone(phone)} नामांतरण के लिए बात करना चाहते हैं (+${phone}).`).catch(() => undefined);
+      await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} नामांतरण के लिए बात करना चाहते हैं।`).catch(() => undefined);
       return { replies: ["नामांतरण के लिए हमारा स्टाफ जल्द आपसे संपर्क करेगा। चाहें तो रजिस्ट्री की PDF या फ़ोटो यहीं भेज दें। कार्यालय फ़ोन: 78984 75648"], route: "mutation" };
     }
     if (state?.mode === "call" || state?.mode === "callback") {
@@ -282,7 +282,7 @@ export class FrontDoorService {
         break;
       case 4:
         await this.setContact(phone, { state: null });
-        await this.outbox.alertOwners(`📞 WhatsApp नंबर ${maskPhone(phone)} स्टाफ से बात करना चाहते हैं (+${phone}).`).catch(() => undefined);
+        await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} स्टाफ से बात करना चाहते हैं।`).catch(() => undefined);
         return { replies: [STAFF_REPLY], route: "staff" };
     }
 

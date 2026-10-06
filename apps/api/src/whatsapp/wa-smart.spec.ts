@@ -184,7 +184,8 @@ describe("front door", () => {
     for (let i = 0; i < SPAM_PER_MINUTE - 1; i++) expect(await w.front.allowInbound(PHONE, t + i * 1000)).toBe(true);
     expect(await w.front.allowInbound(PHONE, t + 20_000)).toBe(false);
     expect(w.contacts.get(PHONE)).toMatchObject({ blockReason: "spam" });
-    expect(w.outbox.alertOwners).toHaveBeenCalledWith(expect.stringContaining("********5648"));
+    // The owner's alert shows the whole number (to call / save it); only logs mask it.
+    expect(w.outbox.alertOwners).toHaveBeenCalledWith(expect.stringContaining("+91 97557 25648"));
     expect(await w.front.allowInbound(PHONE, t + 5 * 60_000)).toBe(false);
     // slow, normal use is never blocked
     for (let i = 0; i < 30; i++) expect(await w.front.allowInbound("919000000001", t + i * 5000)).toBe(true);
