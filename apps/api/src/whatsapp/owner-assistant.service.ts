@@ -3,6 +3,7 @@ import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
 import { AttendanceService } from "../attendance/attendance.service.js";
+import { buildInfoText } from "../common/build-info.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { SpeechService } from "../tasks/speech.service.js";
 import { TaskExtractorService } from "../tasks/task-extractor.service.js";
@@ -169,6 +170,8 @@ export class OwnerAssistantService {
           return ['🧪 ग्राहक मोड 30 मिनट के लिए चालू। अब आप ग्राहक की तरह बॉट आज़मा सकते हैं। वापस आने के लिए "ओनर मोड" लिखें।'];
         case "ownerMode":
           return this.endCustomerTest(phone);
+        case "version":
+          return [buildInfoText()];
         case "list":
           return [await this.listText(now)];
         case "broadcast":

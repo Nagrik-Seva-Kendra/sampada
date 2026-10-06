@@ -91,7 +91,8 @@ export type OwnerCommand =
   | { kind: "list" }
   | { kind: "broadcast"; message: string }
   | { kind: "customerMode" }
-  | { kind: "ownerMode" };
+  | { kind: "ownerMode" }
+  | { kind: "version" };
 
 const END = "(?=$|[\\s.!।,])";
 const DONE_WORDS = new RegExp(`^(हो गया|हो गयी|हो गई|ho gaya|ho gya|hogaya|ho gayi|done|पूरा हो गया|पूरा|complete|completed)${END}`);
@@ -101,6 +102,7 @@ export function parseOwnerCommand(text: string, now: Date): OwnerCommand | null 
   const s = norm(text);
   if (/^(ग्राहक|grahak|customer)\s*(मोड|mode)$/.test(s)) return { kind: "customerMode" };
   if (/^(ओनर|owner|मालिक|malik)\s*(मोड|mode)$/.test(s)) return { kind: "ownerMode" };
+  if (/^(version|वर्ज़न|वर्जन|वर्शन)$/.test(s)) return { kind: "version" };
   if (/^(काम|kaam|list|सूची|aaj ke kaam|आज के काम|kaam batao|काम बताओ|tasks?)$/.test(s)) return { kind: "list" };
   const b = text.trim().match(/^(सब|सभी|sab|sabhi|all)\s*(staff|स्टाफ)\s*(को|ko|to)?\s*[:：\-–]?\s*([\s\S]+)$/i);
   if (b && b[4]!.trim().length >= 2) return { kind: "broadcast", message: b[4]!.trim() };
