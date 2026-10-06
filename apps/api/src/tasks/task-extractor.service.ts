@@ -5,7 +5,9 @@ import { normalizePhone } from "./tasks.service.js";
 const SYSTEM = `You turn one note from the owner of a property-document writing office in Gwalior (India) into a to-do item.
 The note is Hindi, Hinglish or English, often speech-to-text. Return ONLY one JSON object:
 {"title": short Hindi title, "partyName": string|null, "workType": one of "sale","mortgage","agreement","patta","mutation","copy","call","collect_papers","other",
- "place": property/place or null, "dueText": the exact words of the deadline as said (e.g. "सोमवार तक", "kal shaam") or null, "note": anything else useful or null}
+ "place": property/place or null, "dueText": the exact words of the deadline as said (e.g. "सोमवार तक", "kal shaam") or null, "note": anything else useful or null,
+ "assignee": if the note gives the work to a staff member ("मुस्कान मैडम को असाइन कर दो", "Rohit ko de do", "राहुल से करवाओ"), that person's name exactly as written in the STAFF list (match Hindi/English spellings), else the name as said if not in the list, else null}
+The party is the customer, never the staff member the work is given to.
 workType: विक्रय पत्र/बैनामा/registry=sale, बंधक/mortgage=mortgage, अनुबंध/एग्रीमेंट=agreement, पट्टा=patta, नामांतरण=mutation, नकल=copy, फोन/कॉल करना=call, कागज़ लेना=collect_papers.
 If unsure of a field, use null. Never invent names, places or dates. A phone number appears as [MOBILE].`;
 
@@ -14,9 +16,11 @@ If unsure of a field, use null. Never invent names, places or dates. A phone num
 export class TaskExtractorService {
   private readonly log = new Logger("TaskExtractor");
 
-  async extract(text: string, now = new Date()): Promise<TaskDraft | null> {
+  /** `staffNames`: the Team list (names only, no numbers) so the model can name the assignee. */
+  async extract(text: string, now = new Date(), staffNames: string[] = []): Promise<TaskDraft | null> {
     const phone = findMobile(text);
-    const forModel = text.replace(/(\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}/g, "[MOBILE]").slice(0, 2000);
+    const note = text.replace(/(\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}/g, "[MOBILE]").slice(0, 2000);
+    const forModel = staffNames.length ? `STAFF: ${staffNames.slice(0, 50).join(", ")}\nNOTE: ${note}` : note;
     let raw: unknown = null;
     if (process.env.ANTHROPIC_API_KEY) {
       try {

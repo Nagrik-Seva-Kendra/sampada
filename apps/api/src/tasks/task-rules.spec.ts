@@ -61,6 +61,7 @@ describe("model extraction mapping", () => {
       place: "सिटी सेंटर",
       dueAt: istDate(2026, 9, 5, 18).toISOString(),
       note: null,
+      assigneeName: null,
     });
     expect(mapTaskExtract({ partyName: "सीता", workType: "teleport", partyPhone: "12345" }, NOW)).toMatchObject({
       title: "सीता — अन्य",
