@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { mapTaskExtract, type TaskDraft } from "./task-rules.js";
+import { mapTaskExtract, type TaskDraft, workTypeFromWords } from "./task-rules.js";
 import { normalizePhone } from "./tasks.service.js";
 
 const SYSTEM = `You turn one note from the owner of a property-document writing office in Gwalior (India) into a to-do item.
@@ -46,6 +46,10 @@ export class TaskExtractorService {
     // Model off/unusable: the note itself becomes the title.
     const draft = mapTaskExtract(raw ?? { title: text.slice(0, 200), dueText: text }, now);
     if (draft && phone) draft.partyPhone = phone;
+    // The owner's own words name the document → that, not the model's guess ("वसीयत" was read as sale).
+    // A call / collecting papers stays that (a phone call about a बैनामा is still a call).
+    const said = workTypeFromWords(text);
+    if (draft && said && draft.workType !== "call" && draft.workType !== "collect_papers") draft.workType = said;
     return draft;
   }
 }
