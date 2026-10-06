@@ -242,7 +242,7 @@ export class FrontDoorService {
     // "नामांतरण करवाना है": not a draft the bot makes -- staff calls back.
     if (!state && /नामांतरण|नामान्तरण|namantaran|mutation|दाखिल\s*खारिज|dakhil\s*kharij|नाम\s*(कब\s*)?चढ़|naam\s*(kab\s*)?chadh/i.test(text)) {
       await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} नामांतरण के लिए बात करना चाहते हैं।`).catch(() => undefined);
-      return { replies: ["नामांतरण के लिए हमारा स्टाफ जल्द आपसे संपर्क करेगा। चाहें तो रजिस्ट्री की PDF या फ़ोटो यहीं भेज दें। कार्यालय फ़ोन: 78984 75648"], route: "mutation" };
+      return { replies: ["नामांतरण के लिए हमारा स्टाफ जल्द आपसे संपर्क करेगा। नामांतरण में लगभग 30-40 दिन लगते हैं। चाहें तो रजिस्ट्री की PDF या फ़ोटो यहीं भेज दें। कार्यालय फ़ोन: 78984 75648"], route: "mutation" };
     }
     // "गवाह कितने लगेंगे", "वसीयत बनवानी है", "geo tag kya hai": answered here; an open
     // question (cost / guideline) stays open. Amounts and bare numbers go on to the flows.

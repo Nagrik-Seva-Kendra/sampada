@@ -42,6 +42,11 @@ describe("everyday questions, in every kind of writing", () => {
     ["kya aap online registry karte ho", "slot"],
     ["kya registry cancel ho sakti hai", "registry-cancel"],
     ["khasra kahan milega", "khasra"],
+    ["seller mar gaya to kya hoga", "seller-died"],
+    ["विक्रेता की मृत्यु हो गई है अब रजिस्ट्री कैसे होगी", "seller-died"],
+    ["papa ki death ho gayi, makan bechna hai", "seller-died"],
+    ["malik guzar gaye plot kaise bikega", "seller-died"],
+    ["The seller passed away, what now?", "seller-died"],
   ])("%s → %s", (text, topic) => {
     expect(faqAnswer(text)?.topic).toBe(topic);
   });
@@ -52,6 +57,17 @@ describe("everyday questions, in every kind of writing", () => {
       expect(faqAnswer(text)).toBeNull();
     },
   );
+
+  it("a dead seller: heirs' mutation first (about 30-40 days), then the registry; the owner is told", () => {
+    const a = faqAnswer("seller mar gaya to kya hoga")!;
+    expect(a.text).toContain("कानूनी वारिसों");
+    expect(a.text).toContain("नामांतरण");
+    expect(a.text).toContain("30-40 दिन");
+    expect(a.text).toContain("उसके बाद वारिस मिलकर रजिस्ट्री");
+    expect(a.alert).toBeTruthy();
+    expect(faqAnswer("market rate kya hai")?.topic).not.toBe("seller-died");
+    expect(faqAnswer("deadline kab hai")?.topic).not.toBe("seller-died");
+  });
 
   it("the woman / rate answers use the estimate's own figures", () => {
     const w = faqAnswer("mahila ke naam chhoot")!.text;
@@ -105,7 +121,7 @@ describe("conversations", () => {
   it("a question the bot cannot answer goes to the owner (numbers masked), once per 5 minutes; the customer is told", async () => {
     const w = world();
     const t0 = new Date("2026-10-06T06:00:00Z");
-    const r = await w.say("seller mar gaya to ab kya hoga, aadhar 1234 5678 9012", t0);
+    const r = await w.say("NRI buyer kaise sign karega, aadhar 1234 5678 9012", t0);
     expect(r).toMatchObject({ replies: [QUESTION_FORWARDED], route: "question-forwarded", force: true });
     const alert = String((w.outbox.alertOwners.mock.calls as unknown[][])[0]![0]);
     expect(alert).toContain("+91 90000 08888");

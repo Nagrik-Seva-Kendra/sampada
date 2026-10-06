@@ -50,6 +50,9 @@ export const GUIDE_MEANING_TEXT =
   "गाइडलाइन (कलेक्टर दर) सरकार की तय की हुई संपत्ति की न्यूनतम कीमत है। स्टाम्प शुल्क गाइडलाइन मूल्य और रजिस्ट्री राशि में से जो ज़्यादा हो, उस पर लगता है।";
 const GUIDE_MEANING = /(गाइडलाइन|guideline|guide line|कलेक्टर दर|collector rate).*(क्या (होती|होता|है)|kya (hoti|hota|hai)|matlab|मतलब|what is|meaning)|(what is|meaning of).*(guideline|collector rate)/i;
 const KHASRA = /खसरा|khasra|खतौनी|khatauni|नक्शा|naksha|bhulekh|भूलेख|b-?1\b|बी-?1/i;
+const OWNER_WORD = /seller|सेलर|विक्रेता|बेचने वाल|bechne wal|मालिक|malik|owner|जिसके नाम|jiske naam|पिता|पापा|papa|father|dada|दादा|दादी|dadi|नाना|nana|ससुर|sasur|पति|pati|husband|मां|माँ|maa|mother/i;
+const DIED = /\bmar (gay|gaye|gai|chuk)|मर (गय|गए|गई|चुक)|मृत्यु|mrityu|death|देहांत|dehant|dehaant|निधन|nidhan|expire|guzar|गुज़र|गुजर|स्वर्गवास|swargwas|nahi rahe|नहीं रहे|died|passed away|\bdead\b/i;
+const PROPERTY_WORD = /registry|registri|रजिस्ट्री|property|प्रॉपर्टी|संपत्ति|sampatti|zameen|jameen|ज़मीन|जमीन|makan|मकान|plot|प्लॉट|ghar|घर|naam|नाम|बेच|bech/i;
 const KHASRA_ASK = /कहाँ|कहां|kahan|kaha\b|kaise|कैसे|milega|मिलेगा|milegi|मिलेगी|nikal|निकल|where|how/i;
 
 const otherDoc = (s: string): string | null => {
@@ -62,6 +65,17 @@ export function faqAnswer(text: string): FaqAnswer | null {
   const s = clean(text);
   if (s.length < 3) return null;
 
+  // The owner's answer: a dead seller's heirs first get the mutation (about 30-40 days), then they sign the registry.
+  if (DIED.test(s) && (OWNER_WORD.test(s) || PROPERTY_WORD.test(s))) {
+    return {
+      topic: "seller-died",
+      text:
+        "संपत्ति के मालिक (विक्रेता) का देहांत हो गया हो तो पहले उनके कानूनी वारिसों (legal heirs) के नाम नामांतरण (mutation) करवाना होगा। " +
+        "नामांतरण में लगभग 30-40 दिन लगते हैं। उसके बाद वारिस मिलकर रजिस्ट्री कर सकेंगे।\n" +
+        "मृत्यु प्रमाण पत्र और पुरानी रजिस्ट्री की फ़ोटो यहीं भेज दें — हमारा स्टाफ नामांतरण में मदद करेगा। कार्यालय फ़ोन: 78984 75648",
+      alert: "विक्रेता के देहांत के बाद नामांतरण / रजिस्ट्री के लिए पूछ रहे हैं",
+    };
+  }
   const doc = otherDoc(s);
   if (doc) {
     return {
