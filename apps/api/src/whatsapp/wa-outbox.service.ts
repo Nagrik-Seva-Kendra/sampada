@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { alertNumbers } from "./wa-alerts.js";
 import { readMedia } from "./wa-media.js";
 import { requestRef } from "./wa-requests.mapper.js";
-import { graphBase, maskPhone } from "./webhook-diagnostics.js";
+import { cleanMetaText, graphBase, maskPhone, metaErrorOf, recordOutbound } from "./webhook-diagnostics.js";
 
 /** WhatsApp's customer-service window: free-form text only within 24h of the customer's last message. */
 export const WINDOW_MS = 24 * 3600 * 1000;
@@ -253,9 +253,14 @@ export class WaOutboxService {
         body: JSON.stringify({ messaging_product: "whatsapp", to, ...message }),
       });
       const json: any = await res.json().catch(() => null);
-      if (!res.ok) return { ok: false, wamid: null, code: json?.error?.code ?? res.status };
+      if (!res.ok) {
+        recordOutbound(String(message.type ?? "message"), false, metaErrorOf(json, res.status));
+        return { ok: false, wamid: null, code: json?.error?.code ?? res.status };
+      }
+      recordOutbound(String(message.type ?? "message"), true, null);
       return { ok: true, wamid: json?.messages?.[0]?.id ?? null, code: null };
-    } catch {
+    } catch (e: any) {
+      recordOutbound(String(message.type ?? "message"), false, { http: null, code: null, subcode: null, type: null, title: null, message: cleanMetaText(e?.message) ?? "network error", details: null });
       return { ok: false, wamid: null, code: null };
     }
   }

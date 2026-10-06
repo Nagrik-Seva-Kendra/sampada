@@ -23,6 +23,16 @@ async function bootstrap() {
   // importing "express" directly -- a direct "express" import isn't resolvable
   // by this project's esbuild bundle step (nest build && bundle.mjs), since
   // nothing else here imports it as a real (non-type-only) module.
+  // Every request to the WhatsApp webhook leaves one line, even one that fails before the
+  // controller (body parsing, size): "did Meta call us at all?" is always answerable.
+  app.use((req: { method: string; originalUrl?: string; url: string; headers: Record<string, unknown> }, _res: unknown, next: () => void) => {
+    const path = (req.originalUrl ?? req.url).split("?")[0];
+    if (path === "/api/v1/whatsapp/webhook") {
+      // eslint-disable-next-line no-console
+      console.log(`[WhatsappWebhook] ${req.method} received len=${String(req.headers["content-length"] ?? "-")} signed=${!!req.headers["x-hub-signature-256"]}`);
+    }
+    next();
+  });
   app.useBodyParser("json", { limit: "15mb" });
   app.useGlobalFilters(new ZodExceptionFilter(app.getHttpAdapter()));
   app.setGlobalPrefix("api/v1");

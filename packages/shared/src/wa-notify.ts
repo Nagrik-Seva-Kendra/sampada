@@ -225,3 +225,67 @@ export interface WaTemplateSubmitResult {
   problems?: WaTemplateProblem[];
   result: string;
 }
+
+// ---------- WhatsApp connection check (OWNER) ----------
+export interface WaMetaError {
+  http: number | null;
+  code: number | null;
+  subcode: number | null;
+  type: string | null;
+  title: string | null;
+  message: string | null;
+  details: string | null;
+}
+
+/** One Graph read: its data (safe fields only) or Meta's error. */
+export interface WaGraphRead<T = Record<string, unknown>> {
+  ok: boolean;
+  data: T | null;
+  error: WaMetaError | null;
+}
+
+export interface WaConnectionReport {
+  checkedAt: string;
+  config: {
+    graphVersion: string;
+    phoneNumberId: string | null;
+    wabaId: string | null;
+    appId: string | null;
+    accessToken: boolean;
+    appSecret: boolean;
+    verifyToken: boolean;
+    ownerNumbers: number;
+  };
+  /** GET /{WABA}/subscribed_apps: every app that receives this WABA's webhooks. */
+  subscribedApps: WaGraphRead<{ apps: { id: string; name: string | null; link: string | null; overrideCallback: string | null; isThisApp: boolean }[] }>;
+  phone: WaGraphRead;
+  waba: WaGraphRead;
+  /** GET /{APP_ID}/subscriptions (app token): where this app's webhooks go and which fields. */
+  appSubscriptions: WaGraphRead<{ object: string; callbackUrl: string | null; active: boolean; fields: string[] }[]>;
+  webhook: {
+    startedAt: string;
+    posts: number;
+    invalidSignature: number;
+    lastPostAt: string | null;
+    lastSignatureOk: boolean | null;
+    lastInvalidReason: string | null;
+    lastSummary: string | null;
+    lastMessageAt: string | null;
+    lastVerifyAt: string | null;
+    lastVerifyOk: boolean | null;
+    /** Last WhatsApp message stored (survives restarts). */
+    lastStoredMessageAt: string | null;
+  };
+  lastOutbound: { at: string; ok: boolean; kind: string; error: WaMetaError | null } | null;
+  /** Plain-language findings (Hindi), most important first. */
+  findings: string[];
+}
+
+export interface WaTestMessageResult {
+  ok: boolean;
+  /** Masked recipient. */
+  to: string | null;
+  wamid: string | null;
+  error: WaMetaError | null;
+  hint: string | null;
+}
