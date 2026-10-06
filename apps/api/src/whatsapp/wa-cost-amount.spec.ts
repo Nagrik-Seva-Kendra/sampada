@@ -1,3 +1,4 @@
+import { MENU_NUDGE } from "./chat-words.js";
 import { Logger } from "@nestjs/common";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@sampada/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -190,7 +191,9 @@ describe("webhook: cost answers are never swallowed; silent batches say why", ()
     expect(sent.filter((t) => t === COST_AMOUNT_UNCLEAR)).toHaveLength(2);
     await say("hello");
     await say("hello");
-    expect(logged).toContain("text batch from ********5648 messages=1 route=greeting replies=0 silent=repeat-suppressed");
+    // The menu again within 10 minutes: a short nudge instead of silence.
+    expect(sent.at(-1)).toBe(MENU_NUDGE);
+    expect(logged).toContain("text batch from ********5648 messages=1 route=greeting replies=1");
     await say(CUSTOMER_TEXT.replace("33,47,000", "34,00,000"));
     // From the menu (no cost question open): amount + guideline words → straight to the guideline questions.
     expect(sent.at(-1)).toContain("क्र. 845");

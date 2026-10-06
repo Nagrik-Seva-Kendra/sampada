@@ -1,3 +1,4 @@
+import { MENU_NUDGE } from "./chat-words.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -247,7 +248,11 @@ export class WhatsappService {
         route = r.route;
         // Generic answers are never repeated within 10 minutes; answers to the customer's own question always go.
         replies = r.force ? r.replies : await this.front.withoutRepeats(from, r.replies);
-        if (r.replies.length && !replies.length) silent = "repeat-suppressed";
+        if (r.replies.length && !replies.length) {
+          silent = "repeat-suppressed";
+          // The menu again within 10 minutes: one short nudge instead of silence.
+          if (r.route === "menu" || r.route === "greeting" || r.route === "gibberish") replies = await this.front.withoutRepeats(from, [MENU_NUDGE]);
+        }
       }
     }
     await this.send(from, replies);

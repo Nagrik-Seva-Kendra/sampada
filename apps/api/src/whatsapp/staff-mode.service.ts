@@ -5,11 +5,28 @@ import { istDay, parseLeaveDecision, parseLeaveText, punchTextHi } from "../atte
 import { PrismaService } from "../prisma/prisma.service.js";
 import { OwnerAssistantService } from "./owner-assistant.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
+import { isClose, isThanks } from "./chat-words.js";
 
 const STATE_MS = 15 * 60 * 1000;
 const IN_RE = /^(हाज़िरी|हाजिरी|हाज़री|हाजरी|haziri|hazri|haajiri|in|आ गया|आ गई|पहुँच गया|पहुंच गया|पहुँच गई|पहुंच गई|aa gaya|aa gayi|pahunch gaya|pahunch gayi)[\s!.।]*$/i;
 const OUT_RE = /^(out|जा रहा हूँ|जा रहा हूं|जा रही हूँ|जा रही हूं|जा रहा|जा रही|ja raha|ja rahi|ja raha hu|ja rahi hu|निकल रहा|निकल रही|nikal raha|nikal rahi)[\s!.।]*$/i;
-const FIELD_RE = /^(बाहर\s*का\s*काम|बाहर\s*काम|bahar\s*ka\s*ka+m|field(\s*work)?)\s*[:：\-–]?\s*([\s\S]*)$/i;
+// One capture group only: the reason ("field work" must not add a second one -- it broke "बाहर का काम: कारण").
+const FIELD_RE = /^(?:बाहर\s*का\s*काम|बाहर\s*काम|bahar\s*ka\s*ka+m|field(?:\s*work)?)\s*[:：\-–]?\s*([\s\S]*)$/i;
+const ATT_WORD = /हाज़िरी|हाजिरी|हाज़री|हाजरी|haziri|hazri|haajiri|hajri|attendance|atendance|attendence|अटेंडेंस|punch|पंच/i;
+const IN_WORDS = /पहुँच|पहुंच|pahunch|pahuch|आ गया|आ गई|aa gaya|aa gayi|reach|arrived/i;
+const OUT_WORDS = /\bout\b|आउट|जा रहा|जा रही|ja raha|ja rahi|jaa raha|निकल|nikal|घर जा|ghar ja|chutti ho gayi|छुट्टी हो गई|leaving/i;
+const MY_TASKS = /(मेरे|मेरा|mere|mera|आज|aaj|कौन\s*सा|kaun\s*sa|क्या|kya|बाकी|baki|pending|बताओ|batao|दिखाओ|dikhao|list|लिस्ट).*(काम|kaam|task)|(काम|kaam|task).*(बताओ|batao|दिखाओ|dikhao|बाकी|baki|pending|list|लिस्ट|क्या है|kya hai)/i;
+
+/** "IN", "office pahunch gaya", "attendance laga do" → IN; "OUT", "ghar ja raha hu" → OUT; leave words → null. */
+export function punchKindOf(text: string): "IN" | "OUT" | null {
+  const s = text.trim();
+  if (LEAVE_WORD.test(s) && !/हो गई|ho gayi/i.test(s)) return null;
+  if (IN_RE.test(s)) return "IN";
+  if (OUT_RE.test(s)) return "OUT";
+  if (OUT_WORDS.test(s)) return "OUT";
+  if (IN_WORDS.test(s) || ATT_WORD.test(s)) return "IN";
+  return null;
+}
 const LEAVE_WORD = /छुट्टी|छुटी|अवकाश|chhutti|chutti|chhuti|leave/i;
 
 export const STAFF_HELP =
@@ -87,6 +104,12 @@ export class StaffModeService {
     if (msg.type !== "text") return [STAFF_HELP.replace("{name}", me.firstName)];
     const text = (msg.text ?? "").trim();
     if (!text) return [];
+    // "cancel" while a location is awaited; "ok" / "thanks": short answers, not the whole help.
+    if (isClose(text)) {
+      if (state) await this.setState(phone, null);
+      return ["ठीक है।"];
+    }
+    if (isThanks(text)) return ["🙏"];
 
     const done = await this.owner.handleStaff(phone, text);
     if (done) return done;
@@ -94,20 +117,22 @@ export class StaffModeService {
     // Too far from the office for IN: this text is the field-work reason (same location).
     if (state?.mode === "att-field-reason" && !IN_RE.test(text) && !OUT_RE.test(text) && !LEAVE_WORD.test(text)) {
       await this.setState(phone, null);
-      const reason = (FIELD_RE.exec(text)?.[2] || text).trim().slice(0, 500);
+      const reason = (FIELD_RE.exec(text)?.[1] || text).trim().slice(0, 500);
       const r = await this.attendance.punch(this.orgId, me.userId, { kind: "FIELD", lat: state.lat, lng: state.lng, reason }, "whatsapp", now);
       this.log.log(`staff punch FIELD via whatsapp: ${r.code}`);
       return [punchTextHi({ ...r, at: now })];
     }
 
-    if (IN_RE.test(text)) return this.askLocation(phone, "IN", undefined, now);
-    if (OUT_RE.test(text)) return this.askLocation(phone, "OUT", undefined, now);
     const field = FIELD_RE.exec(text);
     if (field) {
-      const reason = field[2]!.trim();
+      const reason = (field[1] ?? "").trim();
       if (!reason) return ['बाहर के काम का कारण साथ लिखें — जैसे "बाहर का काम: तहसील में नामांतरण"।'];
       return this.askLocation(phone, "FIELD", reason.slice(0, 500), now);
     }
+    const kind = punchKindOf(text);
+    if (kind) return this.askLocation(phone, kind, undefined, now);
+    // "मेरे काम", "aaj kya kaam hai": their own open tasks.
+    if (MY_TASKS.test(text)) return [await this.owner.tasksTextFor(me.userId, me.firstName)];
     if (LEAVE_WORD.test(text)) {
       const leave = parseLeaveText(text, istDay(now));
       if (!leave) return ['छुट्टी की तारीख समझ नहीं आई। ऐसे लिखें: "छुट्टी 12/10 से 13/10 बीमारी: कारण" या "कल छुट्टी: कारण"।'];

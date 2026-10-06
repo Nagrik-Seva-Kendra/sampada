@@ -12,6 +12,7 @@ import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
+import { CLOSED_TEXT, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
 import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
 import { normDigits } from "./intake-rules.js";
 import { requestLink } from "./wa-alerts.js";
@@ -66,7 +67,11 @@ export type FrontRoute =
   | "callback"
   | "followup"
   | "copy"
-  | "satisfaction";
+  | "satisfaction"
+  | "closed"
+  | "thanks"
+  | "office-info"
+  | "mutation";
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
@@ -211,6 +216,23 @@ export class FrontDoorService {
     if (fu) {
       await this.setContact(phone, { state: null });
       return { replies: fu, route: "followup" };
+    }
+    // "cancel" / "रद्द करो" / "बंद": closes whatever question is open -- never the whole menu again.
+    if (isClose(text)) {
+      if (state) await this.setContact(phone, { state: null });
+      return { replies: [CLOSED_TEXT], route: "closed", force: true };
+    }
+    // "ok" / "thanks" / "👍" with nothing open: a short thanks.
+    if (!state && isThanks(text)) return { replies: [THANKS_TEXT], route: "thanks" };
+    // "ऑफिस कब खुलता है" / "address bhejo".
+    if (isOfficeInfo(text)) {
+      const s = await this.attendance.settings(this.orgId).catch(() => null);
+      if (s) return { replies: [officeInfoText(s, "78984 75648")], route: "office-info", force: true };
+    }
+    // "नामांतरण करवाना है": not a draft the bot makes -- staff calls back.
+    if (!state && /नामांतरण|नामान्तरण|namantaran|mutation|दाखिल\s*खारिज|dakhil\s*kharij/i.test(text)) {
+      await this.outbox.alertOwners(`📞 WhatsApp नंबर ${maskPhone(phone)} नामांतरण के लिए बात करना चाहते हैं (+${phone}).`).catch(() => undefined);
+      return { replies: ["नामांतरण के लिए हमारा स्टाफ जल्द आपसे संपर्क करेगा। चाहें तो रजिस्ट्री की PDF या फ़ोटो यहीं भेज दें। कार्यालय फ़ोन: 78984 75648"], route: "mutation" };
     }
     if (state?.mode === "call" || state?.mode === "callback") {
       // A bare menu number other than the call answers, or words of another option, leave the call questions.
@@ -444,6 +466,8 @@ export class FrontDoorService {
   /** Guideline words with something to work on (a locality, ward or area). */
   private wantsGuideline(text: string): boolean {
     if (!asksGuideline(text)) return false;
+    // "guideline kya hai" names the guideline itself: ask for the locality.
+    if (/guide\s*line|गाइड\s*लाइन/i.test(text)) return true;
     const f = guideFacts(text);
     return !!(f.name || f.ward || f.area);
   }
