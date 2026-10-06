@@ -22,7 +22,7 @@ import { flatValue, GUIDELINE_DATA, type GuidelineEntry, plotAreaToSqm, plotValu
 const DEV = "०१२३४५६७८९";
 export const asciiDigits = (s: string) => s.replace(/[०-९]/g, (d) => String(DEV.indexOf(d)));
 /** Zero-width joiners / non-joiners, BOM and NBSP out; CRLF → LF. */
-export const cleanText = (s: string) => s.replace(/[​-‍﻿]/g, "").replace(/ /g, " ").replace(/\r/g, "");
+export const cleanText = (s: string) => s.replace(/[​-‍﻿]/g, "").replace(/ /g, " ").replace(/\r/g, "").replace(/ाॅ|ॅा/g, "ॉ");
 const norm = (s: string) => asciiDigits(cleanText(s)).replace(/[़]/g, "").replace(/\s+/g, " ").trim();
 const key = (s: string) => norm(s).replace(/[\s,।.:;()-]/g, "").toLowerCase();
 
@@ -42,17 +42,30 @@ const BUYER_HEAD = /^\s*(क्रेता|क्रयकर्ता)\s*(प�
 const DEV_RE = /(अनुमति|स्वीकृति|अनुज्ञा|अनुज्ञप्ति|परमिशन|permission|नगर तथा ग्राम निवेश|टी\.?\s*एन\.?\s*सी\.?\s*पी|T\s*&\s*C\s*P|रेरा|RERA|कॉलोनी\s*सेल|विकास\s*अनुमति)/i;
 const DEV_REF_RE = /(क्रमांक|क्र\.|नं\.|No\.?|दिनांक)/i;
 const MAINT_RE = /(रखरखाव|रख-रखाव|रख रखाव|मेंटेनेंस|मेन्टेनेन्स|मेंटेनेन्स|अनुरक्षण|maintenance)/i;
-const PLOT_LINE = /^\s*(ब्लॉक|ब्लाक|block\b|प्ला(ट|ॅट)\s*(क्रमांक|नं|नंबर|क्र)|क्षेत्रफल|रकबा|(दुकान|शॉप|shop|यूनिट|इकाई)\s*(क्रमांक|नं|नंबर|no)?|(भूतल|प्रथम|द्वितीय|तृतीय|चतुर्थ|पंचम)\s*तल|तल\s*[-:]|मंजिल|मंज़िल)/i;
+const PLOT_LINE = /^\s*(ब्लॉक|ब्लाक|block\b|प्ला(ट|ॅट)\s*(क्रमांक|नं|नंबर|क्र)|क्षेत्रफल|रकबा|(दुकान|शॉप|shop|यूनिट|इकाई)\s*(क्रमांक|नं|नंबर|no)?|(भूतल|प्रथम|द्वितीय|तृतीय|चतुर्थ|पंचम)\s*तल|तल\s*[-:]|मंजिल|मंज़िल|प्रकोष्ठ\s*\/?\s*(?:SHOP\s*)?(?:क्रमांक|नं)|फ्लोर\s*[-:]|एरिया\s*[-:])/i;
 const DIRS = "(पूर्व|पूरब|पश्चिम|पश्चिमी|उत्तर|दक्षिण)";
 const BOUNDARY_LINE = new RegExp(`^\\s*${DIRS}\\s*(में|दिशा में|दिशा)?\\s*[-:]`);
 const BOUNDARY_HEAD = /चतुःसीमा|चतुर्सीमा|चौहद्दी|चतुरसीमा/;
 const AMOUNT = /(\d[\d,]*\s*\/-|(?:रु|रू)\.?\s*\d|रूपये\s*\d|\d[\d,]{4,}\s*(?:रूपये|रुपये))/;
-const PAY_WORD = /(बिक्रीधन|बिक्री\s*धन|विक्रय\s*धन|प्रतिफल|विक्रय\s*(?:मूल्य|राशि))/;
+const PAY_WORD = /(कीमत|बिक्रीधन|बिक्री\s*धन|विक्रय\s*धन|प्रतिफल|विक्रय\s*(?:मूल्य|राशि))/;
 const PAY_MODE = /(UTR|चैक|चेक|cheque|आर\.?\s*टी\.?\s*जी\.?\s*एस|RTGS|NEFT|एन\.?\s*ई\.?\s*एफ\.?\s*टी|डी\.?\s*डी\.?|डिमांड\s*ड्राफ्ट|नकद|यू\.?\s*पी\.?\s*आई|UPI|बैंक\s*ड्राफ्ट)/i;
 const PAY_END = /लेना\s*देना\s*(कुछ\s*)?शेष\s*नहीं|लेन\s*देन\s*शेष\s*नहीं/;
 const SHOP_RE = /(दुकान|शॉप|shop|यूनिट|unit|कार्यालय\s*क्रमांक|ऑफिस\s*क्रमांक)\s*(क्रमांक|नं\.?|नंबर|no\.?)?\s*[-:]?\s*([A-Z]{0,3}\s*-?\s*\d{1,4}[A-Z]?)/i;
 const FLOOR_RE = /(भूतल|ग्राउंड\s*फ्लोर|प्रथम\s*तल|द्वितीय\s*तल|तृतीय\s*तल|चतुर्थ\s*तल|पंचम\s*तल|(?:ground|first|second|third|fourth|fifth)\s*floor|लोअर\s*ग्राउंड|अपर\s*ग्राउंड)/i;
 const MASTER_DEED = /मास्टर\s*डीड|master\s*deed/i;
+
+const MAINT_SUBJECT = /(रख-?\s*रखाव|रख\s*रखाव|रखरखाव|मेन्टेनेन्स\s*राशि|मेंटेनेंस\s*राशि|प्रति\s*वर्ग\s*फुट|प्रतिवर्गफुट|सोसायटी|अनुरक्षण)/;
+const POSSESSION = /(रिक्त|मूर्तिमंत|कब्जा\s*(?:सौंप|दे\s*दिया|प्राप्त)|आधिपत्य)/;
+/**
+ * A paragraph whose subject is maintenance (रख-रखाव / मेन्टेनेन्स राशि / प्रतिवर्गफुट /
+ * सोसायटी) -- not the possession paragraph that merely mentions "मेन्टेनेन्स चार्ज".
+ */
+function isMaintPara(p: string): boolean {
+  if (!MAINT_RE.test(p)) return false;
+  const first = p.split("।")[0] ?? p;
+  if (MAINT_RE.test(first) && !POSSESSION.test(first)) return true;
+  return MAINT_SUBJECT.test(p) && !POSSESSION.test(p);
+}
 
 const lineIsPayment = (l: string) => (PAY_WORD.test(l) && AMOUNT.test(l)) || (PAY_MODE.test(l) && AMOUNT.test(l)) || PAY_END.test(l);
 const hasPlotLines = (p: string) => p.split("\n").some((l) => PLOT_LINE.test(l) || BOUNDARY_LINE.test(l));
@@ -63,7 +76,7 @@ export function paraKind(p: string): ParaKind {
   if (SELLER_HEAD.test(p)) return "seller";
   if (BUYER_HEAD.test(p)) return "buyer";
   if (hasPlotLines(p)) return "other";
-  if (MAINT_RE.test(p)) return "maint";
+  if (isMaintPara(p)) return "maint";
   if (DEV_RE.test(p) && DEV_REF_RE.test(p) && !PAY_WORD.test(p)) return "dev";
   if (p.split("\n").every((l) => !l.trim() || lineIsPayment(l)) || (PAY_WORD.test(p) && AMOUNT.test(p))) return "payment";
   return "other";
@@ -87,16 +100,86 @@ export function normalizeBlock(raw: string): string {
 /** "04" → "4", "12a" → "12A". */
 const normPlotNo = (n: string) => n.replace(/^0+(?=\d)/, "").toUpperCase();
 
-/** Block + plot no. of a deed: "प्लाट क्रमांक - E-28" / "बी-04", else the "ब्लॉक - ई" line, else the title ("C-22", "LIG-12"). */
+const BLOCK_WORD = "(?:ब्लॉक|ब्लाक|ब्लोक|ब्लौक|block)";
+const LIST_SEP = "\\s*(?:,|&|एवं|और|तथा|व(?=\\s))\\s*";
+const ITEM = `(?:${BLOCK_TOKEN}\\s*[-/]?\\s*)?(\\d{1,4}[A-Za-z]?)(?!\\d)`;
+
+/** The block named in one line: "ब्‍लॉक - डी" → "D" (whole-token match). */
+function blockInLine(l: string): string | null {
+  const m = l.match(new RegExp(`${BLOCK_WORD}\\s*(?:नं\\.?|क्रमांक|क्र\\.?)?\\s*[-:]?\\s*${BLOCK_TOKEN}`, "i"));
+  return m ? normalizeBlock(m[1]!) : null;
+}
+
+/** Most common block among "डी-18" / "ए-4" style neighbours in the boundary lines (a tie is no answer). */
+function neighbourBlock(lines: string[]): string | null {
+  const count = new Map<string, number>();
+  for (const l of lines.filter((x) => BOUNDARY_LINE.test(x))) {
+    for (const m of l.matchAll(new RegExp(`${BLOCK_TOKEN}\\s*[-/]\\s*\\d{1,4}`, "gi"))) {
+      const b = normalizeBlock(m[1]!);
+      count.set(b, (count.get(b) ?? 0) + 1);
+    }
+  }
+  const best = [...count.entries()].sort((a, b) => b[1] - a[1]);
+  return best.length && (best.length === 1 || best[0]![1] > best[1]![1]) ? best[0]![0] : null;
+}
+
+export interface SoldPlotRef {
+  /** null: the deed does not say -- the owner fills it by hand. */
+  block: string | null;
+  plotNo: string;
+  /** Where the block came from. */
+  blockFrom: "plotNo" | "blockLine" | "title" | "neighbours" | null;
+}
+
+/**
+ * The plot(s) a deed sells. The sold plot line is the first "प्लाट क्रमांक …"
+ * line that is not a boundary line; it may list several ("05 व 06",
+ * "9, 10 व 11", "E-43 (कॉर्नर)"). Block per plot: its own prefix ("बी-04"),
+ * else the "ब्लॉक - डी" line next to it (never one elsewhere in the deed),
+ * else the title, else the most common block of the neighbours in the
+ * boundary lines, else unknown (null).
+ */
+export function soldPlotsOf(text: string, title = ""): { plots: SoldPlotRef[]; corner: boolean } {
+  const lines = asciiDigits(cleanText(text)).split("\n");
+  const PLOT_LABEL = /प्ला(?:ट|ॅट)\s*(?:क्रमांक|नं\.?|नंबर|क्र\.?|न\.)/;
+  const idx = lines.findIndex((l) => !BOUNDARY_LINE.test(l) && PLOT_LABEL.test(l));
+  const titleA = asciiDigits(cleanText(title));
+  const titleM = titleA.match(new RegExp(`${BLOCK_TOKEN}\\s*[-/]\\s*(\\d{1,4})(?!\\d)`, "i"));
+  if (idx < 0) {
+    if (!titleM) return { plots: [], corner: false };
+    return { plots: [{ block: normalizeBlock(titleM[1]!), plotNo: normPlotNo(titleM[2]!), blockFrom: "title" }], corner: false };
+  }
+  const rest = lines[idx]!.replace(/^.*?प्ला(?:ट|ॅट)\s*(?:क्रमांक|नं\.?|नंबर|क्र\.?|न\.)\s*[-:]?\s*/, "");
+  const corner = /कॉर्नर|कोर्नर|corner/i.test(rest);
+  const listText = rest.replace(/\([^)]*\)/g, " ").replace(/कॉर्नर|कोर्नर|corner/gi, " ");
+  const list = listText.match(new RegExp(`^\\s*${ITEM}(?:${LIST_SEP}${ITEM})*`, "i"))?.[0] ?? "";
+  const items = [...list.matchAll(new RegExp(ITEM, "gi"))].map((m) => ({ own: m[1] ? normalizeBlock(m[1]) : null, no: normPlotNo(m[2]!) }));
+  if (!items.length) return { plots: [], corner };
+  let near: string | null = null;
+  for (const k of [idx, idx + 1, idx + 2, idx + 3, idx - 1, idx - 2, idx + 4, idx + 5]) {
+    const l = lines[k];
+    if (l === undefined || BOUNDARY_LINE.test(l)) continue;
+    near = blockInLine(l);
+    if (near) break;
+  }
+  const fromTitle = titleM ? normalizeBlock(titleM[1]!) : blockInLine(titleA);
+  const fromNeighbours = neighbourBlock(lines.slice(idx, idx + 25));
+  return {
+    corner,
+    plots: items.map(({ own, no }): SoldPlotRef => {
+      if (own) return { block: own, plotNo: no, blockFrom: "plotNo" };
+      if (near) return { block: near, plotNo: no, blockFrom: "blockLine" };
+      if (fromTitle) return { block: fromTitle, plotNo: no, blockFrom: "title" };
+      if (fromNeighbours) return { block: fromNeighbours, plotNo: no, blockFrom: "neighbours" };
+      return { block: null, plotNo: no, blockFrom: null };
+    }),
+  };
+}
+
+/** Block + plot no. of the (first) plot a deed sells. */
 export function blockAndPlot(text: string, title = ""): { block: string; plotNo: string } | null {
-  const t = asciiDigits(cleanText(text));
-  const pm = t.match(new RegExp(`प्ला(?:ट|ॅट)\\s*(?:क्रमांक|नं\\.?|नंबर|क्र\\.?|न\\.)\\s*[-:]?\\s*(?:${BLOCK_TOKEN}\\s*[-/]?\\s*)?(\\d{1,4}[A-Za-z]?)(?!\\d)`, "i"));
-  const titleM = asciiDigits(cleanText(title)).match(new RegExp(`${BLOCK_TOKEN}\\s*[-/]\\s*(\\d{1,4})(?!\\d)`, "i"));
-  const plotNo = pm?.[2] ?? titleM?.[2];
-  if (!plotNo) return null;
-  const line = t.match(new RegExp(`(?:ब्लॉक|ब्लाक|block)\\s*(?:नं\\.?|क्रमांक|क्र\\.?)?\\s*[-:]?\\s*${BLOCK_TOKEN}`, "i"));
-  const raw = pm?.[1] ?? line?.[1] ?? titleM?.[1] ?? "";
-  return { block: raw ? normalizeBlock(raw) : "", plotNo: normPlotNo(plotNo) };
+  const p = soldPlotsOf(text, title).plots[0];
+  return p ? { block: p.block ?? "", plotNo: p.plotNo } : null;
 }
 
 // ---------- seller ----------
@@ -110,15 +193,34 @@ function blockAfter(content: string, head: RegExp): string {
   return out.join("\n");
 }
 
-/** Names after "भागीदार" / "पार्टनर" / "एवं श्री" in the seller block. */
+/** The seller part of a deed: from the "विक्रेता पक्ष" line up to the "क्रेता पक्ष" line (it may span paragraphs). */
+export function sellerSection(content: string): string {
+  const lines = cleanText(content).split("\n");
+  const i = lines.findIndex((l) => SELLER_HEAD.test(l));
+  if (i < 0) return "";
+  const j = lines.findIndex((l, k) => k > i && BUYER_HEAD.test(l));
+  return lines.slice(i, j > i ? j : Math.min(lines.length, i + 12)).join("\n").trim();
+}
+
+/** One partner whatever the spelling: first name + first letter of the surname ("आयुष लाधा" = "आयुष लढ्ढा"). */
+export function personKey(name: string): string {
+  const w = cleanText(name).replace(/[़्]/g, "").trim().split(/\s+/);
+  return `${w[0] ?? ""}|${(w[1] ?? "").charAt(0)}`;
+}
+
+/** The partners named in the seller part: every "श्री/श्रीमती NAME" that is not someone's father / husband. */
 export function partnerNames(seller: string): string[] {
   const out: string[] = [];
   const s = cleanText(seller).split(/\n/).join(" ");
-  const NAME = "([\\u0900-\\u097F]{2,}(?:\\s[\\u0900-\\u097F]{2,}){0,2})";
-  const STOP = /\s(पुत्र|पुत्री|पत्नी|पति|उम्र|आयु|निवासी|नि\.|जाति|व्यवसाय|पता|द्वारा|एवं|तथा|और|आधार|पैन)(\s|$).*/;
-  for (const m of s.matchAll(new RegExp(`(?:भागीदार(?:गण)?|पार्टनर(?:गण)?|एवं|तथा|व)\\s*[:-]?\\s*(?:श्री|श्रीमती)\\s*${NAME}`, "g"))) {
+  // Name words never run into the next "श्री" / relation / joining word.
+  const W = "(?!श्री|श्रीमती|पुत्र|पुत्री|पत्नी|पति|एवं|तथा|और|निवासी|द्वारा)[\\u0900-\\u097F]{2,}";
+  const NAME = `(${W}(?:\\s${W}){0,2})`;
+  const STOP = /\s(पुत्र|पुत्री|पत्नी|पति|उम्र|आयु|निवासी|नि\.|जाति|व्यवसाय|पता|द्वारा|एवं|तथा|और|आधार|पैन|पार्टनर|भागीदार)(\s|$).*/;
+  for (const m of s.matchAll(new RegExp(`(?:श्री|श्रीमती)\\s*${NAME}`, "g"))) {
+    const before = s.slice(Math.max(0, m.index! - 14), m.index!);
+    if (/(पुत्र|पुत्री|पत्नी|पति|पिता|स्व\.?|स्वर्गीय|वल्द|आत्मज|आत्मजा)\s*$/.test(before)) continue;
     const name = m[1]!.replace(STOP, "").trim();
-    if (name && !out.includes(name)) out.push(name);
+    if (name && !out.some((x) => personKey(x) === personKey(name))) out.push(name);
   }
   return out;
 }
@@ -127,7 +229,11 @@ export function partnerNames(seller: string): string[] {
 export function developerOf(sellerBody: string): string | null {
   const s = cleanText(sellerBody).replace(/\s+/g, " ");
   const m = s.match(/((?:मैसर्स|मेसर्स|मै\.|मे\.|M\/s\.?|मेसर्स\.)\s*.+?)(?=\s+द्वारा|\s+के\s+(?:भागीदार|पार्टनर)|\s+(?:भागीदार|पार्टनर)\s|$)/i);
-  if (!m) return null;
+  if (!m) {
+    // A company: "ब्लू लोटस रियल्टर्स प्रा.लि. द्वारा डायरेक्टर|निदेशक|अधिकृत हस्ताक्षरकर्ता".
+    const c = s.match(/^(.+?(?:प्रा\.?\s*लि\.?|प्राइवेट\s*लिमिटेड|Pvt\.?\s*Ltd\.?|Private\s*Limited|L\.?L\.?P\.?|एल\.?\s*एल\.?\s*पी\.?|लिमिटेड|Ltd\.?))(?=\s*(?:\(|द्वारा|,|$))/i);
+    return c ? c[1]!.replace(/\s{2,}/g, " ").trim() : null;
+  }
   const v = m[1]!
     .replace(/\((?:[^()]*?(?:pan|पैन|PAN)[^()]*)\)/gi, "")
     .replace(/\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, "")
@@ -178,6 +284,8 @@ export interface ColonyDeedFacts {
     corner: boolean;
     floor: string | null;
   } | null;
+  /** Every plot the deed sells (several: "05 व 06"); blockMissing when the deed does not say the block. */
+  plots: (NonNullable<ColonyDeedFacts["plot"]> & { blockMissing?: boolean; blockFrom: SoldPlotRef["blockFrom"] })[];
   /** The deed's own date ("dd/mm/yyyy" from the last "दिनांक"), null when none. */
   date: string | null;
 }
@@ -192,7 +300,7 @@ const FLOOR_OF_PREFIX: Record<string, string> = { LG: "लोअर ग्रा
 export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
   const text = cleanText(content);
   const ascii = asciiDigits(text);
-  const seller = blockAfter(text, SELLER_HEAD);
+  const seller = sellerSection(text);
   const sellerBody = seller.replace(SELLER_HEAD, "").replace(/^\s*[-:–]\s*/, "").trim();
   const paras = paragraphs(text);
   const devPermissions = paras.filter((p) => paraKind(p) === "dev").map((p) => p.slice(0, 3000));
@@ -202,7 +310,8 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
   const surveyNos = [...new Set([...ascii.matchAll(/(?:सर्वे|खसरा)\s*(?:क्रमांक|नं\.?|नंबर|क्र\.?)\s*[-:]?\s*([\d/]+(?:\s*(?:,|एवं|व|और)\s*[\d/]+)*)/g)].flatMap((m) => m[1]!.split(/\s*(?:,|एवं|व|और)\s*/)).filter(Boolean))];
 
   const shop = ascii.match(SHOP_RE);
-  const bp = blockAndPlot(text, title);
+  const sold = soldPlotsOf(text, title);
+  const bp = sold.plots[0] ?? null;
   const kind: ColonyProjectKind = shop && !/प्ला(?:ट|ॅट)\s*(?:क्रमांक|नं|नंबर|क्र)/.test(ascii) ? "SHOP" : "PLOT";
   const dims = ascii.match(/([\d.]+)\s*(?:फुट|फीट|ft)\s*[xX×*]\s*([\d.]+)\s*(?:फुट|फीट|ft)/);
   const area = ascii.match(/([\d.,]+)\s*(?:वर्गफुट|वर्ग फुट|वर्गफीट|वर्ग फीट|sq\.?\s*ft)/i);
@@ -212,6 +321,8 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
   };
   let plot: ColonyDeedFacts["plot"] = null;
   const unitNo = kind === "SHOP" ? shop![3]!.replace(/\s+/g, "").toUpperCase() : bp?.plotNo;
+  // Several plots in one deed: size and boundaries are of the whole parcel, not of each plot.
+  const multi = kind === "PLOT" && sold.plots.length > 1;
   if (unitNo) {
     const anchor = kind === "SHOP" ? shop![0]! : (ascii.match(/प्ला(?:ट|ॅट)\s*(?:क्रमांक|नं|नंबर|क्र)/)?.[0] ?? unitNo);
     const at = Math.max(0, ascii.indexOf(anchor));
@@ -220,23 +331,30 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
     plot = {
       block: kind === "SHOP" ? "" : (bp?.block ?? ""),
       plotNo: unitNo,
-      ewFt: numOf(dims?.[1]),
-      nsFt: numOf(dims?.[2]),
-      areaSqft: numOf(area?.[1]),
-      east: bound("पूर्व|पूरब"),
-      west: bound("पश्चिम|पश्चिमी"),
-      north: bound("उत्तर"),
-      south: bound("दक्षिण"),
-      corner: /कॉर्नर|कोर्नर|corner|कोने\s*का/i.test(near),
+      ewFt: multi ? null : numOf(dims?.[1]),
+      nsFt: multi ? null : numOf(dims?.[2]),
+      areaSqft: multi ? null : numOf(area?.[1]),
+      east: multi ? null : bound("पूर्व|पूरब"),
+      west: multi ? null : bound("पश्चिम|पश्चिमी"),
+      north: multi ? null : bound("उत्तर"),
+      south: multi ? null : bound("दक्षिण"),
+      corner: kind === "PLOT" ? sold.corner : /कॉर्नर|कोर्नर|corner|कोने\s*का/i.test(near),
       floor:
         kind === "SHOP"
-          ? (near.match(FLOOR_RE)?.[1] ?? (prefix ? FLOOR_OF_PREFIX[prefix] : null) ?? (/^4\d\d$/.test(unitNo) ? "चतुर्थ तल" : null) ?? ascii.match(FLOOR_RE)?.[1] ?? null)
+          ? (ascii.match(/फ्लोर\s*[-:]\s*([A-Za-z][A-Za-z ]{1,20}?)\s*$/m)?.[1] ??
+            near.match(FLOOR_RE)?.[1] ?? (prefix ? FLOOR_OF_PREFIX[prefix] : null) ?? (/^4\d\d$/.test(unitNo) ? "चतुर्थ तल" : null) ?? ascii.match(FLOOR_RE)?.[1] ?? null)
           : null,
     };
   }
   const dates = [...ascii.matchAll(/(?:दिनांक|दि\.)\s*(\d{1,2})[./-](\d{1,2})[./-](\d{4})/g)];
   const last = dates.at(-1);
+  const plots: ColonyDeedFacts["plots"] = !plot
+    ? []
+    : kind === "SHOP"
+      ? [{ ...plot, blockFrom: null }]
+      : sold.plots.map((x) => ({ ...plot!, block: x.block ?? "", plotNo: x.plotNo, blockMissing: x.block == null, blockFrom: x.blockFrom }));
   return {
+    plots,
     developer: developerOf(sellerBody),
     seller: sellerBody,
     partners: partnerNames(seller),
@@ -260,7 +378,7 @@ export function colonyDeedFacts(content: string, title = ""): ColonyDeedFacts {
  * paragraphs every plot / block / area line → {{PLOT}} and all four boundary
  * lines → {{BOUNDARY}}. Dates blanked; any Aadhaar / PAN / mobile / e-mail → "____".
  */
-export function markProjectTemplate(content: string): { template: string; found: string[] } {
+export function markProjectTemplate(content: string, deedKind: ColonyProjectKind = "PLOT"): { template: string; found: string[] } {
   const out: string[] = [];
   const found = new Set<string>();
   const once = (marker: string) => {
@@ -268,9 +386,16 @@ export function markProjectTemplate(content: string): { template: string; found:
     found.add(marker);
     return marker;
   };
-  for (const p of paragraphs(content)) {
+  const paras = paragraphs(content);
+  const buyerAt = paras.findIndex((p) => paraKind(p) === "buyer");
+  let inSeller = false;
+  for (const [pi, p] of paras.entries()) {
     const kind = paraKind(p);
+    // The seller part may run over several paragraphs (one per partner) up to the buyer: all of it is {{PARTNER}}.
+    if (inSeller && kind !== "buyer" && pi < buyerAt) continue;
+    inSeller = false;
     if (kind === "seller") {
+      inSeller = buyerAt > pi;
       const head = p.match(/^\s*(विक्रेता|विक्रयकर्ता)\s*(पक्ष|गण)?\s*[-:–]*/)![0].trim();
       const m = once("{{PARTNER}}");
       if (m) out.push(`${head} ${m}`);
@@ -287,7 +412,8 @@ export function markProjectTemplate(content: string): { template: string; found:
     for (const l of p.split("\n")) {
       let m: string | null | undefined;
       if (PLOT_LINE.test(l)) m = found.has("{{PLOT}}") && lines.at(-1) !== "{{PLOT}}" ? undefined : once("{{PLOT}}") ?? null;
-      else if (BOUNDARY_HEAD.test(l) || BOUNDARY_LINE.test(l)) m = once("{{BOUNDARY}}") ?? null;
+      // Shop deeds keep their own heading before the four "… दिशा में :" lines.
+      else if ((deedKind !== "SHOP" && BOUNDARY_HEAD.test(l)) || BOUNDARY_LINE.test(l)) m = once("{{BOUNDARY}}") ?? null;
       else if (lineIsPayment(l)) m = once("{{PAYMENT}}") ?? null;
       else {
         lines.push(l.replace(/(दिनांक|दि\.)\s*[\d०-९]{1,2}[./-][\d०-९]{1,2}[./-][\d०-९]{2,4}/g, "$1 ____"));
@@ -441,24 +567,32 @@ export function devanagariForms(name: string): string[] {
  * by block + plot; partner variants by the pair, named after it and ordered by
  * use; development permission and maintenance are whole paragraphs.
  */
-export function buildSetupSuggestion(deeds: { id: string; title: string; content: string; date?: Date | null }[], names: string[]): ColonySetupSuggestion {
+export function buildSetupSuggestion(
+  deeds: { id: string; title: string; content: string; date?: Date | null }[],
+  names: string[],
+  projectKind?: ColonyProjectKind,
+): ColonySetupSuggestion {
   const src = (d: { id: string; title: string }): ColonySource => ({ deedId: d.id, title: d.title });
-  const facts = deeds.map((d) => ({ d, f: colonyDeedFacts(d.content, d.title) }));
+  let facts = deeds.map((d) => ({ d, f: colonyDeedFacts(d.content, d.title) }));
   const warnings: string[] = [];
   const dateOf = (x: { d: { date?: Date | null }; f: ColonyDeedFacts }) =>
     x.f.date ?? (x.d.date ? x.d.date.toISOString().slice(0, 10).split("-").reverse().join("/") : "—");
 
   const kindCount = facts.filter((x) => x.f.kind === "SHOP").length;
-  const kindValue: ColonyProjectKind = kindCount > facts.length / 2 ? "SHOP" : "PLOT";
+  const kindValue: ColonyProjectKind = projectKind ?? (kindCount > facts.length / 2 ? "SHOP" : "PLOT");
   const kind: ColonySourced<ColonyProjectKind> | null = facts.length
     ? { value: kindValue, from: facts.filter((x) => x.f.kind === kindValue).slice(0, 5).map((x) => src(x.d)) }
     : null;
+  // Only this project's kind of deed counts (a plot deed of another colony must never fill a shop project).
+  const other = facts.filter((x) => x.f.kind !== kindValue);
+  if (other.length) warnings.push(`${other.length} डीड इस प्रोजेक्ट के प्रकार की नहीं (${kindValue === "SHOP" ? "प्लाट" : "दुकान/यूनिट"} की) — उनसे कुछ नहीं लिया गया।`);
+  facts = facts.filter((x) => x.f.kind === kindValue);
 
   // Partner variants: one per pair, named by the pair ("आयुष-रोहित"), most used first.
   const variants = new Map<string, ColonyPartner & { from: ColonySource[]; n: number }>();
   for (const { d, f } of facts) {
     if (!f.partners.length || !f.seller) continue;
-    const pairKey = [...f.partners].sort().join("+");
+    const pairKey = f.partners.map(personKey).sort().join("+");
     const v = variants.get(pairKey);
     if (v) {
       v.n++;
@@ -469,6 +603,15 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
     let k = label.replace(/[^\p{L}\p{M}\p{N}-]/gu, "").toLowerCase().slice(0, 28) || `p${variants.size + 1}`;
     while ([...variants.values()].some((x) => x.key === k)) k = `${k.slice(0, 26)}2`;
     variants.set(pairKey, { key: k, label, text: f.seller.slice(0, 4000), from: [src(d)], n: 1 });
+  }
+  // Two different people with the same first name: the label carries the surname too ("आयुष अग्रवाल-रोहित").
+  const people = new Map<string, string>();
+  for (const { f } of facts) for (const p of f.partners) if (!people.has(personKey(p))) people.set(personKey(p), p);
+  const sameFirst = (key: string) => [...people.keys()].filter((k) => k.split("|")[0] === key.split("|")[0]).length > 1;
+  for (const [pairKey, v] of variants) {
+    const keys = pairKey.split("+");
+    if (!keys.some(sameFirst)) continue;
+    v.label = keys.map((k) => (sameFirst(k) ? people.get(k)!.split(/\s+/).slice(0, 2).join(" ") : people.get(k)!.split(/\s+/)[0]!)).join("-").slice(0, 60);
   }
   const partners = [...variants.values()].sort((a, b) => b.n - a.n).map(({ n: _n, ...p }) => p);
   if (partners.length > 1) warnings.push(`भागीदारों की ${partners.length} जोड़ियाँ मिलीं: ${[...variants.values()].sort((a, b) => b.n - a.n).map((v) => `${v.label} (${v.n} डीड)`).join(", ")}।`);
@@ -508,7 +651,7 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
   // The standard text from the most recent deed with the most markers. A marker is kept only when its field has a value.
   let template: ColonySetupSuggestion["template"] = null;
   for (const { d } of facts) {
-    const t = markProjectTemplate(d.content);
+    const t = markProjectTemplate(d.content, kindValue);
     const missing = COLONY_MARKERS.filter((m) => !t.template.includes(m));
     if (!template || missing.length < template.missing.length) template = { value: t.template, from: [src(d)], found: t.found, missing };
     if (!missing.length) break;
@@ -518,20 +661,29 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
   // Sold plots / units, keyed by block + plot; the newest deed wins, repeats listed with both deeds.
   const plots: ColonySetupSuggestion["plots"] = [];
   const byKey = new Map<string, { title: string; date: string }[]>();
+  const unplaced: ColonySetupSuggestion["unplaced"] = [];
   for (const x of facts) {
     const { d, f } = x;
-    if (!f.plot || MASTER_DEED.test(norm(d.title))) continue;
-    const k = `${f.plot.block}|${f.plot.plotNo}`;
-    const seen = byKey.get(k);
-    const me = { title: d.title, date: dateOf(x) };
-    if (seen) {
-      seen.push(me);
-      continue;
+    if (MASTER_DEED.test(norm(d.title))) continue;
+    for (const pl of f.plots) {
+      const { blockMissing, blockFrom: _bf, ...plotData } = pl;
+      if (blockMissing) {
+        unplaced.push({ plotNo: pl.plotNo, from: src(d) });
+        continue;
+      }
+      const k = `${pl.block}|${pl.plotNo}`;
+      const seen = byKey.get(k);
+      const me = { title: d.title, date: dateOf(x) };
+      if (seen) {
+        seen.push(me);
+        continue;
+      }
+      byKey.set(k, [me]);
+      plots.push({ ...plotData, from: src(d) });
+      if (boundaryNamesSelf(pl)) warnings.push(`"${d.title}" की चतुःसीमा में वही ${f.kind === "SHOP" ? "यूनिट" : "प्लाट"} नंबर (${pl.plotNo}) लिखा है जो बिक रहा है।`);
     }
-    byKey.set(k, [me]);
-    plots.push({ ...f.plot, from: src(d) });
-    if (boundaryNamesSelf(f.plot)) warnings.push(`"${d.title}" की चतुःसीमा में वही ${f.kind === "SHOP" ? "यूनिट" : "प्लाट"} नंबर (${f.plot.plotNo}) लिखा है जो बिक रहा है।`);
   }
+  if (unplaced.length) warnings.push(`${unplaced.length} प्लाट का ब्लॉक डीड से पता नहीं चला — "ब्लॉक नहीं मिला" सूची में देखें और हाथ से भरें (ये आयात नहीं होंगे)।`);
   for (const [k, list] of byKey) {
     if (list.length < 2) continue;
     const [block, plotNo] = k.split("|");
@@ -553,6 +705,7 @@ export function buildSetupSuggestion(deeds: { id: string; title: string; content
     maintenanceChoices,
     template,
     plots,
+    unplaced,
     guideline: guidelineCandidates(names),
     warnings,
   };

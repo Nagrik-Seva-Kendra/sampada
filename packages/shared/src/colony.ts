@@ -200,6 +200,8 @@ export interface ColonySourced<T> {
 }
 
 export interface ColonySetupSuggestion {
+  /** The project this result is for -- the panel never applies a result to another project. */
+  projectId?: string;
   /** The old deeds that were read (most recent first). */
   deeds: ColonySource[];
   kind: ColonySourced<ColonyProjectKind> | null;
@@ -220,6 +222,8 @@ export interface ColonySetupSuggestion {
   template: (ColonySourced<string> & { found: string[]; missing: string[] }) | null;
   /** Sold plots / units read from the deeds (import as SOLD). */
   plots: (Omit<ColonyPlot, "id" | "status"> & { from: ColonySource })[];
+  /** Plots whose block the deed does not say (no block line, title or neighbours): fill by hand, never imported. */
+  unplaced: { plotNo: string; from: ColonySource }[];
   /** Guideline rows matching the project name (office calculator). */
   guideline: ColonyGuidelineRow[];
   /** Things the owner should look at (Hindi). */

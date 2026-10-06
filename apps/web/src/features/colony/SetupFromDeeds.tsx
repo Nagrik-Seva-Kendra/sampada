@@ -36,14 +36,21 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
 
   async function read() {
     setMsg(null);
+    setS(null); // never show the previous result while a new run is in progress
     try {
-      setS(await a.setupSuggest.mutateAsync(extra));
+      const r = await a.setupSuggest.mutateAsync(extra);
+      // A result for another project (the user switched meanwhile) is dropped.
+      if (r.projectId && r.projectId !== projectId) return;
+      setS(r);
     } catch (err) {
       setMsg({ text: await apiErrorMessage(err, t("coSaveError")), ok: false });
     }
   }
 
-  const apply = (patch: Partial<ColonyProjectInput>) => setF({ ...f, ...patch });
+  const mine = (x: ColonySetupSuggestion | null): x is ColonySetupSuggestion => !!x && (!x.projectId || x.projectId === projectId);
+  const apply = (patch: Partial<ColonyProjectInput>) => {
+    if (mine(s)) setF({ ...f, ...patch });
+  };
   const all = (x: ColonySetupSuggestion): Partial<ColonyProjectInput> => ({
     ...(x.kind ? { kind: x.kind.value } : {}),
     ...(x.developer ? { developer: x.developer.value } : {}),
@@ -58,7 +65,7 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
   });
 
   async function importSold() {
-    if (!s?.plots.length) return;
+    if (!mine(s) || !s.plots.length) return;
     setMsg(null);
     try {
       const r = await a.importSold.mutateAsync({ plots: s.plots.map(({ from: _f, ...p }) => p) });
@@ -94,7 +101,7 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
         </button>
       </div>
       {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
-      {s && (
+      {mine(s) && (
         <div style={{ marginTop: 10 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span className="doc-sub">{t("coFromDeedsRead", { n: s.deeds.length })}</span>
@@ -137,6 +144,18 @@ export function SetupFromDeeds({ projectId, f, setF }: { projectId: string; f: C
               s.template.from,
               () => s.template && apply({ template: s.template.value, templateDeedId: s.template.from[0]?.deedId ?? null }),
             )}
+          {s.unplaced.length > 0 && (
+            <>
+              <div style={{ fontWeight: 700, marginTop: 8 }} className="modal-error">
+                {t("coUnplaced")} ({s.unplaced.length})
+              </div>
+              {s.unplaced.map((u) => (
+                <div key={`${u.from.deedId}|${u.plotNo}`} style={{ fontSize: 13, borderTop: "1px solid var(--border)", padding: "3px 0" }}>
+                  {t("coPlot")} {u.plotNo} · <Sources from={[u.from]} />
+                </div>
+              ))}
+            </>
+          )}
           <div style={{ fontWeight: 700, marginTop: 8 }}>
             {t("coSoldPlots")} ({s.plots.length})
           </div>

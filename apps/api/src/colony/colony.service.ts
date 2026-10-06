@@ -378,7 +378,7 @@ export class ColonyService {
         buyers.map((b) => ({ ...b, aadhaar: "", pan: "", aadhaarText: b.aadhaar ? safeDecrypt(b.aadhaar) : undefined, panText: b.pan ? safeDecrypt(b.pan) : undefined })),
       ),
       PLOT: plotBlock(plot, p.kind),
-      BOUNDARY: boundaryBlock(plot),
+      BOUNDARY: boundaryBlock(plot, p.kind),
       PAYMENT: paymentBlock(s.consideration, instalments),
       PARTNER: partner.text,
       DEV_PERMISSION: ((p.devPermissions as string[]) ?? []).filter(Boolean).join("\n"),
@@ -554,7 +554,7 @@ export class ColonyService {
       ? await this.prisma.deedTemplate.findMany({ where: { id: { in: ids.filter((id) => !generated.has(id)) }, type: "sale-deed" }, select: { id: true, title: true, content: true, createdAt: true } })
       : [];
     const deeds = rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((d) => ({ id: d.id, title: d.title, content: d.content, date: d.createdAt }));
-    const suggestion = buildSetupSuggestion(deeds, names);
+    const suggestion = { ...buildSetupSuggestion(deeds, names, p.kind === "SHOP" ? "SHOP" : "PLOT"), projectId };
     this.log.log(`setup suggestion for ${p.name}: ${deeds.length} deed(s), ${suggestion.plots.length} plot(s), ${suggestion.partners.length} partner variant(s)`);
     return suggestion;
   }

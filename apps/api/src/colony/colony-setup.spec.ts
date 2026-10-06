@@ -116,8 +116,9 @@ describe("Setup from old deeds", () => {
     const f = colonyDeedFacts(shop);
     expect(f.kind).toBe("SHOP");
     expect(f.plot).toMatchObject({ block: "", plotNo: "TF-16", areaSqft: 320, floor: "तृतीय तल" });
+    // The office's shop-deed wording.
     expect(plotBlock({ block: "", plotNo: "TF-16", ewFt: null, nsFt: null, areaSqft: 320, floor: "तृतीय तल" }, "SHOP")).toBe(
-      "यूनिट / दुकान क्रमांक - TF-16\nतल - तृतीय तल\nक्षेत्रफल - 320 वर्गफुट यानी 29.73 वर्गमीटर है",
+      "प्रकोष्ठ/SHOP क्रमांक - TF - 16\nफ्लोर - Third\nएरिया - 320 वर्गफुट यानि 29.73 वर्गमीटर है।",
     );
     expect(parseUnitRef("दुकान tf 16")).toBe("TF-16");
     expect(parseUnitRef("Woods TF-16 की स्थिति")).toBe("TF-16");
