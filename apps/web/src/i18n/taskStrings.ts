@@ -43,4 +43,6 @@ export const taskStrings = {
   tkTypeCall: { en: "Phone call", hi: "कॉल करना" },
   tkTypeCollect: { en: "Collect papers", hi: "कागज़ लेना" },
   tkTypeOther: { en: "Other", hi: "अन्य" },
+  tkTypeWill: { en: "Will", hi: "वसीयत" },
+  tkFile: { en: "📎 File", hi: "📎 फ़ाइल" },
 } as const;

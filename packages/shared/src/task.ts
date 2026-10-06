@@ -11,6 +11,7 @@ export const TaskWorkType = z.enum([
   "patta", // पट्टा
   "mutation", // नामांतरण
   "copy", // नकल
+  "will", // वसीयत
   "call", // कॉल करना
   "collect_papers", // कागज़ लेना
   "other",
@@ -24,6 +25,7 @@ export const TASK_WORK_LABEL_HI: Record<TaskWorkType, string> = {
   patta: "पट्टा",
   mutation: "नामांतरण",
   copy: "नकल",
+  will: "वसीयत",
   call: "कॉल करना",
   collect_papers: "कागज़ लेना",
   other: "अन्य",
@@ -53,6 +55,8 @@ export interface TaskItem {
   assigneeId: string | null;
   assigneeName: string | null;
   linkedRequestId: string | null;
+  /** File sent with the task (open with GET tasks/:id/document). */
+  documentName: string | null;
   createdAt: string;
   doneAt: string | null;
 }

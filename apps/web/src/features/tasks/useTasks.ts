@@ -3,6 +3,16 @@ import type { TaskCreateInput, TaskItem, TaskList, TaskUpdateInput } from "@samp
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
+/** The task's file needs the auth header: fetch it and hand back a blob URL (caller revokes it). */
+export function useTaskDocumentOpener() {
+  const token = useAuthStore((s) => s.token);
+  return (id: string) =>
+    api
+      .get(`tasks/${id}/document`, { headers: authHeaders(token), searchParams: { view: "1" } })
+      .blob()
+      .then((b) => URL.createObjectURL(b));
+}
+
 export function useTasks(assigneeId: string) {
   const token = useAuthStore((s) => s.token);
   return useQuery({

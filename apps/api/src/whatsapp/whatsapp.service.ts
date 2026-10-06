@@ -135,6 +135,15 @@ export class WhatsappService {
         await this.send(from, await this.owner.endCustomerTest(from));
         return;
       }
+      // A PDF / photo from the owner belongs to a task, never to the customer draft flow.
+      if (!testing && (msg.type === "document" || msg.type === "image")) {
+        const media = msg[msg.type]; // { id, mime_type, filename?, caption? }
+        const file = await this.downloadMedia(media.id, media.filename);
+        const replies = await this.owner.handleFile(from, { ...file, fileName: media.filename ?? null }, String(media.caption ?? ""));
+        await this.send(from, replies);
+        this.log.log(`message ${msg.id} from owner type=${msg.type} route=owner-file replies=${replies.length}`);
+        return;
+      }
       if (!testing && (msg.type === "text" || msg.type === "audio")) {
         const audio = msg.type === "audio" ? await this.downloadMedia(msg.audio.id) : undefined;
         const replies = await this.owner.handle(from, { type: msg.type, text: body, audio });

@@ -4,11 +4,11 @@ import { normalizePhone } from "./tasks.service.js";
 
 const SYSTEM = `You turn one note from the owner of a property-document writing office in Gwalior (India) into a to-do item.
 The note is Hindi, Hinglish or English, often speech-to-text. Return ONLY one JSON object:
-{"title": short Hindi title, "partyName": string|null, "workType": one of "sale","mortgage","agreement","patta","mutation","copy","call","collect_papers","other",
+{"title": short Hindi title, "partyName": string|null, "workType": one of "sale","mortgage","agreement","patta","mutation","copy","will","call","collect_papers","other",
  "place": property/place or null, "dueText": the exact words of the deadline as said (e.g. "सोमवार तक", "kal shaam") or null, "note": anything else useful or null,
  "assignee": if the note gives the work to a staff member ("मुस्कान मैडम को असाइन कर दो", "Rohit ko de do", "राहुल से करवाओ"), that person's name exactly as written in the STAFF list (match Hindi/English spellings), else the name as said if not in the list, else null}
 The party is the customer, never the staff member the work is given to.
-workType: विक्रय पत्र/बैनामा/registry=sale, बंधक/mortgage=mortgage, अनुबंध/एग्रीमेंट=agreement, पट्टा=patta, नामांतरण=mutation, नकल=copy, फोन/कॉल करना=call, कागज़ लेना=collect_papers.
+workType: विक्रय पत्र/बैनामा/registry=sale, बंधक/mortgage=mortgage, अनुबंध/एग्रीमेंट=agreement, पट्टा=patta, नामांतरण=mutation, नकल=copy, वसीयत/will=will, फोन/कॉल करना=call, कागज़ लेना=collect_papers.
 If unsure of a field, use null. Never invent names, places or dates. A phone number appears as [MOBILE].`;
 
 /** Owner's note → task draft (ANTHROPIC_MODEL). The mobile is taken out before the model sees the text. */

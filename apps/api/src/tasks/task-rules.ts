@@ -140,6 +140,64 @@ export interface TaskDraft {
   assigneeUnknown?: string | null;
 }
 
+// ---------- a file sent with a task ----------
+/** What a read document (deed extractor) adds to a task: only what was clearly read. */
+export interface TaskFileFill {
+  workType: TaskWorkType | null;
+  partyName: string | null;
+  place: string | null;
+  /** Parties and property, as read, for the note. */
+  noteLine: string | null;
+}
+
+export function fileFill(deed: {
+  isSaleDeed?: boolean;
+  documentType?: string | null;
+  sellers?: { name: string }[];
+  buyers?: { name: string }[];
+  property?: { locality?: string | null; village?: string | null; tehsil?: string | null; district?: string | null; khasraOrPlotNo?: string | null } | null;
+} | null): TaskFileFill | null {
+  if (!deed) return null;
+  const dt = `${deed.documentType ?? ""}`;
+  const workType: TaskWorkType | null = /वसीयत|will|testament/i.test(dt)
+    ? "will"
+    : /बंधक|mortgage/i.test(dt)
+      ? "mortgage"
+      : /अनुबंध|agreement|इकरार/i.test(dt)
+        ? "agreement"
+        : /पट्टा|lease|patta/i.test(dt)
+          ? "patta"
+          : deed.isSaleDeed || /विक्रय|बैनामा|sale/i.test(dt)
+            ? "sale"
+            : null;
+  const names = (xs?: { name: string }[]) => (xs ?? []).map((x) => x.name?.trim()).filter(Boolean) as string[];
+  const first = names(deed.sellers);
+  const second = names(deed.buyers);
+  // A will has one executant; a deed's executant is the seller side.
+  const partyName = (first[0] ?? second[0] ?? null)?.slice(0, 120) ?? null;
+  const p = deed.property ?? null;
+  const place = p ? [p.khasraOrPlotNo, p.locality, p.village, p.tehsil, p.district].filter((x) => x && String(x).trim()).join(", ").slice(0, 200) || null : null;
+  const parts = [
+    first.length ? `${workType === "will" ? "वसीयतकर्ता" : "पहला पक्ष"}: ${first.join(", ")}` : null,
+    second.length ? `${workType === "will" ? "लाभार्थी" : "दूसरा पक्ष"}: ${second.join(", ")}` : null,
+  ].filter(Boolean);
+  const noteLine = parts.length ? `फ़ाइल से: ${parts.join("; ")}`.slice(0, 500) : null;
+  if (!workType && !partyName && !place && !noteLine) return null;
+  return { workType, partyName, place, noteLine };
+}
+
+/** Fills only what is empty (the owner's words win); a bare "अन्य" title becomes "<party> — <work>". */
+export function applyFill<T extends { title: string; partyName: string | null; place: string | null; workType: TaskWorkType; note: string | null }>(d: T, f: TaskFileFill | null): T {
+  if (!f) return d;
+  const workType = d.workType === "other" && f.workType ? f.workType : d.workType;
+  const partyName = d.partyName ?? f.partyName;
+  const label = TASK_WORK_LABEL_HI[workType];
+  const plainTitle = d.workType === "other" && workType !== "other";
+  const title = plainTitle && partyName ? `${partyName} — ${label}` : d.title;
+  const note = f.noteLine && !(d.note ?? "").includes(f.noteLine) ? [d.note, f.noteLine].filter(Boolean).join("\n") : d.note;
+  return { ...d, workType, partyName, place: d.place ?? f.place, title, note };
+}
+
 /**
  * The staff member the owner named ("मुस्कान मैडम को असाइन कर दो" → the model
  * returns "Muskan Mishra" from the Team list): full name, or a first name
