@@ -207,8 +207,9 @@ describe("owner: greetings are not tasks; one reply per message", () => {
   it("'Hello' with nothing pending → short help, no task prompt; real work text → task prompt", async () => {
     const w = world();
     expect(await w.say("Hello")).toEqual([OWNER_HELP]);
-    expect(await w.say("ok")).toEqual([OWNER_HELP]);
-    expect(await w.say("Thanks 🙏")).toEqual([OWNER_HELP]);
+    // "ok" / "thanks" get a short 🙏, not the whole help again.
+    expect(await w.say("ok")).toEqual(["🙏"]);
+    expect(await w.say("Thanks 🙏")).toEqual(["🙏"]);
     expect(w.extractor.extract).not.toHaveBeenCalled();
     expect(w.contacts.get(OWNER)?.state ?? null).toBeNull();
     const out = await w.say("Sharma ji ki registry kal tak");

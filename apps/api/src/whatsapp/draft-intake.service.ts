@@ -1,3 +1,4 @@
+import { isClose } from "./chat-words.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import {
   formatParty,
@@ -55,7 +56,9 @@ export type IncomingFile = { key: string; buf: Buffer; mime: string };
 const YES = /^(हाँ|हां|हा|ha|haan|han|yes|y|1|ok|ठीक है|ठीक)$/i;
 const NO = /^(नहीं|नही|no|n|2|nahi|nahin)$/i;
 const SKIP = /^(नहीं|नही|no|na|nahi|nahin|-|none)$/i;
-const CANCEL = /^(रद्द|cancel|stop|बंद)$/i;
+/** "रद्द", "cancel karo", "बंद कर दो", "nahi chahiye" (chat-words). */
+// "nahi chahiye" can answer a question here ("गवाह? nahi chahiye"), so it never cancels the whole request.
+const CANCEL = { test: (v: string) => isClose(v) && !/नहीं चाहिए|nahi chahiye|nhi chahiye/i.test(v) };
 const UNKNOWN = /^(पता नहीं|पता नही|नहीं पता|नही पता|pata nahi|pata nahin|nahi pata|nahin pata|don'?t know|unknown|3)$/i;
 
 /** हाँ → true, नहीं → false, पता नहीं → null, anything else → undefined (ask again). */

@@ -145,6 +145,18 @@ const REMOVE_WORDS = /डिलीट|डिलिट|delete|हटा|hata|म�
 const TASK_WORDS = /काम|kaam|kam\b|task|टास्क/i;
 const MANY_WORDS = /सारे|सारी|सभी|सब|sab|sare|saare|sari|all|पुरान|purane|purani|जितने|jitne/i;
 
+/**
+ * "मुस्कान के काम", "pending kaam", "kitne kaam baki hai", "काम दिखाओ": a
+ * question about the task list (not a new task, not "3 हो गया").
+ */
+const LIST_ASK = /दिखाओ|dikhao|दिखा|dikha|बताओ|batao|btao|list|लिस्ट|सूची|बाकी|baki|baaki|pending|पेंडिंग|कितने|kitne|kitna|के काम|ke kaam|का काम|ka kaam|की काम|ki kaam|kaun\s*kaun|कौन\s*कौन|open|खुले/i;
+export function isTaskListQuery(text: string): boolean {
+  const s = norm(text);
+  if (/^#?\d{1,4}\s/.test(s)) return false;
+  if (DONE_WORDS.test(s)) return false;
+  return TASK_WORDS.test(s) && LIST_ASK.test(s) && !/करना|करनी|करने|बनाना|बनानी|karna|karni|banana|banani|भेजना|bhejna|लाना|lana|देना|dena/i.test(s);
+}
+
 /** Removing several tasks at once (not "3 रद्द", which is one task). */
 export function isBulkCancel(text: string): boolean {
   const s = norm(text);
@@ -388,6 +400,8 @@ const ASKS = /बताओ|बताइए|बताना|batao|bata|btao|list|
  */
 export function isAttendanceQuestion(text: string): boolean {
   const s = norm(text);
+  // "aaj kitne customer aaye" is about customers, not staff attendance.
+  if (/customer|कस्टमर|ग्राहक|grahak|party|पार्टी|client|क्लाइंट/i.test(s)) return false;
   if (ATT_WORDS.test(s)) {
     if (QUESTION.test(s) || ASKS.test(s)) return true;
     // "attendance", "हाज़िरी", "aaj ki attendance": a few words, nothing to do in them.
@@ -403,7 +417,8 @@ const DO_WORDS =
   /बनाना|बनानी|बनाने|बनाओ|banana|banani|banane|banao|करना|करनी|करने|करवाना|करवानी|करो|karna|karni|karne|karwana|karo|भेजना|भेजनी|भेजो|bhejna|bhejni|bhejo|याद|yaad|remind|लाना|लाओ|lana|lao|देना|देनी|dena|deni|लेना|लेनी|lena|leni|जाना|jana|मिलना|milna|बुलाना|bulana|दर्ज|darj|note/i;
 export function hasTaskInstruction(text: string, now: Date): boolean {
   if (DO_WORDS.test(norm(text))) return true;
-  if (parseDue(text, now)) return true;
+  // A date alone does not make a question work: "aaj kitne customer aaye?" (आज) is still a question.
+  if (parseDue(text, now) && !/(^|\s)(कितने|कितना|kitne|kitna|कौन|kaun|किस|kis|kisne|किसने|क्या|kya)(\s|$|\?)/i.test(norm(text))) return true;
   return /(?:\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}/.test(norm(text));
 }
 

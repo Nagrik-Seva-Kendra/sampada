@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
 import { AttendanceService } from "../attendance/attendance.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
+import { isThanks } from "./chat-words.js";
 import { deleteMedia } from "./wa-media.js";
 import { buildInfoText } from "../common/build-info.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -25,6 +26,7 @@ import {
   applyFill,
   fileFill,
   isBulkCancel,
+  isTaskListQuery,
   resolveAssignee,
   type TaskFileFill,
   TASK_OR_QUESTION,
@@ -202,6 +204,7 @@ export class OwnerAssistantService {
       }
       if (CHANGE.test(text)) return ["क्या बदलना है? सही बात लिखें या बोलें (जैसे: तारीख सोमवार, नाम रमेश शर्मा)।"];
       // A greeting is its own message, not a correction: answer it and remind what is waiting.
+      if (isThanks(text)) return ['🙏 पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'];
       if (isSmallTalk(text)) return [OWNER_HELP, 'पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'];
       // Anything else is a correction of the same task.
       if (!parseOwnerCommand(text, now)) return this.propose(phone, `${state.transcript}\nसुधार: ${text}`, state.source, now, state.file);
@@ -250,6 +253,16 @@ export class OwnerAssistantService {
           return [`📅 काम #${t.number} की नई तारीख: ${formatDueHi(cmd.due.toISOString())}`];
         }
       }
+    }
+    // "ok" / "thanks" with nothing waiting: a short thanks, not the whole help.
+    if (!state && isThanks(text)) return ["🙏"];
+    // "मुस्कान के काम", "pending kaam", "काम दिखाओ": the list (only that staff member's when named).
+    if (isTaskListQuery(text) || /^(report|रिपोर्ट)$/i.test(text.trim())) {
+      const who = await this.namedStaff(text, now);
+      const list = await this.listText(now, who?.userId ?? null);
+      this.log.log(`owner question: task list${who ? " (one staff member)" : ""}`);
+      if (/^(report|रिपोर्ट)$/i.test(text.trim()) && this.attendance && this.orgId) return [list, await this.attendance.todayReport(this.orgId, now)];
+      return [who ? `👤 ${who.name}:\n${list}` : list];
     }
     // A lone "हाँ/नहीं/रद्द" with nothing waiting for it is not a new task.
     if (NO.test(text) || CANCEL.test(text) || CHANGE.test(text) || (YES.test(text) && !isSmallTalk(text))) {
@@ -436,8 +449,27 @@ export class OwnerAssistantService {
     ].join("\n");
   }
 
-  private async listText(now: Date): Promise<string> {
-    const open = await this.tasks.openTasks(this.orgId);
+  /** A staff member's own open tasks ("मेरे काम" from their number). */
+  async tasksTextFor(userId: string, firstName: string): Promise<string> {
+    const open = (await this.tasks.openTasks(this.orgId)).filter((t) => t.assigneeId === userId);
+    if (!open.length) return `${firstName}, आपके नाम अभी कोई खुला काम नहीं है। ✅`;
+    const lines = open.slice(0, 15).map((t) => `#${t.number} ${t.title.slice(0, 70)}${t.dueAt ? ` — ${formatDueHi(t.dueAt.toISOString())}` : ""}`);
+    return [`📋 ${firstName}, आपके खुले काम (${open.length}):`, ...lines, ...(open.length > 15 ? [`…और ${open.length - 15} (ऐप में "मेरे काम")`] : []), 'पूरा होने पर "3 हो गया" जैसे लिखें।'].join("\n");
+  }
+
+  /** A staff member named in the text: a Latin first name locally, else (Hindi script) the model maps it to the Team list. */
+  private async namedStaff(text: string, now: Date) {
+    const staff = await this.staff().catch(() => []);
+    const words = text.toLowerCase().split(/[^a-z\u0900-\u097F]+/).filter((w) => w.length >= 3);
+    const local = staff.filter((s) => words.includes(s.firstName.toLowerCase()));
+    if (local.length === 1) return local[0]!;
+    if (!/[\u0900-\u097F]/.test(text) || !/के\s*काम|का\s*काम|की\s*काम|को\s*(?:दिए|सौंपे|असाइन)/.test(text)) return null;
+    const read = await this.extractor.extract(text, now, staff.map((s) => s.name)).catch(() => null);
+    return resolveAssignee(read?.assigneeName ?? null, staff);
+  }
+
+  private async listText(now: Date, assigneeId: string | null = null): Promise<string> {
+    const open = (await this.tasks.openTasks(this.orgId)).filter((t) => !assigneeId || t.assigneeId === assigneeId);
     if (!open.length) return "कोई खुला काम नहीं है। ✅";
     const names = await this.tasks.userNames(open.map((t) => t.assigneeId));
     const digest = digestText(

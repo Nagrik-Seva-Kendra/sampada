@@ -1,3 +1,4 @@
+import { fullPhone } from "./chat-words.js";
 import { createHash, randomInt } from "node:crypto";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
@@ -152,7 +153,7 @@ export class ArchiveCopyService {
       }
     }
     this.log.log(`copy request #${row.number} from ${maskPhone(phone)}`);
-    await this.outbox.alertOwners(`📄 रजिस्ट्री कॉपी अनुरोध #${row.number} (${maskPhone(phone)}) — WhatsApp अनुरोध पेज पर जाँचकर भेजें।`).catch(() => undefined);
+    await this.outbox.alertOwners(`📄 रजिस्ट्री कॉपी अनुरोध #${row.number} (${fullPhone(phone)}) — WhatsApp अनुरोध पेज पर जाँचकर भेजें।`).catch(() => undefined);
     return [`📄 अनुरोध #${row.number} दर्ज हो गया। स्टाफ जाँचकर रजिस्ट्री की कॉपी (केवल जानकारी हेतु, watermark के साथ) इसी नंबर पर भेजेगा।`];
   }
 
