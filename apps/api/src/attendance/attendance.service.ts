@@ -470,6 +470,33 @@ export class AttendanceService {
     ].join("\n");
   }
 
+  /**
+   * The owner's question "हाज़िरी किसने नहीं लगाई" on WhatsApp: today so far --
+   * who has not pressed IN, who came but has not pressed OUT, who is on leave
+   * or out on field work -- in the words of the morning / evening reports.
+   */
+  async todayReport(organizationId: string, now = new Date()): Promise<string> {
+    const day = istDay(now);
+    const rows = (await this.grid(organizationId, [day], undefined, now)).map((s) => s.days[0]!);
+    if (!rows.length) return "टीम में अभी कोई स्टाफ नहीं है।";
+    if (rows.every((r) => r.status === "off" || r.status === "holiday")) return `🗓️ आज (${fmtDay(day)}) ऑफिस की छुट्टी है।`;
+    const g = (st: string[]) => rows.filter((r) => st.includes(r.status));
+    const t = (iso: string | null) => (iso ? fmtTime(new Date(iso)) : "");
+    const line = (title: string, list: StaffDay[], f: (d: StaffDay) => string) => (list.length ? [`${title} (${list.length}): ${list.map(f).join(", ")}`] : []);
+    const notOut = rows.filter((r) => r.inAt && !r.outAt);
+    const came = rows.filter((r) => r.inAt);
+    const lines = [
+      `🕘 आज की हाज़िरी अभी तक (${fmtDay(day)}, ${fmtTime(now)})`,
+      ...line("❌ IN नहीं किया", g(["absent"]), (d) => d.name),
+      ...line("🌆 OUT नहीं किया", notOut, (d) => `${d.name} (IN ${t(d.inAt)})`),
+      ...line("🏖️ छुट्टी", g(["leave", "halfLeave"]), (d) => `${d.name}${d.status === "halfLeave" ? " (आधा दिन)" : ""}`),
+      ...line("🚶 बाहर का काम", g(["field"]), (d) => `${d.name}${d.field[0]?.reason ? ` — ${d.field[0].reason}` : ""}`),
+      ...line("✅ आए", came, (d) => `${d.name} ${t(d.inAt)}${d.outAt ? `–${t(d.outAt)}` : ""}${d.lateMin > 0 ? ` (${d.lateMin} मिनट देर)` : ""}`),
+    ];
+    if (lines.length === 1) lines.push("सबकी हाज़िरी पूरी है।");
+    return lines.join("\n");
+  }
+
   /** Staff who came but did not press "जा रहा हूँ". */
   async eveningReport(organizationId: string, now = new Date()): Promise<string | null> {
     const day = istDay(now);
