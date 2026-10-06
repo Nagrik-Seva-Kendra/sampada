@@ -492,6 +492,7 @@ function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; h
   const save = useSaveSettings();
   const hol = useHolidayMutations();
   const [f, setF] = useState<AttendanceSettings>(settings);
+  const staffList = useAttendanceMonth(thisMonth(), "").data?.staff ?? [];
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [h, setH] = useState({ date: "", name: "" });
   const num = (k: keyof AttendanceSettings) => ({
@@ -581,6 +582,32 @@ function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; h
           <input type="checkbox" checked={f.reportsEnabled} onChange={(e) => setF({ ...f, reportsEnabled: e.target.checked })} />
           {t("atReports")}
         </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+          <input type="checkbox" checked={f.staffReminders} onChange={(e) => setF({ ...f, staffReminders: e.target.checked })} />
+          {t("atStaffReminders")}
+        </label>
+        {f.staffReminders && staffList.length > 0 && (
+          <div style={{ marginTop: 6, paddingLeft: 22 }}>
+            <div className="doc-sub">{t("atReminderSkip")}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
+              {staffList.map((s) => (
+                <label key={s.userId} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={f.reminderSkipUserIds.includes(s.userId)}
+                    onChange={(e) =>
+                      setF({
+                        ...f,
+                        reminderSkipUserIds: e.target.checked ? [...f.reminderSkipUserIds, s.userId] : f.reminderSkipUserIds.filter((id) => id !== s.userId),
+                      })
+                    }
+                  />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <button type="submit" className="btn-calc" style={{ marginTop: 12 }} disabled={save.isPending}>
           {t("atSave")}
         </button>

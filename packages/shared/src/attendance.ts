@@ -22,6 +22,10 @@ export const AttendanceSettingsInput = z
     /** Optional: each late arrival deducts this fraction of a day (0 = off). */
     lateDeductionDay: z.number().min(0).max(1),
     reportsEnabled: z.boolean(),
+    /** WhatsApp "आपने आज IN / OUT नहीं लगाया" to the staff member, at the report times. */
+    staffReminders: z.boolean(),
+    /** Staff who never get that reminder. */
+    reminderSkipUserIds: z.array(z.string().min(1).max(64)).max(200),
   })
   .strict();
 export type AttendanceSettings = z.infer<typeof AttendanceSettingsInput>;
@@ -38,6 +42,8 @@ export const DEFAULT_ATTENDANCE_SETTINGS: AttendanceSettings = {
   paidLeavePerMonth: 1,
   lateDeductionDay: 0,
   reportsEnabled: true,
+  staffReminders: true,
+  reminderSkipUserIds: [],
 };
 
 export const HolidayInput = z.object({ date: ymd, name: z.string().trim().min(1).max(100) }).strict();

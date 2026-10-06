@@ -1,8 +1,9 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import { WA_TEMPLATES } from "@sampada/shared";
+import { type AttendanceSettings, WA_TEMPLATES } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { WaOutboxService } from "../whatsapp/wa-outbox.service.js";
 import { closedDay, hhmmToMin, istDay, istMinutes } from "./attendance-rules.js";
+import { type ReminderKind, reminderSummary, reminderTargets, reminderText } from "./attendance-reminders.js";
 import { AttendanceService } from "./attendance.service.js";
 import { SalaryService } from "./salary.service.js";
 
@@ -37,7 +38,8 @@ export const STAFF_INTRO =
 
 /**
  * Once a minute: the owner's morning attendance report (start + 30 min) and
- * the evening "OUT नहीं किया" list (end + 60 min) on working days; once: staff
+ * the evening "OUT नहीं किया" list (end + 60 min) on working days, and at the
+ * same times "आपने आज IN / OUT नहीं लगाया" to each staff member; once: staff
  * phones from the owner's list and an intro message to each staff member;
  * on the 1st of a month the previous month's salary sheet (DRAFT).
  */
@@ -107,7 +109,7 @@ export class AttendanceJobsService implements OnModuleInit, OnModuleDestroy {
 
   async reports(now: Date): Promise<void> {
     const settings = await this.attendance.settings(this.orgId);
-    if (!settings.reportsEnabled) return;
+    if (!settings.reportsEnabled && !settings.staffReminders) return;
     const day = istDay(now);
     const holidays = (await this.attendance.holidays(this.orgId)).map((h) => h.date);
     if (closedDay(day, settings, holidays)) return;
@@ -115,15 +117,52 @@ export class AttendanceJobsService implements OnModuleInit, OnModuleDestroy {
     // Each report only within 2 hours of its time (a restart later in the day does not send a stale one).
     const morning = hhmmToMin(settings.startTime) + 30;
     if (mins >= morning && mins < morning + 120) {
-      await this.once(`att-morning:${day}`, async () => this.toOwner(await this.attendance.morningReport(this.orgId, now), now));
+      await this.once(`att-morning:${day}`, async () => {
+        const sent = settings.staffReminders ? await this.remind("IN", day, settings, now) : null;
+        if (settings.reportsEnabled) await this.toOwner([await this.attendance.morningReport(this.orgId, now), sent].filter(Boolean).join("\n"), now);
+      });
     }
     const evening = hhmmToMin(settings.endTime) + 60;
     if (mins >= evening && mins < evening + 120) {
       await this.once(`att-evening:${day}`, async () => {
-        const text = await this.attendance.eveningReport(this.orgId, now);
-        if (text) await this.toOwner(text, now);
+        const sent = settings.staffReminders ? await this.remind("OUT", day, settings, now) : null;
+        const text = [await this.attendance.eveningReport(this.orgId, now), sent].filter(Boolean).join("\n");
+        if (text && settings.reportsEnabled) await this.toOwner(text, now);
       });
     }
+  }
+
+  /**
+   * "आपने आज IN / OUT नहीं लगाया" to every staff member still missing it right
+   * now: text inside their 24h window, else attendance_reminder_v1. At most once
+   * per staff member, kind and day (WaJobRun); every attempt is stored in
+   * WaNotification (kind ATTENDANCE, with the reason when it could not go).
+   * Returns the owner's one-line summary.
+   */
+  async remind(kind: ReminderKind, day: string, settings: AttendanceSettings, now = new Date()): Promise<string | null> {
+    const staff = await this.attendance.staff(this.orgId);
+    const rows = await this.attendance.grid(this.orgId, [day], undefined, now);
+    const byUser = new Map(rows.map((r) => [r.userId, r.days[0]]));
+    const { send, skipped } = reminderTargets(staff, (id) => byUser.get(id), kind, settings);
+    const sent: string[] = [];
+    const failed = [...skipped];
+    for (const s of send) {
+      const key = `att-remind:${kind}:${day}:${s.userId}`;
+      if (await this.prisma.waJobRun.findUnique({ where: { name: key } })) continue;
+      await this.prisma.waJobRun.create({ data: { name: key, lastRunAt: now } });
+      const n = await this.outbox.send({
+        organizationId: this.orgId,
+        draftIntakeId: key,
+        kind: "ATTENDANCE",
+        to: s.phone!,
+        text: reminderText(s.firstName, kind),
+        template: { name: WA_TEMPLATES.attendanceReminder.name, language: WA_TEMPLATES.attendanceReminder.language, params: [s.firstName, kind] },
+      });
+      if (n.status === "SENT") sent.push(s.name);
+      else failed.push({ name: s.name, reason: n.reason ?? "भेजा नहीं जा सका" });
+    }
+    this.log.log(`${kind} reminders ${day}: sent ${sent.length}, not sent ${failed.length}`);
+    return reminderSummary(kind, sent, failed);
   }
 
   /** Text inside the 24h window; outside it the staff_notice template with the report on one line. */
