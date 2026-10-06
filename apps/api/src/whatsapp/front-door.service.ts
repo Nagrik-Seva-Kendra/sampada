@@ -12,6 +12,7 @@ import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
+import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
 import { normDigits } from "./intake-rules.js";
 import { requestLink } from "./wa-alerts.js";
 import { deleteMedia } from "./wa-media.js";
@@ -20,7 +21,6 @@ import {
   asksGuideline,
   COST_AMOUNT_ASK,
   COST_AMOUNT_UNCLEAR,
-  COST_GUIDELINE_NOTE,
   COST_KIND_ASK,
   flatFeeText,
   isAbusive,
@@ -76,6 +76,7 @@ export interface FrontReply {
 
 type State =
   | { mode: "cost"; step: "KIND" | "AMOUNT"; guideline?: { value: number; sdPct: number } | null; amount?: number | null }
+  | GuideState
   | { mode: "call"; step: "CHOICE" }
   | { mode: "callback"; step: "WHEN" }
   | { mode: "callback"; step: "PURPOSE"; at: string | null; atText: string | null }
@@ -219,6 +220,14 @@ export class FrontDoorService {
         ((state.mode === "call" && choice >= 3) || (state.mode === "callback" && state.step === "WHEN"));
       if (!leaves) return this.call(phone, state, text, now);
     }
+    if (state?.mode === "guide") {
+      // Guideline questions: every bare number answers them ("4" = दुकान); a greeting or
+      // words of another menu option leave.
+      const bareNo = /^\s*\d{1,2}\s*[.)।]?\s*$/.test(normDigits(text));
+      const leaves = !bareNo && (isGreeting(text) || (choice !== null && choice !== 2));
+      if (!leaves) return this.guide(phone, state, text);
+      await this.setContact(phone, { state: null });
+    }
     if (state?.mode === "cost") {
       // Inside the cost questions a bare number answers them ("1" = रजिस्ट्री), and so does
       // any amount ("33,47,000 ... guideline bata do") or words of option 2 itself -- we are
@@ -239,6 +248,7 @@ export class FrontDoorService {
         // "33 लाख की रजिस्ट्री का खर्च / गाइडलाइन": the amount is already here.
         const amount = /^\s*2\s*[.)।]?\s*$/.test(normDigits(text)) ? null : parseMoney(text);
         if (amount) return this.costEstimate(phone, { mode: "cost", step: "AMOUNT" }, amount, text, await this.fees());
+        if (this.wantsGuideline(text)) return this.guideStart(phone, null, text);
         await this.setContact(phone, { state: { mode: "cost", step: "KIND" } });
         return { replies: [COST_KIND_ASK], route: "cost" };
       }
@@ -366,7 +376,7 @@ export class FrontDoorService {
   async handleDocument(phone: string, file: IncomingFile): Promise<FrontReply | null> {
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
     const state = (c?.state as State) ?? null;
-    if (state?.mode !== "cost") return null;
+    if (state?.mode !== "cost" && state?.mode !== "guide") return null;
     const deed = await this.extractor.extract(file.buf, file.mime).catch(() => null);
     // Not part of any request: the customer's file is not kept.
     await deleteMedia(file.key).catch(() => this.log.warn(`cost: uploaded file not deleted (${maskPhone(phone)})`));
@@ -395,6 +405,7 @@ export class FrontDoorService {
     if (state.step === "KIND") {
       // "60 लाख की रजिस्ट्री": an amount means a registry (checked first -- "लाख और ..." is not "other").
       if (amount) return this.costEstimate(phone, state, amount, text, fees);
+      if (this.wantsGuideline(text)) return this.guideStart(phone, null, text);
       const kind = parseCostKind(text);
       if (!kind) return { replies: [COST_KIND_ASK], route: "cost", force: true };
       if (kind === "registry") {
@@ -405,6 +416,7 @@ export class FrontDoorService {
       return { replies: [flatFeeText(kind, fees)], route: "cost" };
     }
     // Waiting for the amount: never silent.
+    if (!amount && this.wantsGuideline(text)) return this.guideStart(phone, state.amount ?? null, text);
     if (!amount) return { replies: [COST_AMOUNT_UNCLEAR], route: "cost", force: true };
     return this.costEstimate(phone, state, amount, text, fees);
   }
@@ -422,13 +434,42 @@ export class FrontDoorService {
     fees: WaOfficeFees,
   ): Promise<FrontReply> {
     const guideline = state.guideline ?? null;
-    const replies = [registryCostText({ amount, guideline }, fees)];
-    if (!guideline && asksGuideline(text)) {
-      replies.push(COST_GUIDELINE_NOTE);
+    // Guideline asked in words: worked out with the office calculator (asking what is missing).
+    if (!guideline && asksGuideline(text)) return this.guideStart(phone, amount, text);
+    await this.setContact(phone, { state: null });
+    return { replies: [registryCostText({ amount, guideline }, fees)], route: "cost", force: true };
+  }
+
+  // ---------- guideline by the office calculator ----------
+  /** Guideline words with something to work on (a locality, ward or area). */
+  private wantsGuideline(text: string): boolean {
+    if (!asksGuideline(text)) return false;
+    const f = guideFacts(text);
+    return !!(f.name || f.ward || f.area);
+  }
+
+  private async guideStart(phone: string, amount: number | null, text: string): Promise<FrontReply> {
+    const g = mergeFacts({ mode: "guide", step: "NAME", amount }, guideFacts(text));
+    return this.guideTurn(phone, guideNext(g, await this.fees()), amount);
+  }
+
+  private async guide(phone: string, state: GuideState, text: string): Promise<FrontReply> {
+    return this.guideTurn(phone, guideReply(state, text, await this.fees()), state.amount);
+  }
+
+  /**
+   * Saves the next question's state. Without a value (no row, a house / shop ...)
+   * the amount estimate is still given and a registry PDF sent next is used.
+   */
+  private async guideTurn(phone: string, turn: GuideTurn, amount: number | null): Promise<FrontReply> {
+    let replies = turn.replies;
+    if (turn.state) await this.setContact(phone, { state: turn.state });
+    else if (turn.outcome === "answered") await this.setContact(phone, { state: null });
+    else {
       await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline: null, amount } });
-    } else {
-      await this.setContact(phone, { state: null });
+      if (amount) replies = [registryCostText({ amount, guideline: null }, await this.fees()), ...replies];
     }
+    this.log.log(`guideline chat ${maskPhone(phone)} step=${turn.state?.step ?? "-"} outcome=${turn.outcome ?? "asking"}`);
     return { replies, route: "cost", force: true };
   }
 

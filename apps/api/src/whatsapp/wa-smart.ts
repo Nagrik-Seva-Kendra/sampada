@@ -147,8 +147,6 @@ export const asksGuideline = (text: string): boolean =>
 export const COST_AMOUNT_UNCLEAR =
   "राशि समझ नहीं आई, कृपया जैसे 33,47,000 या 33 लाख 47 हज़ार लिखें।\n" +
   "गाइडलाइन मूल्य जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
-export const COST_GUIDELINE_NOTE =
-  "ℹ️ कॉलोनी / वार्ड / क्षेत्रफल से गाइडलाइन मूल्य हम अंदाज़े से नहीं बताते। सही गाइडलाइन (और उस पर स्टाम्प शुल्क) के लिए उसी संपत्ति की पुरानी रजिस्ट्री की PDF या सभी पन्नों की फ़ोटो यहीं भेजें।";
 
 export function parseCostKind(text: string): WaFeeKind | null {
   const s = normDigits(text).trim().toLowerCase();
