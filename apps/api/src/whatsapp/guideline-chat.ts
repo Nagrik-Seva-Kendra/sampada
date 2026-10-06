@@ -6,7 +6,7 @@
  * The value always comes from the office calculator (guideline/calculator.ts:
  * plotValue + stampDuty) and the rows from guidelineCandidates() of the colony
  * setup -- nothing is copied, so the bot and the office tools agree. Nothing
- * is guessed: a missing locality / row / type / area / corner is asked, more
+ * is guessed: a missing locality / row / type / area / corner / boundary is asked, more
  * than one row is listed for the customer to choose.
  */
 import { officeFeeFor, type WaOfficeFees } from "@sampada/shared";
@@ -16,7 +16,7 @@ import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
 import { inr, normDigits } from "./intake-rules.js";
 
 export type GuideType = "plotRes" | "plotCom" | "house" | "shop" | "flat" | "agri";
-export type GuideStep = "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER";
+export type GuideStep = "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY";
 
 export interface GuideState {
   mode: "guide";
@@ -29,6 +29,8 @@ export interface GuideState {
   type?: GuideType | null;
   area?: { value: number; unit: "sqft" | "sqm" } | null;
   corner?: boolean | null;
+  /** Boundary wall / नींव भरा (calculator "foundation", +10%). */
+  boundary?: boolean | null;
 }
 
 export interface GuideFacts {
@@ -37,6 +39,7 @@ export interface GuideFacts {
   type: GuideType | null;
   area: { value: number; unit: "sqft" | "sqm" } | null;
   corner: boolean | null;
+  boundary: boolean | null;
 }
 
 // ---------- reading the customer's words ----------
@@ -54,7 +57,10 @@ const AGRI = /kheti|खेती|कृषि|krishi|agri|\bkhet\b|खेत|zam
 const PLOT = /plot|प्लॉट|प्लाट|भूखंड|भूखण्ड|khali|खाली/i;
 const COMMERCIAL = /vyavsayik|vyavasayik|व्यावसायिक|व्यवसायिक|commercial|कमर्शियल/i;
 const CORNER = /corner|कॉर्नर|कोर्नर|कार्नर/i;
-const NOT_CORNER = /(corner|कॉर्नर|कोर्नर|कार्नर)\s*(nahi|nahin|nhi|नहीं|नही|not|no)\b|(nahi|नहीं|not|non|no)[\s-]*(corner|कॉर्नर|कोर्नर|कार्नर)/i;
+const BOUNDARY = String.raw`boundary|baundri|boundry|bondri|बाउंड्री|बाउन्ड्री|बॉउंड्री|बाउंड्रीवाल|चारदीवारी|char\s*diwari|नींव|नीव|neev|neenv|foundation`;
+const BOUNDARY_RE = new RegExp(BOUNDARY, "i");
+const NOT_BOUNDARY = new RegExp(String.raw`(${BOUNDARY})(\s*(wall|wal|वॉल|वाल|भरी|भरा|bhari|bhara))?\s*(nahi|nahin|nhi|नहीं|नही|not|no)(?![a-z])|(nahi|नहीं|not|non|no|bina|बिना)[\s-]*(${BOUNDARY})`, "i");
+const NOT_CORNER = /(corner|कॉर्नर|कोर्नर|कार्नर)\s*(nahi|nahin|nhi|नहीं|नही|not|no)(?![a-z])|(nahi|नहीं|not|non|no)[\s-]*(corner|कॉर्नर|कोर्नर|कार्नर)/i;
 
 /** Words that are never part of a locality name. */
 const STOP = new Set(
@@ -115,7 +121,8 @@ export function guideFacts(text: string): GuideFacts {
   else if (AGRI.test(s) || AGRI_UNIT.test(s)) type = "agri";
   else if (PLOT.test(s)) type = COMMERCIAL.test(s) ? "plotCom" : "plotRes";
   const corner = NOT_CORNER.test(s) ? false : CORNER.test(s) ? true : null;
-  return { name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area, corner };
+  const boundary = NOT_BOUNDARY.test(s) ? false : BOUNDARY_RE.test(s) ? true : null;
+  return { name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area, corner, boundary };
 }
 
 // ---------- rows ----------
@@ -153,6 +160,7 @@ export const GUIDE_ASK_TYPE =
   "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस\n5. फ़्लैट\n6. खेती की ज़मीन";
 export const GUIDE_ASK_AREA = "प्लॉट का क्षेत्रफल लिखें (जैसे: 2770 वर्गफुट, 257 वर्गमीटर या 30x40 फुट)।";
 export const GUIDE_ASK_CORNER = "क्या प्लॉट कॉर्नर (दो तरफ़ सड़क) का है? नंबर लिखें:\n1. हाँ\n2. नहीं";
+export const GUIDE_ASK_BOUNDARY = "क्या प्लॉट पर बाउंड्री वॉल बनी है या नींव भरी है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_PDF_HINT = "सही गाइडलाइन के लिए उसी संपत्ति की पुरानी रजिस्ट्री की PDF या सभी पन्नों की फ़ोटो यहीं भेजें।";
 export const GUIDE_DISCLAIMER = "⚠️ यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।";
 
@@ -175,12 +183,14 @@ export function readType(text: string): GuideType | null {
   const byNo: Record<string, GuideType> = { "1": "plotRes", "2": "plotCom", "3": "house", "4": "shop", "5": "flat", "6": "agri" };
   return byNo[n] ?? guideFacts(text).type;
 }
-export function readCorner(text: string): boolean | null {
+const yesNo = (text: string): boolean | null => {
   const n = bare(text).toLowerCase();
   if (/^(1|haan|han|ha|hn|yes|y|हाँ|हां|हा|जी हाँ)$/.test(n)) return true;
   if (/^(2|nahi|nahin|nhi|na|no|n|नहीं|नही|ना)$/.test(n)) return false;
-  return guideFacts(text).corner;
-}
+  return null;
+};
+export const readCorner = (text: string): boolean | null => yesNo(text) ?? guideFacts(text).corner;
+export const readBoundary = (text: string): boolean | null => yesNo(text) ?? guideFacts(text).boundary;
 export function readPick(text: string, n: number): number | "none" | null {
   const s = bare(text).toLowerCase();
   if (/^(0|koi nahi|koi nahin|none|कोई नहीं)$/.test(s)) return "none";
@@ -193,18 +203,18 @@ export function readPick(text: string, n: number): number | "none" | null {
 // ---------- the answer ----------
 /**
  * Guideline value of a plot by the office calculator (plotValue: road premium
- * 0, corner +10%, no नींव भरा premium) and the duties by its stampDuty() with
+ * 0; corner +10% and boundary wall / नींव भरा +10%, both +20%) and the duties by its stampDuty() with
  * the registry amount as the consideration; the office fee slab is on the
  * higher of amount and guideline value.
  */
 export function guideAnswer(
-  input: { entry: GuidelineEntry; type: "plotRes" | "plotCom"; area: { value: number; unit: "sqft" | "sqm" }; corner: boolean; amount: number | null },
+  input: { entry: GuidelineEntry; type: "plotRes" | "plotCom"; area: { value: number; unit: "sqft" | "sqm" }; corner: boolean; boundary: boolean; amount: number | null },
   fees: WaOfficeFees,
 ): { text: string; value: number; stamp: ReturnType<typeof stampDuty> } {
-  const { entry, area, corner, amount } = input;
+  const { entry, area, corner, boundary, amount } = input;
   const use = input.type === "plotCom" ? "com" : "res";
   const sqm = plotAreaToSqm(area.value, area.unit);
-  const r = plotValue({ entry, areaSqm: sqm, use, corner });
+  const r = plotValue({ entry, areaSqm: sqm, use, corner, foundation: boundary });
   const value = Math.round(r.value);
   const st = stampDuty(r.value, entry, amount ?? 0);
   const base = Math.max(amount ?? 0, value);
@@ -212,7 +222,7 @@ export function guideAnswer(
   const lines = [
     `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
-    `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : "आवासीय"} भूखण्ड)${corner ? " + कॉर्नर 10%" : ""}`,
+    `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : "आवासीय"} भूखण्ड)${corner ? " + कॉर्नर 10%" : ""}${boundary ? " + बाउंड्री वॉल/नींव 10%" : ""}${corner || boundary ? ` = ₹${inr(r.rate)}` : ""}`,
     `क्षेत्रफल: ${area.value} ${area.unit === "sqft" ? "वर्गफुट" : "वर्गमीटर"}${area.unit === "sqft" ? ` = ${+sqm.toFixed(2)} वर्गमीटर` : ""}`,
     `गाइडलाइन मूल्य: ₹${inr(value)}`,
   ];
@@ -227,7 +237,7 @@ export function guideAnswer(
   lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
   lines.push(
     "",
-    `मान्यता: सड़क प्रीमियम 0%; नींव भरे प्लॉट का +10% नहीं जोड़ा गया${corner ? "" : "; कॉर्नर नहीं"}।`,
+    `मान्यता: सड़क प्रीमियम 0%${corner ? "" : "; कॉर्नर नहीं"}${boundary ? "" : "; बाउंड्री वॉल / नींव नहीं"}।`,
     GUIDE_DISCLAIMER,
     'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
   );
@@ -252,6 +262,7 @@ export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
     type: g.type ?? f.type,
     area: g.area ?? f.area,
     corner: g.corner ?? f.corner,
+    boundary: g.boundary ?? f.boundary,
   };
 }
 
@@ -271,8 +282,9 @@ export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntr
   if (!g.type) return { state: { ...g, step: "TYPE" }, replies: [GUIDE_ASK_TYPE] };
   if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_AREA] };
   if (g.corner == null) return { state: { ...g, step: "CORNER" }, replies: [GUIDE_ASK_CORNER] };
+  if (g.boundary == null) return { state: { ...g, step: "BOUNDARY" }, replies: [GUIDE_ASK_BOUNDARY] };
   const entry = data.find((e) => e.sno === g.sno)!;
-  const a = guideAnswer({ entry, type: g.type, area: g.area, corner: g.corner, amount: g.amount }, fees);
+  const a = guideAnswer({ entry, type: g.type, area: g.area, corner: g.corner, boundary: g.boundary, amount: g.amount }, fees);
   return { state: null, replies: [a.text], outcome: "answered" };
 }
 
@@ -322,6 +334,12 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       const c = readCorner(text);
       if (c == null) unclear = GUIDE_ASK_CORNER;
       next = { ...g, corner: c };
+      break;
+    }
+    case "BOUNDARY": {
+      const b = readBoundary(text);
+      if (b == null) unclear = GUIDE_ASK_BOUNDARY;
+      next = { ...g, boundary: b };
       break;
     }
   }

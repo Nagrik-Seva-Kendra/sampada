@@ -2,6 +2,7 @@ import { DEFAULT_OFFICE_FEES } from "@sampada/shared";
 import { describe, expect, it } from "vitest";
 import {
   GUIDE_ASK_AREA,
+  GUIDE_ASK_BOUNDARY,
   GUIDE_ASK_CORNER,
   GUIDE_ASK_NAME,
   GUIDE_ASK_TYPE,
@@ -24,13 +25,14 @@ const SNO_845 = GUIDELINE_DATA.find((e) => e.sno === 845)!;
 
 describe("guideline from the customer's words", () => {
   it("reads locality, ward, area; nothing it was not told", () => {
-    expect(guideFacts(TEXT)).toEqual({ name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null });
+    expect(guideFacts(TEXT)).toEqual({ name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null, boundary: null });
     expect(guideFacts("गंगा विहार वार्ड नं. 60 में 257 वर्गमीटर का कॉर्नर प्लॉट")).toEqual({
       name: "गंगा विहार",
       ward: "60",
       type: "plotRes",
       area: { value: 257, unit: "sqm" },
       corner: true,
+      boundary: null,
     });
     expect(guideFacts("30x40 ka plot, corner nahi").area).toEqual({ value: 1200, unit: "sqft" });
     expect(guideFacts("30x40 ka plot, corner nahi").corner).toBe(false);
@@ -59,6 +61,8 @@ describe("the 7:09 PM example: ₹33,47,000, Ganga Vihar ward 60, 2770 sqft", ()
     t = guideReply(t.state!, "1", fees);
     expect(t.replies).toEqual([GUIDE_ASK_CORNER]);
     t = guideReply(t.state!, "nahi", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_BOUNDARY]);
+    t = guideReply(t.state!, "2", fees);
     expect(t.state).toBeNull();
     expect(t.outcome).toBe("answered");
     const text = t.replies[0]!;
@@ -83,13 +87,45 @@ describe("the 7:09 PM example: ₹33,47,000, Ganga Vihar ward 60, 2770 sqft", ()
   });
 
   it("without an amount: only the guideline; corner +10% by the calculator", () => {
-    const a = guideAnswer({ entry: SNO_845, type: "plotRes", area: { value: 2770, unit: "sqft" }, corner: true, amount: null }, fees);
+    const a = guideAnswer({ entry: SNO_845, type: "plotRes", area: { value: 2770, unit: "sqft" }, corner: true, boundary: false, amount: null }, fees);
     const calc = plotValue({ entry: SNO_845, areaSqm: plotAreaToSqm(2770, "sqft"), use: "res", corner: true });
     expect(a.value).toBe(Math.round(calc.value));
     expect(a.text).toContain("+ कॉर्नर 10%");
     expect(a.text).not.toContain("रजिस्ट्री राशि");
     expect(a.text).not.toContain("ऊपर की राशि");
     expect(a.stamp.male.stampDuty).toBe(Math.round(calc.value * 0.095));
+  });
+});
+
+describe("corner and boundary wall / नींव: +10% each, +20% together (calculator plotValue)", () => {
+  const value = (corner: boolean, foundation: boolean) =>
+    Math.round(plotValue({ entry: SNO_845, areaSqm: plotAreaToSqm(2770, "sqft"), use: "res", corner, foundation }).value);
+  const answer = (corner: boolean, boundary: boolean) =>
+    guideAnswer({ entry: SNO_845, type: "plotRes", area: { value: 2770, unit: "sqft" }, corner, boundary, amount: null }, fees);
+
+  it("matches the calculator for every combination", () => {
+    expect(value(true, true)).toBe(Math.round(13_000 * 1.2 * plotAreaToSqm(2770, "sqft")));
+    expect(answer(true, true).value).toBe(value(true, true));
+    expect(answer(true, false).value).toBe(value(true, false));
+    expect(answer(false, true).value).toBe(value(false, true));
+    expect(answer(false, false).value).toBe(3_345_437);
+    expect(answer(true, true).text).toContain("दर: ₹13,000 प्रति वर्गमीटर (आवासीय भूखण्ड) + कॉर्नर 10% + बाउंड्री वॉल/नींव 10% = ₹15,600");
+    expect(answer(false, true).text).toContain("+ बाउंड्री वॉल/नींव 10% = ₹14,300");
+    expect(answer(false, false).text).toContain("मान्यता: सड़क प्रीमियम 0%; कॉर्नर नहीं; बाउंड्री वॉल / नींव नहीं।");
+  });
+
+  it("read from the text, else asked", () => {
+    expect(guideFacts("corner plot, boundary wall bani hai").boundary).toBe(true);
+    expect(guideFacts("बाउंड्री वॉल नहीं है").boundary).toBe(false);
+    expect(guideFacts("नींव भरी है").boundary).toBe(true);
+    expect(guideFacts("कॉर्नर नहीं है").corner).toBe(false);
+    expect(guideFacts("bina boundary ka plot").boundary).toBe(false);
+    const t = guideNext(mergeFacts({ mode: "guide", step: "NAME", amount: null, sno: 845 }, guideFacts("2770 sqft corner plot boundary wall bani hai")), fees);
+    expect(t.outcome).toBe("answered");
+    expect(t.replies[0]).toContain("= ₹15,600");
+    const ask = guideNext(mergeFacts({ mode: "guide", step: "NAME", amount: null, sno: 845 }, guideFacts("2770 sqft corner plot")), fees);
+    expect(ask.replies).toEqual([GUIDE_ASK_BOUNDARY]);
+    expect(guideReply(ask.state!, "haan", fees).replies[0]).toContain("= ₹15,600");
   });
 });
 
@@ -107,7 +143,7 @@ describe("guideline questions: never a guess, never silent", () => {
     expect(t.replies).toEqual([GUIDE_ASK_AREA]);
     t = guideReply(t.state!, "2770", fees);
     expect(t.replies[0]).toContain("इकाई भी लिखें");
-    t = guideReply(t.state!, "2770 sqft, corner", fees);
+    t = guideReply(t.state!, "2770 sqft, corner, boundary wall nahi", fees);
     expect(t.outcome).toBe("answered");
     expect(t.replies[0]).toContain("+ कॉर्नर 10%");
   });

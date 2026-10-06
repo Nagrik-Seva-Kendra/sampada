@@ -2,7 +2,7 @@ import { Logger } from "@nestjs/common";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@sampada/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontDoorService } from "./front-door.service.js";
-import { GUIDE_ASK_CORNER, GUIDE_ASK_TYPE } from "./guideline-chat.js";
+import { GUIDE_ASK_BOUNDARY, GUIDE_ASK_CORNER, GUIDE_ASK_TYPE } from "./guideline-chat.js";
 import { asksGuideline, COST_AMOUNT_ASK, COST_AMOUNT_UNCLEAR, COST_KIND_ASK, MENU_TEXT, parseMoney } from "./wa-smart.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
@@ -96,6 +96,7 @@ describe("cost flow: the 7:09 PM conversation", () => {
     expect(pick.replies[0]).not.toContain("कौन सा दस्तावेज़");
     expect((await w.say("1")).replies).toEqual([GUIDE_ASK_TYPE]);
     expect((await w.say("1")).replies).toEqual([GUIDE_ASK_CORNER]);
+    expect((await w.say("2")).replies).toEqual([GUIDE_ASK_BOUNDARY]);
     const ans = (await w.say("2")).replies.join("\n");
     expect(ans).toContain("गाइडलाइन मूल्य: ₹33,45,437");
     expect(ans).toContain("रजिस्ट्री राशि: ₹33,47,000");
@@ -195,6 +196,7 @@ describe("webhook: cost answers are never swallowed; silent batches say why", ()
     expect(sent.at(-1)).toContain("क्र. 845");
     await say("1");
     await say("1");
+    await say("2");
     await say("2");
     expect(sent.at(-1)).toContain("ऊपर की राशि ₹54,563 पर 5.1%");
     expect(logged).toContain("guideline chat ********5648 step=- outcome=answered");
