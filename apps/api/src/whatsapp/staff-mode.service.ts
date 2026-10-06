@@ -45,7 +45,8 @@ type StaffState =
 export interface StaffMessage {
   type: string;
   text?: string;
-  location?: { latitude: number; longitude: number };
+  /** WhatsApp adds name / address only when a place was picked or searched, never for "current location". */
+  location?: { latitude: number; longitude: number; name?: string; address?: string; url?: string };
 }
 
 /**
@@ -92,6 +93,11 @@ export class StaffModeService {
       const lng = Number(msg.location.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return ["लोकेशन पढ़ी नहीं जा सकी, दोबारा भेजें।"];
       if (state?.mode !== "att-punch") return ['पहले लिखें: "हाज़िरी", "जा रहा हूँ" या "बाहर का काम: कारण" — फिर लोकेशन भेजें।'];
+      // A picked / searched place (it has a name or address) is not where the person is: attendance needs the live position.
+      if (msg.location.name || msg.location.address || msg.location.url) {
+        this.log.log(`staff punch ${state.kind} via whatsapp: picked place refused`);
+        return ['यह चुनी हुई जगह है, आपकी अभी की लोकेशन नहीं। 📎 अटैच → Location → "Send your current location" (अभी की लोकेशन भेजें) दबाएँ। जगह खोजकर या चुनकर भेजने से हाज़िरी नहीं लगती।'];
+      }
       await this.setState(phone, null);
       const r = await this.attendance.punch(this.orgId, me.userId, { kind: state.kind, lat, lng, ...(state.reason ? { reason: state.reason } : {}) }, "whatsapp", now);
       this.log.log(`staff punch ${state.kind} via whatsapp: ${r.code}`);
