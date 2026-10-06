@@ -31,6 +31,9 @@ export function digestDue(now: Date, lastRunAt: Date | null, at = digestTime()):
  * reminders 2 hours before a task is due, and deletion of stored voice notes
  * that are due (7 days). Logs counts and task numbers only.
  */
+/** "05/10/2026" (IST). */
+const istDdMmYyyy = (d: Date) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10).split("-").reverse().join("/");
+
 @Injectable()
 export class TaskJobsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger("TaskJobs");
@@ -77,7 +80,7 @@ export class TaskJobsService implements OnModuleInit, OnModuleDestroy {
       await this.outbox.deliverDirect(o, text, {
         name: WA_TEMPLATES.ownerDigest.name,
         language: WA_TEMPLATES.ownerDigest.language,
-        params: [String(dueToday), String(overdue)],
+        params: [istDdMmYyyy(now), String(dueToday), String(overdue)],
       });
     }
     this.log.log(`morning list sent: today=${dueToday} overdue=${overdue}`);

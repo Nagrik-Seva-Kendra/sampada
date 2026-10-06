@@ -99,7 +99,7 @@ export class AttendanceJobsService implements OnModuleInit, OnModuleDestroy {
         await this.outbox.deliverDirect(s.phone!, STAFF_INTRO.replace("{name}", s.firstName), {
           name: WA_TEMPLATES.staffNotice.name,
           language: WA_TEMPLATES.staffNotice.language,
-          params: [s.firstName, "अब हाज़िरी आपके लॉगिन के हाज़िरी पेज पर लगेगी, लोकेशन सिर्फ़ बटन दबाने के समय ली जाती है"],
+          params: [s.firstName, "हाज़िरी", "अब हाज़िरी आपके लॉगिन के हाज़िरी पेज पर लगेगी, लोकेशन सिर्फ़ बटन दबाने के समय ली जाती है"],
         });
       });
     }
@@ -115,24 +115,26 @@ export class AttendanceJobsService implements OnModuleInit, OnModuleDestroy {
     // Each report only within 2 hours of its time (a restart later in the day does not send a stale one).
     const morning = hhmmToMin(settings.startTime) + 30;
     if (mins >= morning && mins < morning + 120) {
-      await this.once(`att-morning:${day}`, async () => this.toOwner(await this.attendance.morningReport(this.orgId, now)));
+      await this.once(`att-morning:${day}`, async () => this.toOwner(await this.attendance.morningReport(this.orgId, now), now));
     }
     const evening = hhmmToMin(settings.endTime) + 60;
     if (mins >= evening && mins < evening + 120) {
       await this.once(`att-evening:${day}`, async () => {
         const text = await this.attendance.eveningReport(this.orgId, now);
-        if (text) await this.toOwner(text);
+        if (text) await this.toOwner(text, now);
       });
     }
   }
 
   /** Text inside the 24h window; outside it the staff_notice template with the report on one line. */
-  private async toOwner(text: string): Promise<void> {
+  private async toOwner(text: string, now = new Date()): Promise<void> {
+    const day = istDay(now);
+    const ref = `हाज़िरी रिपोर्ट ${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`;
     for (const o of this.attendance.ownerNumbers()) {
       await this.outbox.deliverDirect(o, text, {
         name: WA_TEMPLATES.staffNotice.name,
         language: WA_TEMPLATES.staffNotice.language,
-        params: ["मालिक जी", text.replace(/\s*\n\s*/g, " · ").slice(0, 900)],
+        params: ["मालिक जी", ref, text.replace(/\s*\n\s*/g, " · ").slice(0, 900)],
       });
     }
   }

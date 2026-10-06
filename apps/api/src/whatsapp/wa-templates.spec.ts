@@ -34,6 +34,14 @@ describe("template rules (checked before submitting)", () => {
     expect(WA_TEMPLATES.alert.name).toBe("new_request_alert_v2");
   });
 
+  it("Meta re-classified v1 texts as MARKETING: a concrete reference is required, promotional words refused; v1 names are gone", () => {
+    const names = Object.values(WA_TEMPLATES as Record<string, WaTemplateDef>).map((t) => t.name);
+    for (const old of ["follow_up_reminder", "staff_notice", "owner_task_digest"]) expect(names).not.toContain(old);
+    expect(names).toEqual(expect.arrayContaining(["follow_up_reminder_v2", "staff_notice_v2", "owner_task_digest_v2"]));
+    expect(templateProblems({ name: "staff_notice", body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से सूचना: {{2}}। धन्यवाद।", example: ["a", "b"] })).toContain("noReference");
+    expect(templateProblems({ name: "x", body: "नमस्ते {{1}}, अनुरोध पर आज 20% छूट वाला ऑफर है, जल्दी करें आज ही", example: ["a"] })).toContain("promotional");
+  });
+
   it("start / end / adjacent / numbering / example count / name", () => {
     expect(templateProblems({ name: "x", body: "{{1}} नमस्ते आप कैसे हैं आज", example: ["a"] })).toContain("startsWithVariable");
     expect(templateProblems({ name: "x", body: "नमस्ते आप कैसे हैं आज {{1}}।", example: ["a"] })).toContain("endsWithVariable");

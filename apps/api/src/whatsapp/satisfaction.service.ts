@@ -148,14 +148,14 @@ export class SatisfactionService implements OnModuleInit, OnModuleDestroy {
         const cfg = await this.config(this.orgId);
         await this.setState(phone, rating <= 3 ? { mode: "feedback", requestId: live.requestId, until: new Date(now.getTime() + 2 * 864e5).toISOString() } : null);
         this.log.log(`rating ${rating} for request ${requestRef(live.requestId)}`);
-        if (rating <= 3) await this.alertOwner(`⚠️ अनुरोध ${requestRef(live.requestId)} को ${rating}/5 रेटिंग मिली (${maskPhone(phone)})।`);
+        if (rating <= 3) await this.alertOwner(`⚠️ अनुरोध ${requestRef(live.requestId)} को ${rating}/5 रेटिंग मिली (${maskPhone(phone)})।`, null, `अनुरोध ${requestRef(live.requestId)}`);
         return [ratingReply(rating, cfg.reviewUrl || null)];
       }
     }
     if (live?.mode === "feedback" && v.length >= 2 && !RATING_RE.test(v)) {
       await this.prisma.draftIntake.updateMany({ where: { id: live.requestId, phone }, data: { feedback: v.slice(0, 1000) } });
       await this.setState(phone, null);
-      await this.alertOwner(`📝 अनुरोध ${requestRef(live.requestId)} — कम रेटिंग पर ग्राहक की बात दर्ज हुई। WhatsApp अनुरोध पेज पर देखें।`);
+      await this.alertOwner(`📝 अनुरोध ${requestRef(live.requestId)} — कम रेटिंग पर ग्राहक की बात दर्ज हुई। WhatsApp अनुरोध पेज पर देखें।`, null, `अनुरोध ${requestRef(live.requestId)}`);
       return ["धन्यवाद, आपकी बात मालिक तक पहुँचा दी गई है। हम सुधार करेंगे।"];
     }
     if (CHECKLIST_RE.test(v)) {
@@ -173,7 +173,7 @@ export class SatisfactionService implements OnModuleInit, OnModuleDestroy {
       if (note.length < 3) return ['क्या सुधार करना है, साथ में लिखें — जैसे "सुधार: पिता का नाम मोहन लाल है"।'];
       const list = Array.isArray(last.corrections) ? (last.corrections as any[]) : [];
       await this.prisma.draftIntake.update({ where: { id: last.id }, data: { corrections: [...list, { text: note.slice(0, 500), at: now.toISOString() }].slice(-20) as any } });
-      await this.alertOwner(`✏️ अनुरोध ${requestRef(last.id)} में ग्राहक ने सुधार भेजा। WhatsApp अनुरोध पेज पर देखें।`, last.assigneeId);
+      await this.alertOwner(`✏️ अनुरोध ${requestRef(last.id)} में ग्राहक ने सुधार भेजा। WhatsApp अनुरोध पेज पर देखें।`, last.assigneeId, `अनुरोध ${requestRef(last.id)}`);
       this.log.log(`correction for request ${requestRef(last.id)}`);
       return [`✏️ आपका सुधार अनुरोध ${requestRef(last.id)} में दर्ज हो गया। स्टाफ ड्राफ्ट में ठीक करेगा।`];
     }
@@ -188,7 +188,8 @@ export class SatisfactionService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async alertOwner(text: string, assigneeId?: string | null) {
+  /** `ref`: the record the alert is about ("अनुरोध AB12CD") -- the template needs it. */
+  private async alertOwner(text: string, assigneeId: string | null, ref: string) {
     const to = new Set(ownerNumbers());
     if (assigneeId) {
       const u = await this.prisma.user.findFirst({ where: { id: assigneeId }, select: { mobile: true } });
@@ -196,7 +197,7 @@ export class SatisfactionService implements OnModuleInit, OnModuleDestroy {
       if (/^[6-9]\d{9}$/.test(ten)) to.add(`91${ten}`);
     }
     for (const n of to) {
-      await this.outbox.deliverDirect(n, text, { name: WA_TEMPLATES.staffNotice.name, language: WA_TEMPLATES.staffNotice.language, params: ["जी", text.replace(/\s+/g, " ")] }).catch(() => undefined);
+      await this.outbox.deliverDirect(n, text, { name: WA_TEMPLATES.staffNotice.name, language: WA_TEMPLATES.staffNotice.language, params: ["जी", ref, text.replace(/\s+/g, " ")] }).catch(() => undefined);
     }
   }
 

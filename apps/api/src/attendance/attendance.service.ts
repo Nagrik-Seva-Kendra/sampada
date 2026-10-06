@@ -394,7 +394,7 @@ export class AttendanceService {
       await this.outbox.deliverDirect(staff.phone, `नमस्ते ${staff.firstName}, ${text}`, {
         name: WA_TEMPLATES.staffNotice.name,
         language: WA_TEMPLATES.staffNotice.language,
-        params: [staff.firstName, text.replace(/[।]$/, "")],
+        params: [staff.firstName, `छुट्टी अर्ज़ी #${item.number}`, text.replace(/[।]$/, "")],
       });
     }
     this.log.log(`leave #${item.number} ${approve ? "approved" : "rejected"}`);

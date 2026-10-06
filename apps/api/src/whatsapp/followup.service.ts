@@ -37,6 +37,9 @@ export function followUpDueNow(now: Date, env = process.env.WA_FOLLOWUP_TIME): b
  * follow_up_reminder template). "बंद" / STOP opts the number out of all
  * follow-ups; "हाँ करवाना है" creates a call-back for the office.
  */
+/** The record kind in the template ("अनुरोध AB12CD (पट्टा)"). */
+const FOLLOW_UP_LABEL: Record<FollowUpKind, string> = { agreement: "अनुबंध", mortgage: "बंधक पत्र", patta: "पट्टा", sale: "विक्रय पत्र" };
+
 @Injectable()
 export class FollowUpService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger("FollowUps");
@@ -195,7 +198,11 @@ export class FollowUpService implements OnModuleInit, OnModuleDestroy {
           kind: "FOLLOWUP",
           to: f.phone,
           text: `${body}\n(ऐसे संदेश बंद करने के लिए "बंद" लिखें।)`,
-          template: { name: WA_TEMPLATES.followUp.name, language: WA_TEMPLATES.followUp.language, params: [body] },
+          template: {
+            name: WA_TEMPLATES.followUp.name,
+            language: WA_TEMPLATES.followUp.language,
+            params: [req.customerName ? `${req.customerName} जी` : "ग्राहक जी", ref, FOLLOW_UP_LABEL[f.kind as FollowUpKind] ?? "दस्तावेज़", date.split("-").reverse().join("/")],
+          },
         })
         .catch((e) => this.log.error(`follow-up for request ${ref} not recorded: ${e?.code ?? e?.name ?? "error"}`));
       if (f.recurring) {
