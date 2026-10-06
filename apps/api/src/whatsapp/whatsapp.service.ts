@@ -17,6 +17,8 @@ import {
   graphErrorSummary,
   isUniqueViolation,
   maskPhone,
+  metaErrorOf,
+  recordOutbound,
   type SignatureResult,
 } from "./webhook-diagnostics.js";
 
@@ -287,11 +289,15 @@ export class WhatsappService {
       headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
     });
+    const json: any = await res.json().catch(() => null);
     if (!res.ok) {
-      this.log.error(`send failed to ${maskPhone(to)}: ${await graphErrorSummary(res)}`);
+      const err = metaErrorOf(json, res.status);
+      recordOutbound("reply", false, err);
+      this.log.error(`send failed to ${maskPhone(to)}: http=${res.status} code=${err.code ?? "-"} subcode=${err.subcode ?? "-"} msg="${err.message ?? "-"}"`);
       return;
     }
-    const wamid = ((await res.json().catch(() => null)) as any)?.messages?.[0]?.id ?? "-";
+    recordOutbound("reply", true, null);
+    const wamid = json?.messages?.[0]?.id ?? "-";
     this.log.log(`sent reply to ${maskPhone(to)} wamid=${wamid}`);
   }
 

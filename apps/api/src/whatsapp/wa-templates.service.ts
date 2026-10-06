@@ -3,7 +3,7 @@ import { ClsService } from "nestjs-cls";
 import { templateProblems, WA_TEMPLATES, type WaTemplateDef, type WaTemplateStatus, type WaTemplateSubmitResult } from "@sampada/shared";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { isManagerRole } from "./wa-requests.service.js";
-import { graphBase } from "./webhook-diagnostics.js";
+import { cleanMetaText, graphBase } from "./webhook-diagnostics.js";
 
 /** Graph body for submitting one template for Meta's review. */
 export function templateSubmission(t: WaTemplateDef) {
@@ -15,17 +15,7 @@ export function templateSubmission(t: WaTemplateDef) {
   };
 }
 
-/** Meta's text, safe to show and log: no tokens, no long digit runs (numbers / ids), bounded. */
-export function cleanMetaText(v: unknown, max = 300): string | undefined {
-  if (typeof v !== "string" || !v.trim()) return undefined;
-  return v
-    .replace(/(access_token|token|bearer)\s*[=:]?\s*\S+/gi, "$1 [hidden]")
-    .replace(/EAA[A-Za-z0-9]{10,}/g, "[hidden]")
-    .replace(/\d[\d\s-]{6,}\d/g, "[number]")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
+export { cleanMetaText };
 
 /** The useful part of a Graph error: code, error_subcode, error_user_title, error_user_msg (or message). */
 export function metaError(json: any, httpStatus: number) {

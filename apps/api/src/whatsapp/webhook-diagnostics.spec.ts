@@ -175,7 +175,7 @@ describe("WhatsappService", () => {
     vi.stubEnv("WA_ACCESS_TOKEN", TOKEN);
     vi.stubGlobal("fetch", vi.fn(async () => json(401, { error: { code: 190, type: "OAuthException", message: "Session has expired" } })));
     await new WhatsappService({} as any, {} as any, { touchContact: async () => undefined } as any, { handleReply: async () => null, flushPending: async () => undefined } as any, frontStub() as any, { isOwner: () => false, handleStaff: async () => null, linkRequest: async () => undefined } as any, { handle: async () => null, ownerText: async () => null, ownerButton: async () => null } as any).sendText("919876543210", "hi");
-    expect(logged).toContain('error: send failed to ********3210: http=401 code=190 type=OAuthException message="Session has expired"');
+    expect(logged).toContain('error: send failed to ********3210: http=401 code=190 subcode=- msg="Session has expired"');
   });
 });
 

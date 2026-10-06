@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
 import { ArchiveCopyPanel } from "./ArchiveCopyPanel";
+import { ConnectionPanel } from "./ConnectionPanel";
 import { SatisfactionPanel } from "./SatisfactionPanel";
 import { BlockedPanel, FeesPanel } from "./BotSettingsPanels";
 import { DeleteRequestDialog, takeWaToast } from "./DeleteRequestDialog";
@@ -164,6 +165,7 @@ export function WhatsappRequestsPage() {
           </h2>
         </div>
 
+        {canManage && <ConnectionPanel />}
         {canManage && <TemplatesPanel />}
         {canManage && <FeesPanel />}
         {canManage && <BlockedPanel />}
