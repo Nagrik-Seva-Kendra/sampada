@@ -30,7 +30,12 @@ const WHERE_WORD = /पता|address|एड्रेस|location|लोके�
 export function isOfficeInfo(text: string): boolean {
   const s = clean(text);
   if (WHERE_WORD.test(s) && (OFFICE_WORD.test(s) || /^(address|पता|location|लोकेशन)/i.test(s) || /(bhejo|भेजो|batao|बताओ|do|दो)/i.test(s))) return true;
-  return OFFICE_WORD.test(s) && WHEN_WORD.test(s);
+  if (OFFICE_WORD.test(s) && WHEN_WORD.test(s)) return true;
+  // "kitne baje aau", "kya sunday ko khula hai", "kal khula rahega": the office is meant.
+  return (
+    /(कितने बजे|kitne baje|kab|कब)\s*(आऊ|आऊँ|आऊं|आएँ|आएं|आयें|आ जाऊ|aau|aaun|aaoon|aayen|aaye|aa jau|aa sakt|आ सकत|milenge|मिलेंगे)/i.test(s) ||
+    /(खुला|खुली|खुलता|खुलेगा|khula|khuli|khulta|khulega|बंद रहता|band rehta|band rahta|बंद रहेगा|band rahega)/i.test(s)
+  );
 }
 
 const DAY_HI = ["रविवार", "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार"];

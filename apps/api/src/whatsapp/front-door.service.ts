@@ -12,6 +12,7 @@ import { SatisfactionService } from "./satisfaction.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
+import { ASK_AWAY, asksToAsk, faqAnswer, GUIDE_MEANING_TEXT, isGuideMeaning, looksLikeQuestion, QUESTION_FORWARDED } from "./customer-faq.js";
 import { CLOSED_TEXT, fullPhone, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
 import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
 import { normDigits } from "./intake-rules.js";
@@ -32,6 +33,7 @@ import {
   parseCostKind,
   parseMoney,
   parseMenuChoice,
+  redactForModel,
   registryCostText,
 } from "./wa-smart.js";
 import { maskPhone } from "./webhook-diagnostics.js";
@@ -43,6 +45,9 @@ export const GIBBERISH_NOTICE = "लगता है संदेश गलत�
 export const DRAFT_HOWTO =
   "ड्राफ्ट के लिए कृपया पुरानी रजिस्ट्री की PDF या सभी पन्नों की साफ़ फ़ोटो भेजें।\n" +
   "बंधक पत्र के लिए बैंक का सैंक्शन लेटर और जिस संपत्ति को बंधक रखना है उसकी रजिस्ट्री भेजें।";
+/** "registry karwani hai", "बेचना है": wants a deed made (not asking about one). */
+const WANTS_ONE = /करवान|करवानी|करानी|कराना|बनवान|बनवानी|करनी है|करना है|चाहिए|बेचना|बेचनी|खरीदना|खरीदनी|karwan|karan[ai]|banwan|karni hai|karna hai|chahiye|chahie|bechn|kharidn|want|need|make/i;
+const QUESTION_NOTED = "🙏 आपका सवाल हमारे स्टाफ को भेज दिया है — जल्द ही यहीं जवाब मिलेगा।";
 export const STAFF_REPLY = "ठीक है, हमारा स्टाफ जल्द आपसे संपर्क करेगा। कार्यालय फ़ोन: 78984 75648";
 
 /** Customer-facing phrase for every work status (menu 3). */
@@ -55,6 +60,10 @@ const STATUS_PHRASE: Record<string, string> = {
 
 export type FrontRoute =
   | "menu"
+  | `faq-${string}`
+  | "ask-away"
+  | "draft-question"
+  | "question-forwarded"
   | "greeting"
   | "draft-howto"
   | "cost"
@@ -231,9 +240,20 @@ export class FrontDoorService {
       if (s) return { replies: [officeInfoText(s, "78984 75648")], route: "office-info", force: true };
     }
     // "नामांतरण करवाना है": not a draft the bot makes -- staff calls back.
-    if (!state && /नामांतरण|नामान्तरण|namantaran|mutation|दाखिल\s*खारिज|dakhil\s*kharij/i.test(text)) {
+    if (!state && /नामांतरण|नामान्तरण|namantaran|mutation|दाखिल\s*खारिज|dakhil\s*kharij|नाम\s*(कब\s*)?चढ़|naam\s*(kab\s*)?chadh/i.test(text)) {
       await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} नामांतरण के लिए बात करना चाहते हैं।`).catch(() => undefined);
       return { replies: ["नामांतरण के लिए हमारा स्टाफ जल्द आपसे संपर्क करेगा। चाहें तो रजिस्ट्री की PDF या फ़ोटो यहीं भेज दें। कार्यालय फ़ोन: 78984 75648"], route: "mutation" };
+    }
+    // "गवाह कितने लगेंगे", "वसीयत बनवानी है", "geo tag kya hai": answered here; an open
+    // question (cost / guideline) stays open. Amounts and bare numbers go on to the flows.
+    const answersKind = state?.mode === "cost" && state.step === "KIND" && parseCostKind(text) !== null;
+    if (!answersKind && !/^\s*\d{1,2}\s*[.)।]?\s*$/.test(normDigits(text)) && parseMoney(text) === null) {
+      const faq = faqAnswer(text);
+      if (faq) {
+        if (faq.alert) await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} ${faq.alert}।`).catch(() => undefined);
+        return { replies: [faq.text], route: `faq-${faq.topic}`, force: true };
+      }
+      if (!state && asksToAsk(text)) return { replies: [ASK_AWAY], route: "ask-away", force: true };
     }
     if (state?.mode === "call" || state?.mode === "callback") {
       // A bare menu number other than the call answers, or words of another option, leave the call questions.
@@ -267,12 +287,25 @@ export class FrontDoorService {
     switch (choice) {
       case 1:
         await this.setContact(phone, { state: null });
+        // "kya NRI ki registry ho sakti hai": a question about a registry, not "make one" -- the office answers it too.
+        if (looksLikeQuestion(text) && text.trim().split(/\s+/).length >= 4 && !WANTS_ONE.test(text)) {
+          if (this.questionAlertDue(phone, now)) {
+            await this.outbox
+              .alertOwners(`❓ WhatsApp नंबर ${fullPhone(phone)} का सवाल:\n"${redactForModel(text).slice(0, 300)}"`)
+              .catch(() => undefined);
+          }
+          return { replies: [QUESTION_NOTED, DRAFT_HOWTO], route: "draft-question", force: true };
+        }
         return { replies: [DRAFT_HOWTO], route: "draft-howto" };
       case 2: {
         // "33 लाख की रजिस्ट्री का खर्च / गाइडलाइन": the amount is already here.
         const amount = /^\s*2\s*[.)।]?\s*$/.test(normDigits(text)) ? null : parseMoney(text);
         if (amount) return this.costEstimate(phone, { mode: "cost", step: "AMOUNT" }, amount, text, await this.fees());
-        if (this.wantsGuideline(text)) return this.guideStart(phone, null, text);
+        if (this.wantsGuideline(text)) {
+          const g = await this.guideStart(phone, null, text);
+          if (isGuideMeaning(text) && g.replies.length) g.replies[0] = `${GUIDE_MEANING_TEXT}\n\n${g.replies[0]}`;
+          return g;
+        }
         await this.setContact(phone, { state: { mode: "cost", step: "KIND" } });
         return { replies: [COST_KIND_ASK], route: "cost" };
       }
@@ -301,7 +334,25 @@ export class FrontDoorService {
       const r = await deedWords();
       if (r) return { replies: r, route: "deed-words" };
     }
+    // A question the bot has no answer for: the office answers it -- never just the menu again.
+    if (!state && !isGreeting(text) && looksLikeQuestion(text)) {
+      if (this.questionAlertDue(phone, now)) {
+        await this.outbox
+          .alertOwners(`❓ WhatsApp नंबर ${fullPhone(phone)} का सवाल (बॉट जवाब नहीं दे पाया):\n"${redactForModel(text).slice(0, 300)}"`)
+          .catch(() => undefined);
+      }
+      return { replies: [QUESTION_FORWARDED], route: "question-forwarded", force: true };
+    }
     return { replies: [menuText(callOn)], route: isGreeting(text) ? "greeting" : "menu" };
+  }
+
+  private readonly questionAlerts = new Map<string, number>();
+  /** One owner alert per number per 5 minutes, however many questions come. */
+  private questionAlertDue(phone: string, now: Date): boolean {
+    const last = this.questionAlerts.get(phone) ?? 0;
+    if (now.getTime() - last < 5 * 60_000) return false;
+    this.questionAlerts.set(phone, now.getTime());
+    return true;
   }
 
   // ---------- call (menu 5) ----------
