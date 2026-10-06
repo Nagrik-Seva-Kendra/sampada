@@ -420,4 +420,9 @@ export const waStrings = {
   wcPhone: { en: "Phone number", hi: "फ़ोन नंबर" },
   wcWaba: { en: "WhatsApp Business Account", hi: "WhatsApp Business Account" },
   wcAppSubs: { en: "This app's webhook (callback URL, fields)", hi: "हमारे app का webhook (callback URL, fields)" },
+  wcToken: { en: "What the access token is allowed to do", hi: "Access token क्या कर सकता है" },
+  wcTokenTail: { en: "Token in server: …{tail} ({len} characters) — match the ending with the new token in Meta", hi: "सर्वर वाला token: …{tail} ({len} अक्षर) — आख़िरी हिस्सा Meta वाले नए token से मिलाएँ" },
+  wcTokenDebug: { en: "Token details (debug_token)", hi: "Token विवरण (debug_token)" },
+  wcWabaOwner: { en: "WABA owner business", hi: "WABA किस business का है" },
+  wcAppOwner: { en: "App and its business", hi: "App और उसका business" },
 } as const;

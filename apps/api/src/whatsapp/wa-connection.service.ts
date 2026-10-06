@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
-import type { WaConnectionReport, WaGraphRead, WaMetaError, WaTestMessageResult } from "@sampada/shared";
+import type { WaConnectionReport, WaGraphRead, WaMetaError, WaTestMessageResult, WaTokenInfo } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { ownerNumbers } from "./owner-assistant.service.js";
@@ -43,7 +43,7 @@ function safe(v: unknown, depth = 0): unknown {
  * config, this app not subscribed, 'messages' not subscribed, the webhook sent
  * elsewhere (override), number not on Cloud API, no webhook since start.
  */
-export function connectionFindings(r: Omit<WaConnectionReport, "findings">, now = new Date()): string[] {
+export function connectionFindings(r: Omit<WaConnectionReport, "findings" | "token">, now = new Date()): string[] {
   const out: string[] = [];
   const c = r.config;
   if (!c.accessToken || !c.phoneNumberId || !c.wabaId) out.push("❌ WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID / WA_WABA_ID में से कुछ सेट नहीं है।");
@@ -96,6 +96,86 @@ export function connectionFindings(r: Omit<WaConnectionReport, "findings">, now 
   return out;
 }
 
+const MESSAGING = "whatsapp_business_messaging";
+const MANAGEMENT = "whatsapp_business_management";
+const str = (v: unknown, max = 200): string | null => (v == null || v === "" ? null : String(v).slice(0, max));
+/** Meta's unix seconds → ISO; 0 means "never". */
+const unixTime = (v: unknown): string | null => (typeof v !== "number" ? null : v === 0 ? "never" : new Date(v * 1000).toISOString());
+
+/** The safe part of a /debug_token answer: no token, no secret. */
+export function tokenDebugOf(json: any): NonNullable<WaTokenInfo["debug"]["data"]> {
+  const d = json?.data ?? {};
+  const ids = (x: unknown) => (Array.isArray(x) ? x.slice(0, 50).map((i) => String(i)) : null);
+  return {
+    isValid: typeof d.is_valid === "boolean" ? d.is_valid : null,
+    type: str(d.type, 40),
+    appId: str(d.app_id, 40),
+    application: str(d.application),
+    userId: str(d.user_id, 40),
+    expiresAt: unixTime(d.expires_at),
+    dataAccessExpiresAt: unixTime(d.data_access_expires_at),
+    scopes: Array.isArray(d.scopes) ? d.scopes.slice(0, 60).map((x: unknown) => String(x)) : [],
+    granularScopes: Array.isArray(d.granular_scopes) ? d.granular_scopes.slice(0, 60).map((g: any) => ({ scope: String(g?.scope ?? ""), targetIds: ids(g?.target_ids) })) : [],
+    error: d.error ? { code: d.error.code ?? null, subcode: d.error.subcode ?? null, message: cleanMetaText(d.error.message) ?? null } : null,
+  };
+}
+
+/**
+ * Plain-language verdicts on what the token may do (pure): (d) invalid /
+ * expired, (c) another app's token, (a) no whatsapp_business_messaging,
+ * (b) messaging granted but not for this WABA / number, then portfolios.
+ */
+export function tokenVerdicts(
+  t: Omit<WaTokenInfo, "verdicts">,
+  cfg: { appId: string | null; wabaId: string | null; phoneNumberId: string | null },
+  now = new Date(),
+): string[] {
+  const out: string[] = [];
+  if (!t.length) return ["❌ WA_ACCESS_TOKEN सेट नहीं है। / WA_ACCESS_TOKEN is not set."];
+  const d = t.debug.data;
+  if (!t.debug.ok || !d) {
+    const e = t.debug.error;
+    out.push(`⚠️ Token की जाँच (debug_token) नहीं हो सकी${e ? ` (कोड ${e.code ?? e.http ?? "-"}: ${e.message ?? ""})` : ""} — WA_APP_ID / WA_APP_SECRET सही हैं? / Could not debug the token.`);
+    return out;
+  }
+  const expired = d.expiresAt && d.expiresAt !== "never" && Date.parse(d.expiresAt) <= now.getTime();
+  if (d.isValid === false || expired) {
+    out.push(
+      `❌ (d) Token अमान्य या समाप्त है${d.error?.message ? `: ${d.error.message}` : ""} — Coolify में नया token डालें। / Token is invalid or expired.`,
+    );
+  }
+  if (cfg.appId && d.appId && d.appId !== cfg.appId) {
+    out.push(`❌ (c) यह token दूसरे app (${d.appId}${d.application ? ` "${d.application}"` : ""}) का है, हमारे app ${cfg.appId} का नहीं। / Token belongs to app ${d.appId}, not ${cfg.appId}.`);
+  }
+  if (!d.scopes.includes(MESSAGING)) {
+    out.push(`❌ (a) Token में ${MESSAGING} अनुमति नहीं है — system user का token बनाते समय यह permission चुनें। / Token lacks ${MESSAGING}.`);
+  } else {
+    const g = d.granularScopes.find((x) => x.scope === MESSAGING);
+    const targets = g?.targetIds;
+    const ours = [cfg.wabaId, cfg.phoneNumberId].filter((x): x is string => !!x);
+    if (targets && targets.length && ours.length && !ours.some((id) => targets.includes(id))) {
+      out.push(
+        `❌ (b) ${MESSAGING} सिर्फ़ इन assets के लिए है: ${targets.join(", ")} — हमारा WABA ${cfg.wabaId ?? "?"} / नंबर ${cfg.phoneNumberId ?? "?"} इनमें नहीं। Business Settings → System users → Assign assets में यह WABA (Full control) जोड़कर नया token बनाएँ। / ${MESSAGING} is not granted for this WABA.`,
+      );
+    }
+  }
+  if (!d.scopes.includes(MANAGEMENT)) out.push(`⚠️ Token में ${MANAGEMENT} नहीं है — WABA / templates पढ़े नहीं जा सकेंगे। / Token lacks ${MANAGEMENT}.`);
+  if (d.type && d.type !== "SYSTEM_USER") out.push(`⚠️ Token का प्रकार ${d.type} है (SYSTEM_USER होना चाहिए) — यह जल्दी समाप्त हो सकता है। / Not a system-user token.`);
+  const wabaBiz = t.wabaOwner.data?.ownerBusinessId;
+  const appBiz = t.app.data?.ownerBusinessId;
+  if (wabaBiz && appBiz && wabaBiz !== appBiz) {
+    out.push(
+      `⚠️ App (${t.app.data?.id ?? cfg.appId}) business ${appBiz} में है और WABA business ${wabaBiz} में — अलग portfolios। System user उसी portfolio का हो जिसका WABA है, या WABA को app वाले portfolio के साथ share करें। / App and WABA are in different portfolios.`,
+    );
+  } else if (wabaBiz && !appBiz) {
+    out.push(`ℹ️ WABA business ${wabaBiz} का है; app का business owner token से पढ़ा नहीं जा सका — Meta App Dashboard → Settings → Basic में देखें। / App owner not readable.`);
+  }
+  if (!out.some((v) => v.startsWith("❌"))) {
+    out.unshift(`✅ Token मान्य है और इसमें ${MESSAGING} इस WABA के लिए है। फिर भी (#200) आए तो Coolify में token का आख़िरी हिस्सा (…${t.tail ?? ""}) Meta वाले नए token से मिलाएँ। / Token looks right.`);
+  }
+  return out;
+}
+
 /**
  * OWNER: "WhatsApp connection check" -- what Meta says about the number, the
  * WABA, the subscribed apps and this app's webhook, plus what this server has
@@ -132,6 +212,38 @@ export class WaConnectionService {
     if (process.env.WA_APP_ID) return process.env.WA_APP_ID;
     const r = await this.read("/app?fields=id", process.env.WA_ACCESS_TOKEN);
     return (r.data?.id as string | undefined) ?? null;
+  }
+
+  /** debug_token (app token) + WABA and app owners; only safe fields come back. */
+  private async tokenInfo(appId: string | null): Promise<WaTokenInfo> {
+    const env = process.env;
+    const token = env.WA_ACCESS_TOKEN ?? "";
+    const wabaId = env.WA_WABA_ID ?? null;
+    const appToken = appId && env.WA_APP_SECRET ? `${appId}|${env.WA_APP_SECRET}` : undefined;
+    const none = { ok: false, data: null, error: null };
+
+    const dbg = token ? await this.read(`/debug_token?input_token=${encodeURIComponent(token)}`, appToken) : none;
+    const debug: WaTokenInfo["debug"] = dbg.ok ? { ok: true, error: null, data: tokenDebugOf(dbg.data) } : { ok: false, data: null, error: dbg.error };
+
+    const w = wabaId ? await this.read(`/${wabaId}?fields=id,name,owner_business_info`, token || undefined) : none;
+    const wabaOwner: WaTokenInfo["wabaOwner"] = w.ok
+      ? { ok: true, error: null, data: { id: str(w.data?.id, 40), name: str(w.data?.name), ownerBusinessId: str(w.data?.owner_business_info?.id, 40), ownerBusinessName: str(w.data?.owner_business_info?.name) } }
+      : { ok: false, data: null, error: w.error };
+
+    let a: WaGraphRead<any> = none;
+    if (appId) {
+      // owner_business may be unknown to this version or unreadable: fall back to the basic fields, then to the app token.
+      for (const [fields, tk] of [["id,name,link,owner_business", token || undefined], ["id,name,link", token || undefined], ["id,name,link,owner_business", appToken]] as const) {
+        a = await this.read(`/${appId}?fields=${fields}`, tk);
+        if (a.ok) break;
+      }
+    }
+    const app: WaTokenInfo["app"] = a.ok
+      ? { ok: true, error: null, data: { id: str(a.data?.id, 40), name: str(a.data?.name), link: str(a.data?.link, 300), ownerBusinessId: str(a.data?.owner_business?.id, 40), ownerBusinessName: str(a.data?.owner_business?.name) } }
+      : { ok: false, data: null, error: a.error };
+
+    const info = { tail: token.length >= 12 ? token.slice(-6) : null, length: token.length, debug, wabaOwner, app };
+    return { ...info, verdicts: tokenVerdicts(info, { appId, wabaId, phoneNumberId: env.WA_PHONE_NUMBER_ID ?? null }) };
   }
 
   async check(now = new Date()): Promise<WaConnectionReport> {
@@ -178,6 +290,7 @@ export class WaConnectionService {
         }
       : { ok: false, data: null, error: subsApp.error };
 
+    const tokenInfo = await this.tokenInfo(appId);
     const last = await this.prisma.waInboundMessage.findFirst({ orderBy: { createdAt: "desc" }, select: { createdAt: true } }).catch(() => null);
     const st = connectionStats();
     const report: Omit<WaConnectionReport, "findings"> = {
@@ -198,8 +311,11 @@ export class WaConnectionService {
       appSubscriptions,
       webhook: { ...st.webhook, lastStoredMessageAt: last?.createdAt.toISOString() ?? null },
       lastOutbound: st.outbound,
+      token: tokenInfo,
     };
-    const findings = connectionFindings(report, now);
+    let findings = connectionFindings(report, now);
+    const tokenProblems = tokenInfo.verdicts.filter((v) => v.startsWith("❌"));
+    if (tokenProblems.length) findings = [...tokenProblems, ...findings.filter((f) => !f.startsWith("✅"))];
     this.log.log(`connection check: ${findings.filter((f) => f.startsWith("❌")).length} problem(s); webhooks since start ${st.webhook.posts}`);
     return { ...report, findings };
   }
