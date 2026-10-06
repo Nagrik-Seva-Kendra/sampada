@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
-import { ColonyProjectInput, ColonySaleInput } from "@sampada/shared";
+import { ColonyProjectInput, ColonySaleInput, ColonySoldPlotsInput } from "@sampada/shared";
 import { z } from "zod";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { ColonyService } from "./colony.service.js";
@@ -42,6 +42,28 @@ export class ColonyController {
   @Get("template-suggest/:deedId")
   suggest(@Param("deedId") deedId: string) {
     return this.service.suggest(deedId);
+  }
+
+  /** OWNER/ADMIN: the whole Setup suggested from the project's old deeds (nothing saved). */
+  @Get("projects/:id/setup-suggest")
+  setupSuggest(@Param("id") id: string, @Query("extra") extra?: string) {
+    return this.service.setupSuggest(id, String(extra ?? "").slice(0, 200));
+  }
+
+  /** OWNER/ADMIN: plots / units sold in the old deeds → plot master as SOLD. */
+  @Post("projects/:id/plots/import-sold")
+  importSold(@Param("id") id: string, @Body() body: unknown) {
+    return this.service.importSoldPlots(id, ColonySoldPlotsInput.parse(body));
+  }
+
+  @Put("projects/:id/plots/:plotId/corner")
+  corner(@Param("id") id: string, @Param("plotId") plotId: string, @Body() body: unknown) {
+    return this.service.setCorner(id, plotId, z.object({ corner: z.boolean() }).parse(body).corner);
+  }
+
+  @Get("guideline-search")
+  guidelineSearch(@Query("q") q?: string) {
+    return this.service.guidelineSearch(String(q ?? "").slice(0, 100));
   }
 
   @Get("projects/:id/dashboard")

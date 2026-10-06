@@ -72,7 +72,7 @@ export function missingMarkers(template: string): string[] {
 
 // ---------- the 4 blocks ----------
 export function plotLabel(block: string, plotNo: string): string {
-  return `ब्लॉक ${block} - प्लाट ${plotNo}`;
+  return block ? `ब्लॉक ${block} - प्लाट ${plotNo}` : `यूनिट ${plotNo}`;
 }
 
 export function buyerBlock(buyers: (ColonyBuyer & { aadhaarText?: string; panText?: string })[]): string {
@@ -82,9 +82,20 @@ export function buyerBlock(buyers: (ColonyBuyer & { aadhaarText?: string; panTex
   return formatPartyBlock("क्रेता पक्ष", parties);
 }
 
-export function plotBlock(p: { block: string; plotNo: string; ewFt: number | null; nsFt: number | null; areaSqft: number | null }): string {
+export function plotBlock(
+  p: { block: string; plotNo: string; ewFt: number | null; nsFt: number | null; areaSqft: number | null; floor?: string | null },
+  kind: string = "PLOT",
+): string {
   const sqft = p.areaSqft ?? (p.ewFt && p.nsFt ? p.ewFt * p.nsFt : null);
   const dims = p.ewFt && p.nsFt ? `${r2(p.ewFt)} फुट x ${r2(p.nsFt)} फुट होकर ` : "";
+  if (kind === "SHOP") {
+    return [
+      `यूनिट / दुकान क्रमांक - ${p.plotNo}`,
+      ...(p.block ? [`ब्लॉक / विंग - ${p.block}`] : []),
+      `तल - ${p.floor?.trim() || "____"}`,
+      sqft ? `क्षेत्रफल - ${dims}${r2(sqft)} वर्गफुट यानी ${r2(sqft * SQM_PER_SQFT)} वर्गमीटर है` : "क्षेत्रफल - ____",
+    ].join("\n");
+  }
   return [
     `ब्लॉक - ${p.block}`,
     `प्लाट क्रमांक - ${p.plotNo}`,
@@ -125,7 +136,8 @@ export function saleChecks(input: {
   instalments: Instalment[];
   buyers: ColonyBuyer[];
   plot: { areaSqft: number | null; ewFt: number | null; nsFt: number | null };
-  guidelineRatePerSqm: number | null;
+  /** From the office guideline calculator (colonyGuideline). */
+  guideline: { value: number; how: string } | null;
   otherSaleOfPlot: boolean;
   plotSold: boolean;
 }): ColonyCheck[] {
@@ -143,12 +155,12 @@ export function saleChecks(input: {
   if (areaSqft && ewFt && nsFt && Math.abs(ewFt * nsFt - areaSqft) / areaSqft > 0.01) {
     out.push({ level: "warning", code: "areaMismatch", message: `नाप (${ewFt} x ${nsFt} = ${r2(ewFt * nsFt)} वर्गफुट) और क्षेत्रफल (${areaSqft} वर्गफुट) मेल नहीं खाते।` });
   }
-  const sqft = areaSqft ?? (ewFt && nsFt ? ewFt * nsFt : null);
-  if (input.guidelineRatePerSqm && sqft) {
-    const guideline = Math.round(sqft * SQM_PER_SQFT * input.guidelineRatePerSqm);
-    if (input.consideration < guideline) {
-      out.push({ level: "warning", code: "belowGuideline", message: `प्रतिफल गाइडलाइन मूल्य (लगभग ₹${inr(guideline)}) से कम है — स्टाम्प शुल्क गाइडलाइन पर लगेगा।` });
-    }
+  if (input.guideline && input.consideration < input.guideline.value) {
+    out.push({
+      level: "warning",
+      code: "belowGuideline",
+      message: `प्रतिफल गाइडलाइन मूल्य (₹${inr(input.guideline.value)}; ${input.guideline.how}) से कम है — स्टाम्प शुल्क गाइडलाइन पर लगेगा।`,
+    });
   }
   input.buyers.forEach((b, i) => {
     const miss = missingSampadaFields({
@@ -265,6 +277,8 @@ export interface PlotRow {
   west: string | null;
   north: string | null;
   south: string | null;
+  corner: boolean;
+  floor: string | null;
 }
 
 const HEADERS: Record<keyof PlotRow, RegExp> = {
@@ -277,6 +291,8 @@ const HEADERS: Record<keyof PlotRow, RegExp> = {
   west: /^(पश्चिम|west)$/i,
   north: /^(उत्तर|north)$/i,
   south: /^(दक्षिण|south)$/i,
+  corner: /^(कॉर्नर|कोर्नर|कोना|corner)(\s*\(.*\))?$/i,
+  floor: /^(तल|मंजिल|मंज़िल|floor)$/i,
 };
 const num = (s: string | undefined) => {
   const v = (s ?? "").replace(/[०-९]/g, (d) => String("०१२३४५६७८९".indexOf(d))).replace(/[^\d.]/g, "");
@@ -290,15 +306,17 @@ export function parsePlots(rows: string[][]): { plots: (PlotRow & { row: number 
   const head = rows[0]!.map((h) => h.trim());
   const col = {} as Record<keyof PlotRow, number>;
   for (const k of Object.keys(HEADERS) as (keyof PlotRow)[]) col[k] = head.findIndex((h) => HEADERS[k].test(h));
-  if (col.block < 0 || col.plotNo < 0) return { plots: [], errors: [{ row: 1, reason: 'पहली पंक्ति में "ब्लॉक" और "प्लाट क्रमांक" कॉलम चाहिए।' }] };
+  // Shop / unit projects may have no "ब्लॉक" column ("यूनिट" / "दुकान" in the plot column).
+  if (col.plotNo < 0) col.plotNo = head.findIndex((h) => /^(यूनिट|दुकान|unit|shop)\s*(क्रमांक|नं\.?|नंबर|no\.?)?$/i.test(h));
+  if (col.plotNo < 0) return { plots: [], errors: [{ row: 1, reason: 'पहली पंक्ति में "ब्लॉक" और "प्लाट क्रमांक" (या "यूनिट क्रमांक") कॉलम चाहिए।' }] };
   const plots: (PlotRow & { row: number })[] = [];
   const seen = new Set<string>();
   rows.slice(1).forEach((r, i) => {
     const row = i + 2;
     const get = (k: keyof PlotRow) => (col[k] >= 0 ? (r[col[k]] ?? "").trim() : "");
     const block = get("block").toUpperCase();
-    const plotNo = get("plotNo");
-    if (!block || !plotNo) return errors.push({ row, reason: "ब्लॉक या प्लाट क्रमांक खाली है।" });
+    const plotNo = col.block < 0 ? get("plotNo").replace(/\s+/g, "").toUpperCase() : get("plotNo");
+    if ((col.block >= 0 && !block) || !plotNo) return errors.push({ row, reason: "ब्लॉक या प्लाट क्रमांक खाली है।" });
     const key = `${block}|${plotNo}`;
     if (seen.has(key)) return errors.push({ row, reason: `ब्लॉक ${block} प्लाट ${plotNo} दो बार है।` });
     seen.add(key);
@@ -313,12 +331,21 @@ export function parsePlots(rows: string[][]): { plots: (PlotRow & { row: number 
       west: get("west") || null,
       north: get("north") || null,
       south: get("south") || null,
+      corner: /^(हाँ|हां|हा|yes|y|1|true|कॉर्नर|corner)$/i.test(get("corner")),
+      floor: get("floor") || null,
     });
   });
   return { plots, errors };
 }
 
 // ---------- company mode (WhatsApp) ----------
+/** "TF-16" / "दुकान TF 16" → the unit number of a SHOP project. */
+export function parseUnitRef(text: string): string | null {
+  const s = text.replace(/[०-९]/g, (d) => String("०१२३४५६७८९".indexOf(d)));
+  const m = s.match(/(?:दुकान|शॉप|shop|यूनिट|unit)?\s*(?:क्रमांक|नं\.?|no\.?)?\s*\b([A-Za-z]{1,3})\s*-?\s*(\d{1,4}[A-Za-z]?)\b/i);
+  return m ? `${m[1]!.toUpperCase()}-${m[2]!.toUpperCase()}` : null;
+}
+
 /** "E-47" / "ब्लॉक E प्लाट 47" → { block, plotNo }. */
 export function parsePlotRef(text: string): { block: string; plotNo: string } | null {
   const s = text.replace(/[०-९]/g, (d) => String("०१२३४५६७८९".indexOf(d)));

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ColonyDashboard, ColonyImportResult, ColonyPlot, ColonyProject, ColonyProjectInput, ColonySale, ColonySaleInput } from "@sampada/shared";
+import type { ColonyDashboard, ColonyImportResult, ColonyPlot, ColonyProject, ColonyProjectInput, ColonySale, ColonySaleInput, ColonyGuidelineRow, ColonySetupSuggestion, ColonySoldPlotsInput } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -41,6 +41,20 @@ export function useColonyActions(projectId: string | null) {
     live: useMutation<ColonyProject, Error, boolean>({ mutationFn: (live) => api.put(`colony/projects/${projectId}/live`, { ...h, json: { live } }).json(), onSuccess }),
     suggest: useMutation<{ template: string; found: string[]; missing: string[] }, Error, string>({
       mutationFn: (deedId) => api.get(`colony/template-suggest/${deedId}`, h).json(),
+    }),
+    setupSuggest: useMutation<ColonySetupSuggestion, Error, string>({
+      mutationFn: (extra) => api.get(`colony/projects/${projectId}/setup-suggest`, { ...h, searchParams: { extra } }).json(),
+    }),
+    importSold: useMutation<ColonyImportResult, Error, ColonySoldPlotsInput>({
+      mutationFn: (json) => api.post(`colony/projects/${projectId}/plots/import-sold`, { ...h, json }).json(),
+      onSuccess,
+    }),
+    corner: useMutation<ColonyPlot[], Error, { plotId: string; corner: boolean }>({
+      mutationFn: ({ plotId, corner }) => api.put(`colony/projects/${projectId}/plots/${plotId}/corner`, { ...h, json: { corner } }).json(),
+      onSuccess,
+    }),
+    guidelineSearch: useMutation<ColonyGuidelineRow[], Error, string>({
+      mutationFn: (q) => api.get("colony/guideline-search", { ...h, searchParams: { q } }).json(),
     }),
     importPlots: useMutation<ColonyImportResult, Error, File>({ mutationFn: (f) => upload(`colony/projects/${projectId}/plots/import`, f), onSuccess }),
     importSales: useMutation<ColonyImportResult, Error, File>({ mutationFn: (f) => upload(`colony/projects/${projectId}/sales/import`, f), onSuccess }),

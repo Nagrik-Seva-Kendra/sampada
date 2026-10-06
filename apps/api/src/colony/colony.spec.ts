@@ -75,7 +75,7 @@ describe("colony rules", () => {
       instalments: [{ date: "2026-10-01", amount: 300_000, mode: "cash", ref: "" }],
       buyers: [buyer],
       plot: { areaSqft: 1500, ewFt: 30, nsFt: 40 },
-      guidelineRatePerSqm: 10_000,
+      guideline: { value: 1_393_545, how: "गाइडलाइन" },
       otherSaleOfPlot: true,
       plotSold: false,
     }).map((c) => `${c.level}:${c.code}`);
@@ -85,7 +85,7 @@ describe("colony rules", () => {
       instalments: [{ date: "2026-10-01", amount: 1_500_000, mode: "rtgs", ref: "" }],
       buyers: [{ ...buyer, motherName: "सीता", address: "लश्कर", mobile: "9876543210", email: "a@b.in", aadhaar: "x" }],
       plot: { areaSqft: 1500, ewFt: 30, nsFt: 50 },
-      guidelineRatePerSqm: 10_000,
+      guideline: { value: 1_393_545, how: "गाइडलाइन" },
       otherSaleOfPlot: false,
       plotSold: false,
     });
@@ -96,7 +96,7 @@ describe("colony rules", () => {
     const csv = Buffer.from("ब्लॉक,प्लाट क्रमांक,पूर्व-पश्चिम (फुट),उत्तर-दक्षिण (फुट),क्षेत्रफल,पूर्व,पश्चिम,उत्तर,दक्षिण\ne,47,30,50,1500,प्लाट 48,प्लाट 46,\"30 फुट रोड, कॉलोनी\",प्लाट 60\nE,47,1,1,1,,,,\n,5,,,,,,,\n");
     const p = parsePlots(readTable(csv, "plots.csv"));
     expect(p.plots).toEqual([
-      { row: 2, block: "E", plotNo: "47", ewFt: 30, nsFt: 50, areaSqft: 1500, east: "प्लाट 48", west: "प्लाट 46", north: "30 फुट रोड, कॉलोनी", south: "प्लाट 60" },
+      { row: 2, block: "E", plotNo: "47", ewFt: 30, nsFt: 50, areaSqft: 1500, east: "प्लाट 48", west: "प्लाट 46", north: "30 फुट रोड, कॉलोनी", south: "प्लाट 60", corner: false, floor: null },
     ]);
     expect(p.errors.map((e) => e.row)).toEqual([3, 4]);
     const book = xlsx([{ name: "प्लाट", rows: [["ब्लॉक", "प्लाट क्रमांक", "क्षेत्रफल", "पूर्व"], ["F", 7, 1200, "रोड"]] }]);

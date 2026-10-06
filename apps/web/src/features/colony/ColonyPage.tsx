@@ -16,6 +16,7 @@ import { useActiveOrganization } from "../../stores/authStore";
 import { useWaT } from "../whatsapp/waI18n";
 import { formatDate } from "../whatsapp/waLabels";
 import { useColonyActions, useColonyData, useColonyProjects } from "./useColony";
+import { SetupFromDeeds } from "./SetupFromDeeds";
 import "../whatsapp/waRequests.css";
 
 type Tab = "dashboard" | "sales" | "plots" | "setup";
@@ -207,6 +208,8 @@ function PlotsTab({ projectId, canManage }: { projectId: string; canManage: bool
           <tr style={{ textAlign: "left" }}>
             <th>{t("coBlock")}</th>
             <th>{t("coPlot")}</th>
+            <th>{t("coFloor")}</th>
+            <th>{t("coCorner")}</th>
             <th>फुट</th>
             <th>वर्गफुट</th>
             <th>पूर्व</th>
@@ -219,8 +222,12 @@ function PlotsTab({ projectId, canManage }: { projectId: string; canManage: bool
         <tbody>
           {(plots.data ?? []).map((p) => (
             <tr key={p.id} style={{ borderTop: "1px solid #e5e7eb" }}>
-              <td>{p.block}</td>
+              <td>{p.block || "—"}</td>
               <td>{p.plotNo}</td>
+              <td>{p.floor ?? "—"}</td>
+              <td>
+                <input type="checkbox" checked={p.corner} disabled={!canManage || a.corner.isPending} aria-label={t("coCorner")} onChange={(e) => a.corner.mutate({ plotId: p.id, corner: e.target.checked })} />
+              </td>
               <td>{p.ewFt && p.nsFt ? `${p.ewFt} x ${p.nsFt}` : "—"}</td>
               <td>{p.areaSqft ?? "—"}</td>
               <td>{p.east ?? "—"}</td>
@@ -460,7 +467,12 @@ function SetupTab({ project }: { project: ColonyProject }) {
   const a = useColonyActions(project.id);
   const [f, setF] = useState<ColonyProjectInput>(() => ({
     name: project.name,
+    kind: project.kind,
     village: project.village,
+    ward: project.ward,
+    surveyNos: project.surveyNos,
+    aliases: project.aliases,
+    guidelineSno: project.guidelineSno,
     developer: project.developer,
     partners: project.partners,
     devPermissions: [project.devPermissions[0] ?? "", project.devPermissions[1] ?? ""],
@@ -473,6 +485,15 @@ function SetupTab({ project }: { project: ColonyProject }) {
   const [numbers, setNumbers] = useState(project.companyNumbers.map((n) => n.slice(-10)).join(", "));
   const [deedRef, setDeedRef] = useState(project.templateDeedId ?? "");
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [gq, setGq] = useState(project.name);
+  const [gRows, setGRows] = useState<{ sno: number; hi: string; ward: string; plotRes: number; multiCom: number }[]>([]);
+  async function findGuideline() {
+    try {
+      setGRows(await a.guidelineSearch.mutateAsync(gq));
+    } catch (err) {
+      setMsg({ text: await apiErrorMessage(err, t("coSaveError")), ok: false });
+    }
+  }
   async function save() {
     setMsg(null);
     try {
@@ -501,11 +522,32 @@ function SetupTab({ project }: { project: ColonyProject }) {
       </label>
     ));
   return (
+    <div>
+    <SetupFromDeeds projectId={project.id} f={f} setF={setF} />
     <div className="dr-form">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
         <label className="modal-field">
           {t("coSetupName")}
           <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        </label>
+        <label className="modal-field">
+          {t("coKind")}
+          <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as "PLOT" | "SHOP" })}>
+            <option value="PLOT">{t("coKindPLOT")}</option>
+            <option value="SHOP">{t("coKindSHOP")}</option>
+          </select>
+        </label>
+        <label className="modal-field">
+          {t("coAliases")}
+          <input value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} />
+        </label>
+        <label className="modal-field">
+          {t("coWard")}
+          <input value={f.ward} onChange={(e) => setF({ ...f, ward: e.target.value })} />
+        </label>
+        <label className="modal-field">
+          {t("coSurvey")}
+          <input value={f.surveyNos} onChange={(e) => setF({ ...f, surveyNos: e.target.value })} />
         </label>
         <label className="modal-field">
           {t("coVillage")}
@@ -516,10 +558,28 @@ function SetupTab({ project }: { project: ColonyProject }) {
           <input value={f.developer} onChange={(e) => setF({ ...f, developer: e.target.value })} />
         </label>
         <label className="modal-field">
-          {t("coGuidelineRate")}
+          {t("coGuidelineRateFallback")}
           <input type="number" min={0} value={f.guidelineRatePerSqm ?? ""} onChange={(e) => setF({ ...f, guidelineRatePerSqm: e.target.value === "" ? null : Number(e.target.value) })} />
         </label>
       </div>
+      <div style={{ fontWeight: 700, marginTop: 12 }}>{t("coGuidelineRow")}</div>
+      <p className="doc-sub" style={{ margin: "2px 0 6px" }}>{f.guidelineSno ? `#${f.guidelineSno}` : t("coGuidelineNone")}</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input className="dr-action-select" style={{ flex: "1 1 240px" }} value={gq} onChange={(e) => setGq(e.target.value)} />
+        <button type="button" className="doc-btn" disabled={a.guidelineSearch.isPending || gq.trim().length < 3} onClick={findGuideline}>
+          {t("coGuidelineFind")}
+        </button>
+      </div>
+      {gRows.map((g) => (
+        <div key={g.sno} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>
+            #{g.sno} {g.hi} (वार्ड {g.ward}) — ₹{g.plotRes}/वर्गमीटर{g.multiCom ? `, व्यावसायिक बहुमंजिला ₹${g.multiCom}` : ""}
+          </span>
+          <button type="button" className={f.guidelineSno === g.sno ? "btn-calc" : "doc-btn"} onClick={() => setF({ ...f, guidelineSno: g.sno })}>
+            {t("coGuidelinePick")}
+          </button>
+        </div>
+      ))}
       <div style={{ fontWeight: 700, marginTop: 12 }}>{t("coPartners")}</div>
       {f.partners.map((p, i) => (
         <div key={p.key} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -529,8 +589,11 @@ function SetupTab({ project }: { project: ColonyProject }) {
           </label>
           <label className="modal-field" style={{ flex: "1 1 360px" }}>
             {t("coPartnerText")}
-            <input value={p.text} onChange={(e) => setF({ ...f, partners: f.partners.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
+            <textarea rows={3} value={p.text} onChange={(e) => setF({ ...f, partners: f.partners.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
           </label>
+          <button type="button" className="doc-btn" style={{ alignSelf: "center" }} onClick={() => setF({ ...f, partners: f.partners.filter((_, j) => j !== i) })}>
+            ✕
+          </button>
         </div>
       ))}
       {pair("devPermissions", "coDevPermission", 2)}
@@ -552,6 +615,7 @@ function SetupTab({ project }: { project: ColonyProject }) {
         {t("coSaveProject")}
       </button>
       {msg && <p className={msg.ok ? "doc-sub" : "modal-error"}>{msg.text}</p>}
+    </div>
     </div>
   );
 }

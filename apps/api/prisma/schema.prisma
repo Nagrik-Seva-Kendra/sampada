@@ -1040,7 +1040,15 @@ model ColonyProject {
   id                 String   @id @default(cuid())
   organizationId     String
   name               String
+  /// PLOT | SHOP (units like "TF-16" on a floor)
+  kind               String   @default("PLOT")
   village            String
+  ward               String   @default("")
+  surveyNos          String   @default("")
+  /// Other names (to find old deeds / the project in a company message)
+  aliases            String   @default("")
+  /// Guideline row (sno) of the office calculator data
+  guidelineSno       Int?
   developer          String
   /// [{ key, label, text }] -- which partner signs for the company.
   partners           Json     @default("[]")
@@ -1074,6 +1082,10 @@ model ColonyPlot {
   west           String?
   north          String?
   south          String?
+  /// Corner plot: guideline +10% (office calculator)
+  corner         Boolean @default(false)
+  /// SHOP projects: the floor
+  floor          String?
   /// AVAILABLE | DRAFTED | SOLD
   status         String  @default("AVAILABLE")
 
