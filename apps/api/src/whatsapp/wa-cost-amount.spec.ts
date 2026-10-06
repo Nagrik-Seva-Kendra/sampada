@@ -2,7 +2,8 @@ import { Logger } from "@nestjs/common";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@sampada/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontDoorService } from "./front-door.service.js";
-import { asksGuideline, COST_AMOUNT_ASK, COST_AMOUNT_UNCLEAR, COST_GUIDELINE_NOTE, COST_KIND_ASK, MENU_TEXT, parseMoney } from "./wa-smart.js";
+import { GUIDE_ASK_CORNER, GUIDE_ASK_TYPE } from "./guideline-chat.js";
+import { asksGuideline, COST_AMOUNT_ASK, COST_AMOUNT_UNCLEAR, COST_KIND_ASK, MENU_TEXT, parseMoney } from "./wa-smart.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 const PHONE = "919000005648";
@@ -85,18 +86,30 @@ describe("cost flow: amounts in free text", () => {
 });
 
 describe("cost flow: the 7:09 PM conversation", () => {
-  it("amount + guideline ask in AMOUNT step → estimate + ask for the old registry (not the document menu again)", async () => {
+  it("amount + guideline ask in AMOUNT step → the office calculator's guideline (row confirmed, type and corner asked), not the document menu", async () => {
     const w = world();
     expect((await w.say("2")).replies).toEqual([COST_KIND_ASK]);
     expect((await w.say("1")).replies).toEqual([COST_AMOUNT_ASK]);
-    const r = await w.say(CUSTOMER_TEXT);
-    expect(r.route).toBe("cost");
-    expect(r.force).toBe(true);
-    expect(r.replies[0]).toContain("रजिस्ट्री खर्च का अनुमान");
+    const pick = await w.say(CUSTOMER_TEXT);
+    expect(pick).toMatchObject({ route: "cost", force: true });
+    expect(pick.replies[0]).toContain("1. क्र. 845 — सिंधिया नगर श्री गंगा विहार इन्क्लेव (वार्ड 60)");
+    expect(pick.replies[0]).not.toContain("कौन सा दस्तावेज़");
+    expect((await w.say("1")).replies).toEqual([GUIDE_ASK_TYPE]);
+    expect((await w.say("1")).replies).toEqual([GUIDE_ASK_CORNER]);
+    const ans = (await w.say("2")).replies.join("\n");
+    expect(ans).toContain("गाइडलाइन मूल्य: ₹33,45,437");
+    expect(ans).toContain("रजिस्ट्री राशि: ₹33,47,000");
+    expect(w.contacts.get(PHONE).state).toBeNull();
+  });
+
+  it("no guideline row → said plainly, the amount estimate still given, and a registry PDF sent next is used", async () => {
+    const w = world();
+    await w.say("2");
+    await w.say("1");
+    const r = await w.say("33,47,000 pe, Xyzabc Puram ward 7 ka guideline");
     expect(r.replies[0]).toContain("33,47,000");
-    expect(r.replies[1]).toBe(COST_GUIDELINE_NOTE);
-    expect(r.replies.join("\n")).not.toContain("कौन सा दस्तावेज़");
-    // The amount is kept: the registry sent next is estimated on it.
+    expect(r.replies[1]).toContain("पंक्ति नहीं मिली");
+    expect(r.replies[1]).toContain("PDF");
     expect(w.contacts.get(PHONE).state).toEqual({ mode: "cost", step: "AMOUNT", guideline: null, amount: 3_347_000 });
     const doc = await w.front.handleDocument(PHONE, { key: "k", buf: Buffer.from("x"), mime: "application/pdf" } as any);
     expect(doc!.replies).toHaveLength(1);
@@ -122,8 +135,13 @@ describe("cost flow: the 7:09 PM conversation", () => {
     await w.say("1");
     const bad = await w.say("pata nahi abhi");
     expect(bad).toMatchObject({ replies: [COST_AMOUNT_UNCLEAR], route: "cost", force: true });
-    expect(await w.say("guideline bata do Ganga vihar")).toMatchObject({ replies: [COST_AMOUNT_UNCLEAR], force: true });
     expect(w.contacts.get(PHONE).state).toMatchObject({ mode: "cost", step: "AMOUNT" });
+    // Guideline words with a locality → the guideline questions (rows listed, none picked).
+    const g = await w.say("guideline bata do Ganga vihar");
+    expect(g.force).toBe(true);
+    expect(g.replies[0]).toContain("क्र. 845");
+    expect(g.replies[0]).toContain("क्र. 399");
+    expect(w.contacts.get(PHONE).state).toMatchObject({ mode: "guide", step: "PICK" });
     // "4" or a greeting still leaves the cost questions.
     expect((await w.say("hi")).replies).toEqual([MENU_TEXT]);
     expect(w.contacts.get(PHONE).state).toBeNull();
@@ -173,8 +191,12 @@ describe("webhook: cost answers are never swallowed; silent batches say why", ()
     await say("hello");
     expect(logged).toContain("text batch from ********5648 messages=1 route=greeting replies=0 silent=repeat-suppressed");
     await say(CUSTOMER_TEXT.replace("33,47,000", "34,00,000"));
-    // From the menu (no cost question open): amount + guideline words → the estimate at once.
-    expect(sent.some((t) => t.includes("34,00,000"))).toBe(true);
-    expect(sent.at(-1)).toBe(COST_GUIDELINE_NOTE);
+    // From the menu (no cost question open): amount + guideline words → straight to the guideline questions.
+    expect(sent.at(-1)).toContain("क्र. 845");
+    await say("1");
+    await say("1");
+    await say("2");
+    expect(sent.at(-1)).toContain("ऊपर की राशि ₹54,563 पर 5.1%");
+    expect(logged).toContain("guideline chat ********5648 step=- outcome=answered");
   });
 });
