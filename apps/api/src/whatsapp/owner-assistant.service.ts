@@ -24,6 +24,7 @@ import {
   QUESTION_HELP,
   applyFill,
   fileFill,
+  isBulkCancel,
   resolveAssignee,
   type TaskFileFill,
   TASK_OR_QUESTION,
@@ -61,6 +62,7 @@ export const CONFIRM_STALE_MS = 10 * 60 * 1000;
 type OwnerState =
   | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text"; at?: string; file?: OwnerFile }
   | { mode: "task-file"; file: OwnerFile; at: string }
+  | { mode: "bulk-cancel"; ids: string[]; numbers: number[]; at: string }
   | { mode: "task-outreach"; taskId: string }
   | { mode: "task-or-question"; text: string; source: "voice" | "text" }
   | null;
@@ -157,6 +159,20 @@ export class OwnerAssistantService {
       if (/^\s*(2|सवाल|sawal|swal|नहीं|nahi|no)\s*[.।]?\s*$/i.test(text)) return [QUESTION_HELP];
       state = null; // something new: handled as a fresh message
     }
+
+    // "ये N काम रद्द करूँ?" -- only an explicit हाँ cancels them.
+    if (state?.mode === "bulk-cancel") {
+      await this.setState(phone, null);
+      if (YES.test(text) && now.getTime() - Date.parse(state.at) <= CONFIRM_STALE_MS) {
+        for (const id of state.ids) await this.tasks.setStatus(id, "CANCELLED");
+        this.log.log(`owner bulk cancel: ${state.ids.length} task(s)`);
+        return [`🗑️ ${state.ids.length} काम रद्द कर दिए: ${state.numbers.map((n) => `#${n}`).join(", ")}। (ऐप में "रद्द" टैब में दिखेंगे।)`];
+      }
+      if (NO.test(text) || CANCEL.test(text) || YES.test(text)) return ["ठीक है, कोई काम रद्द नहीं किया।"];
+      state = null; // something new
+    }
+    // "मुस्कान के सारे काम डिलीट करो": list them and ask, never a new task.
+    if (isBulkCancel(text) && state?.mode !== "task-confirm") return this.bulkCancelAsk(phone, text, now);
 
     // A file waiting for "which work?": a number attaches it, a note makes a new task with it.
     if (state?.mode === "task-file") {
@@ -298,6 +314,20 @@ export class OwnerAssistantService {
     await this.setState(phone, { mode: "task-file", file: of, at: now.toISOString() });
     this.log.log("owner file: asked which task");
     return [fileLine(of), 'यह फ़ाइल किस काम की है? काम का नंबर लिखें (जैसे 12), या नया काम लिखें/बोलें। हटाने के लिए "रद्द"।'];
+  }
+
+  /** The open tasks of the staff member named (the model maps "मुस्कान मिश्रा" to the Team name); asks before cancelling. */
+  private async bulkCancelAsk(phone: string, text: string, now: Date): Promise<string[]> {
+    const staff = await this.staff().catch(() => []);
+    const read = await this.extractor.extract(text, now, staff.map((s) => s.name));
+    const who = resolveAssignee(read?.assigneeName ?? null, staff);
+    if (!who) return ['किसके काम रद्द करने हैं? स्टाफ का नाम साफ़ लिखें, जैसे: "मुस्कान मिश्रा के सारे काम रद्द करो"। एक काम के लिए: "3 रद्द"।'];
+    const open = (await this.tasks.openTasks(this.orgId)).filter((t) => t.assigneeId === who.userId);
+    if (!open.length) return [`${who.name} को सौंपा कोई खुला काम नहीं है।`];
+    await this.setState(phone, { mode: "bulk-cancel", ids: open.map((t) => t.id), numbers: open.map((t) => t.number), at: now.toISOString() });
+    this.log.log(`owner bulk cancel: asked for ${open.length} task(s)`);
+    const list = open.slice(0, 20).map((t) => `#${t.number} ${t.title.slice(0, 60)}`);
+    return [[`${who.name} के ${open.length} खुले काम:`, ...list, ...(open.length > 20 ? [`…और ${open.length - 20}`] : []), `ये सब रद्द करूँ? "हाँ" / "नहीं"`].join("\n")];
   }
 
   /** Keeps the file with a saved task; what was read fills its empty fields. */
