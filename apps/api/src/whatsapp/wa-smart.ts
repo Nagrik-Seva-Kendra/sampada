@@ -20,16 +20,23 @@ export const menuText = (callOn: boolean) => (callOn ? `${MENU_TEXT}\n${MENU_CAL
 
 export type MenuChoice = 1 | 2 | 3 | 4 | 5;
 
+/**
+ * "registri", "rajistri", "rjstri", "रजिस्टी", "makan bechna hai", "बैनामा":
+ * how people actually write about a registry / selling / buying property.
+ */
+export const REGISTRY_WORD =
+  /\br[ae]?[jg]?[ie]?s?t?r[iy]\b|registri|rejistri|rajistri|rajisatri|rajstri|rjstri|रजिस्टी|रजस्ट्री|रजिस्ट्रि|रजिसटरी|रजिस्टरी|बेचना|बेचनी|बेचनी है|bechna|bechni|बेचना है|खरीदना|खरीदनी|kharidna|kharidni|बैनामा|bainama|benama/i;
+
 /** "1"/"१"/"1." or the words of an option → its number; null otherwise. With `callOn`, "5" and call words → 5. */
 export function parseMenuChoice(text: string, callOn = false): MenuChoice | null {
   const s = normDigits(text).trim().toLowerCase();
   const n = s.match(callOn ? /^([1-5])(?:\s*[.)।]?\s*)$/ : /^([1-4])(?:\s*[.)।]?\s*)$/);
   if (n) return Number(n[1]) as MenuChoice;
   if (callOn && /कॉल|call|फ़ोन|फोन|phone|बात करवा/.test(s)) return 5;
-  if (/खर्च|खर्चा|kharch|kharcha|गाइडलाइन|guideline|स्टाम्प|stamp|फीस|fees?\b|शुल्क|कितना लगेगा|kitna lagega|cost/.test(s)) return 2;
-  if (/कहाँ पहुँचा|कहां पहुंचा|kahan pahuncha|स्थिति|status|मेरा काम|mera kaam|अनुरोध नंबर|request (no|number)/.test(s)) return 3;
-  if (/स्टाफ|staff|बात करनी|बात करना|baat karni|baat karna|call|कॉल|फोन करें|phone karo|इंसान|human/.test(s)) return 4;
-  if (/नई रजिस्ट्री|ड्राफ्ट|draft|nayi registry|new registry|बंधक का ड्राफ्ट/.test(s)) return 1;
+  if (/खर्च|खर्चा|kharch|kharcha|गाइडलाइन|guideline|स्टाम्प|stamp|फीस|fees?\b|शुल्क|कितना लगेगा|kitna lagega|cost|charges?\b|चार्ज|पैसा|पैसे|paisa|paise|कितने का|kitne ka|rate kya/.test(s)) return 2;
+  if (/कहाँ पहुँचा|कहां पहुंचा|kahan pahuncha|स्थिति|status|मेरा काम|mera kaam|mera kam\b|काम कब|kaam kab|kam kab|कब होगा|kab hoga|कब तक होगा|kab tak hoga|अनुरोध नंबर|request (no|number)/.test(s)) return 3;
+  if (/स्टाफ|staff|बात करनी|बात करना|baat karni|baat karna|^बात$|^baat$|speak|talk to|call|कॉल|फोन करें|phone karo|इंसान|human|आदमी से|aadmi se/.test(s)) return 4;
+  if (/नई रजिस्ट्री|ड्राफ्ट|draft|nayi registry|new registry|बंधक का ड्राफ्ट/.test(s) || REGISTRY_WORD.test(s)) return 1;
   return null;
 }
 
@@ -111,8 +118,21 @@ const LABEL_BEFORE = /(ward|वार्ड|survey|सर्वे|plot|प्�
  * sentence. Ward / plot / survey numbers and areas ("2770 sqft") are skipped;
  * a bare number must be at least 10,000 (and not a 10-digit phone number).
  */
+/** Number words people write before लाख / हज़ार / करोड़: "बीस लाख", "bees lakh", "dhai lakh". */
+const NUMBER_WORDS: Record<string, number> = {
+  ek: 1, एक: 1, do: 2, दो: 2, teen: 3, tin: 3, तीन: 3, char: 4, chaar: 4, चार: 4, paanch: 5, panch: 5, पांच: 5, पाँच: 5,
+  chhe: 6, chhah: 6, cheh: 6, छह: 6, छः: 6, saat: 7, sat: 7, सात: 7, aath: 8, ath: 8, आठ: 8, nau: 9, नौ: 9, das: 10, dus: 10, दस: 10,
+  gyarah: 11, ग्यारह: 11, barah: 12, baarah: 12, बारह: 12, terah: 13, तेरह: 13, chaudah: 14, चौदह: 14, pandrah: 15, pandrah_: 15, पंद्रह: 15, पन्द्रह: 15,
+  solah: 16, सोलह: 16, satrah: 17, सत्रह: 17, atharah: 18, अठारह: 18, unnis: 19, उन्नीस: 19, bees: 20, bis: 20, बीस: 20,
+  pachees: 25, pachis: 25, पच्चीस: 25, tees: 30, tis: 30, तीस: 30, paintees: 35, पैंतीस: 35, chalis: 40, chaalis: 40, चालीस: 40,
+  paintalis: 45, पैंतालीस: 45, pachas: 50, pachaas: 50, पचास: 50, saath: 60, साठ: 60, sattar: 70, सत्तर: 70, pachattar: 75, पचहत्तर: 75,
+  assi: 80, अस्सी: 80, nabbe: 90, नब्बे: 90, sau: 100, सौ: 100, dedh: 1.5, डेढ़: 1.5, डेढ: 1.5, dhai: 2.5, ढाई: 2.5,
+};
+const NUMBER_WORD_RE = new RegExp(`(^|[^a-z\u0900-\u097F])(${Object.keys(NUMBER_WORDS).sort((a, b) => b.length - a.length).join("|")})\\s*(?=करोड़|करोड|crore|cr\\b|लाख|lakh|lac|हज़ार|हजार|ha[zj])`, "gi");
+const wordsToDigits = (s: string) => s.replace(NUMBER_WORD_RE, (_m, pre: string, w: string) => `${pre}${NUMBER_WORDS[w.toLowerCase()] ?? NUMBER_WORDS[w] ?? w} `);
+
 export function parseMoney(text: string): number | null {
-  const s = normDigits(text).toLowerCase().replace(/(\d),(?=\d)/g, "$1");
+  const s = wordsToDigits(normDigits(text).toLowerCase()).replace(/(\d),(?=\d)/g, "$1");
   const tokens = [...s.matchAll(MONEY_TOKEN)].map((m) => ({ start: m.index!, end: m.index! + m[0].length, n: parseFloat(m[1]!), raw: m[1]!, mult: unitValue(m[2]) }));
   for (let i = 0; i < tokens.length; i++) {
     const first = tokens[i]!;

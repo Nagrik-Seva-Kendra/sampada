@@ -194,7 +194,8 @@ export class FrontDoorService {
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
     const state = (c?.state as State) ?? null;
 
-    if (isGibberish(text)) {
+    // "rjstri ka kharch" has few vowels but is a known word: never treated as keyboard mash.
+    if (isGibberish(text) && parseMenuChoice(text, !!this.callNumber()) === null) {
       if (c?.mutedUntil && c.mutedUntil > now) return { replies: [], route: "gibberish-muted" };
       const streak = (c?.gibberishStreak ?? 0) + 1;
       const mute = streak >= 3;
@@ -257,7 +258,8 @@ export class FrontDoorService {
       const bareDigit = /^\s*[1-4]\s*$/.test(normDigits(text));
       const hasAmount = !bareDigit && parseMoney(text) !== null;
       const greeting = isGreeting(text);
-      const switches = !hasAmount && (greeting || (choice !== null && choice !== 2 && !bareDigit) || (bareDigit && choice === 4));
+      const kindAnswer = state.step === "KIND" && parseCostKind(text) !== null;
+      const switches = !hasAmount && !kindAnswer && (greeting || (choice !== null && choice !== 2 && !bareDigit) || (bareDigit && choice === 4));
       if (!switches) return this.cost(phone, state, text);
       if (greeting) await this.setContact(phone, { state: null });
     }
@@ -285,6 +287,10 @@ export class FrontDoorService {
         await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} स्टाफ से बात करना चाहते हैं।`).catch(() => undefined);
         return { replies: [STAFF_REPLY], route: "staff" };
     }
+
+    // "5 लाख का" with nothing open: the registry estimate on it.
+    const money = /लाख|lakh|lac|हज़ार|हजार|hazar|hajar|करोड़|करोड|crore|₹|\brs\b|rupay|रुपय/i.test(text) ? parseMoney(text) : null;
+    if (money) return this.costEstimate(phone, { mode: "cost", step: "AMOUNT" }, money, text, await this.fees());
 
     const ref = text.trim().match(/^#?([a-z0-9]{6})$/i)?.[1];
     if (ref) {
@@ -439,6 +445,13 @@ export class FrontDoorService {
     }
     // Waiting for the amount: never silent.
     if (!amount && this.wantsGuideline(text)) return this.guideStart(phone, state.amount ?? null, text);
+    // A bare "20" for the amount of a property means 20 लाख (said so in the answer).
+    const bare = normDigits(text).trim().match(/^(\d{1,3}(?:\.\d+)?)\s*[.)।]?$/);
+    if (!amount && bare && Number(bare[1]) > 0) {
+      const lakh = Math.round(Number(bare[1]) * 1e5);
+      const r = await this.costEstimate(phone, state, lakh, text, fees);
+      return { ...r, replies: [`(₹${Number(bare[1])} लाख माना है — अलग राशि हो तो पूरी लिखें, जैसे 20,50,000)`, ...r.replies] };
+    }
     if (!amount) return { replies: [COST_AMOUNT_UNCLEAR], route: "cost", force: true };
     return this.costEstimate(phone, state, amount, text, fees);
   }

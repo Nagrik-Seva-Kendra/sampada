@@ -1,3 +1,5 @@
+import { SpeechService } from "../tasks/speech.service.js";
+import { deleteMedia } from "./wa-media.js";
 import { MENU_NUDGE } from "./chat-words.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -23,6 +25,9 @@ import {
   type SignatureResult,
 } from "./webhook-diagnostics.js";
 
+/** A voice note that could not be understood: never "please type" -- many customers cannot. */
+export const VOICE_NOT_HEARD = "🎙️ आपकी आवाज़ साफ़ समझ नहीं आई। कृपया दोबारा धीरे बोलकर भेजें, या 4 लिखें — हमारा स्टाफ आपसे बात करेगा। कार्यालय फ़ोन: 78984 75648";
+
 @Injectable()
 export class WhatsappService {
   private readonly log = new Logger(WhatsappService.name);
@@ -36,6 +41,7 @@ export class WhatsappService {
     private readonly owner: OwnerAssistantService,
     private readonly staffMode: StaffModeService,
     @Optional() private readonly colony?: ColonyService,
+    @Optional() private readonly speech?: SpeechService,
   ) {}
 
   /** Texts from one number within WA_DEBOUNCE_MS (default 10 s) are handled together. */
@@ -212,6 +218,20 @@ export class WhatsappService {
         this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=${viaCost ? "cost" : "flow"} replies=${replies.length}`);
         return;
       }
+      case "audio": {
+        // A customer who cannot type speaks: the voice note becomes text and goes the same way as typed text.
+        const heard = await this.customerVoice(msg.audio?.id).catch(() => null);
+        if (heard) {
+          const done = this.debouncer.push(from, heard, name, (b) => this.handleTextsSafely(from, b));
+          if (this.debounceMs() <= 0) await done;
+          else done.catch(() => undefined);
+          this.log.log(`message ${msg.id} from ${maskPhone(from)} type=audio route=voice-as-text`);
+          return;
+        }
+        await this.send(from, await this.front.withoutRepeats(from, [VOICE_NOT_HEARD]));
+        this.log.log(`message ${msg.id} from ${maskPhone(from)} type=audio route=voice-not-heard`);
+        return;
+      }
       default: {
         const replies = await this.front.withoutRepeats(from, ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"]);
         await this.send(from, replies);
@@ -275,6 +295,21 @@ export class WhatsappService {
   /** The window is open now: a draft PDF that could not go out earlier is sent after this reply. */
   private async afterReply(from: string): Promise<void> {
     await this.drafts.flushPending(from).catch((e) => this.log.warn(`pending draft not sent: ${e?.code ?? e?.name ?? "error"}`));
+  }
+
+  /**
+   * A customer's voice note as text (Google Speech, hi-IN), or null. The
+   * recording is deleted right after; neither audio nor text is logged.
+   */
+  private async customerVoice(mediaId: string | undefined): Promise<string | null> {
+    if (!mediaId || !this.speech) return null;
+    const file = await this.downloadMedia(mediaId);
+    try {
+      const r = await this.speech.transcribe(file.buf, file.mime);
+      return r.ok && r.text.trim() ? r.text.trim() : null;
+    } finally {
+      await deleteMedia(file.key).catch(() => this.log.warn("voice note not deleted"));
+    }
   }
 
   // ---------- media ----------
