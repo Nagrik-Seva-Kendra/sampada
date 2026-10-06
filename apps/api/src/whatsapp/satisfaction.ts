@@ -17,7 +17,13 @@ export const DEFAULT_CORRECTION_POLICY =
 
 export const RATING_RE = /^\s*([1-5])\s*(⭐|स्टार|star)?\s*$/i;
 export const CORRECTION_RE = /^(सुधार|गलती|ग़लती|correction|galti|sudhar|सुधारना है|गलत है)(\s|:|$)/i;
-export const CHECKLIST_RE = /^(चेकलिस्ट|checklist|क्या लाना है|kya lana hai|क्या क्या लाना|कौन से कागज़|kaun se kagaz)/i;
+const DOC_WORD = "कागज़|कागज|कागजात|कागज़ात|kagaj|kagaz|kaagaz|kagzat|दस्तावेज़|दस्तावेज|dastavej|dastavez|documents?|docs?|papers?";
+const DOC_ASK = "क्या|kya|कौन|kaun|चाहिए|chahiye|chahie|लगेंगे|लगेगा|लगते|lagenge|lagega|lagte|लाने|लाना|laane|lana|lane|list|लिस्ट|which|what|required|need|ज़रूरी|जरूरी|jaruri|zaruri";
+/** "चेकलिस्ट", "kagaj kya kya lagenge", "रजिस्ट्री के लिए कौन से दस्तावेज़ चाहिए", or just "कागज". */
+export const CHECKLIST_RE = new RegExp(
+  `^(चेकलिस्ट|checklist|क्या लाना है|kya lana hai|क्या क्या लाना)|^(${DOC_WORD})[\\s?।.!]*$|(${DOC_WORD}).*(${DOC_ASK})|(${DOC_ASK}).*(${DOC_WORD})`,
+  "i",
+);
 
 /** Plain-language summary sent right after submit. */
 export function simpleSummary(ref: string, d: any): string {

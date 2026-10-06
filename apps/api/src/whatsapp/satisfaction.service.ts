@@ -160,7 +160,10 @@ export class SatisfactionService implements OnModuleInit, OnModuleDestroy {
     }
     if (CHECKLIST_RE.test(v)) {
       const last = await this.latest(phone);
-      return [checklistText(last?.data ?? {})];
+      // No request yet: what the draft needs first, then the registry-day list.
+      return last
+        ? [checklistText(last.data ?? {})]
+        : ["📄 ड्राफ्ट बनवाने के लिए: संपत्ति की पुरानी रजिस्ट्री की PDF या सभी पन्नों की साफ़ फ़ोटो यहीं भेजें।", checklistText({})];
     }
     if (CORRECTION_RE.test(v)) {
       const last = await this.latest(phone);
