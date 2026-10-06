@@ -131,6 +131,25 @@ export interface TaskDraft {
   place: string | null;
   dueAt: string | null;
   note: string | null;
+  /** Staff member to give the work to (from the Team list), when the owner said so. */
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  /** A name the owner said that is not in the Team list (asked to correct). */
+  assigneeUnknown?: string | null;
+}
+
+/**
+ * The staff member the owner named ("मुस्कान मैडम को असाइन कर दो" → the model
+ * returns "Muskan Mishra" from the Team list): full name, or a first name
+ * only one staff member has; case-insensitive. Never guesses between two.
+ */
+export function resolveAssignee<T extends { userId: string; name: string }>(said: string | null | undefined, staff: T[]): T | null {
+  const k = (said ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!k) return null;
+  const full = staff.filter((s) => s.name.toLowerCase().replace(/\s+/g, " ").trim() === k);
+  if (full.length === 1) return full[0]!;
+  const first = staff.filter((s) => s.name.toLowerCase().split(" ")[0] === k.split(" ")[0]);
+  return first.length === 1 ? first[0]! : null;
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ").slice(0, max) : null);
@@ -160,6 +179,7 @@ export function mapTaskExtract(raw: unknown, now: Date): TaskDraft | null {
     place: str(r.place, 200),
     dueAt: due ? due.toISOString() : null,
     note: str(r.note, 1000),
+    assigneeName: str(r.assignee, 120),
   };
 }
 
@@ -178,7 +198,10 @@ export function formatDueHi(iso: string | null): string {
 
 export function confirmText(d: TaskDraft): string {
   const party = d.partyName ?? "पार्टी का नाम नहीं";
-  const lines = [`काम दर्ज: ${party} - ${TASK_WORK_LABEL_HI[d.workType]} - ${formatDueHi(d.dueAt)}`];
+  const work = d.workType === "other" ? d.title : TASK_WORK_LABEL_HI[d.workType];
+  const lines = [`काम दर्ज: ${party} - ${work} - ${formatDueHi(d.dueAt)}`];
+  if (d.assigneeId && d.assigneeName) lines.push(`सौंपा: ${d.assigneeName}`);
+  else if (d.assigneeUnknown) lines.push(`⚠️ "${d.assigneeUnknown}" Team में नहीं मिला — किसे सौंपना है, सही नाम लिखें (या "हाँ" बिना सौंपे दर्ज करने के लिए)।`);
   if (d.partyPhone) lines.push(`मोबाइल: ${d.partyPhone.slice(2)}`);
   if (d.place) lines.push(`जगह: ${d.place}`);
   if (d.note) lines.push(`नोट: ${d.note}`);

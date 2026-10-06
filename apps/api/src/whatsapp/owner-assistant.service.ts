@@ -19,6 +19,7 @@ import {
   parseOwnerCommand,
   parseStaffDone,
   QUESTION_HELP,
+  resolveAssignee,
   TASK_OR_QUESTION,
   type TaskDraft,
 } from "../tasks/task-rules.js";
@@ -34,8 +35,11 @@ const CANCEL = /^(रद्द|रद्द करो|रद्द करें|
 export const CUSTOMER_TEST_MS = 30 * 60 * 1000;
 export const AUDIO_KEEP_MS = 7 * 24 * 3600 * 1000;
 
+/** An unanswered "ठीक?" older than this is dropped. */
+export const CONFIRM_STALE_MS = 10 * 60 * 1000;
+
 type OwnerState =
-  | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text" }
+  | { mode: "task-confirm"; draft: TaskDraft; transcript: string; source: "voice" | "text"; at?: string }
   | { mode: "task-outreach"; taskId: string }
   | { mode: "task-or-question"; text: string; source: "voice" | "text" }
   | null;
@@ -118,6 +122,13 @@ export class OwnerAssistantService {
       const report = await this.attendance.todayReport(this.orgId, now);
       return state?.mode === "task-confirm" ? [report, 'पिछला काम अभी पुष्टि के लिए बाकी है: "हाँ" / "बदलें" / "रद्द"'] : [report];
     }
+    // A "ठीक?" left unanswered for 10+ minutes is dropped: the next message is new work, not its correction.
+    let dropped = false;
+    if (state?.mode === "task-confirm" && (!state.at || now.getTime() - Date.parse(state.at) > CONFIRM_STALE_MS)) {
+      await this.setState(phone, null);
+      state = null;
+      dropped = true;
+    }
     if (state?.mode === "task-or-question") {
       if (/^\s*(1|हाँ|हां|haan|han|yes|काम|kaam)\s*[.।]?\s*$/i.test(text)) return this.propose(phone, state.text, state.source, now);
       await this.setState(phone, null);
@@ -195,14 +206,21 @@ export class OwnerAssistantService {
       await this.setState(phone, { mode: "task-or-question", text: text.slice(0, 4000), source });
       return [TASK_OR_QUESTION];
     }
-    return this.propose(phone, text, source, now);
+    const out = await this.propose(phone, text, source, now);
+    return dropped ? ["(पिछला काम पुष्टि न होने से छोड़ दिया गया।)", ...out] : out;
   }
 
   /** Read the note into a task and ask "ठीक?". */
   private async propose(phone: string, transcript: string, source: "voice" | "text", now: Date): Promise<string[]> {
-    const draft = await this.extractor.extract(transcript, now);
+    const staff = await this.staff().catch(() => []);
+    const draft = await this.extractor.extract(transcript, now, staff.map((s) => s.name));
     if (!draft) return ["माफ़ कीजिए, काम समझ नहीं आया। कृपया पार्टी, काम और तारीख के साथ दोबारा लिखें या बोलें।"];
-    await this.setState(phone, { mode: "task-confirm", draft, transcript: transcript.slice(0, 4000), source });
+    if (draft.assigneeName) {
+      const who = resolveAssignee(draft.assigneeName, staff);
+      if (who) Object.assign(draft, { assigneeId: who.userId, assigneeName: who.name, assigneeUnknown: null });
+      else Object.assign(draft, { assigneeId: null, assigneeUnknown: draft.assigneeName, assigneeName: null });
+    }
+    await this.setState(phone, { mode: "task-confirm", draft, transcript: transcript.slice(0, 4000), source, at: now.toISOString() });
     const heard = source === "voice" ? [`🎙️ सुना: "${transcript.slice(0, 500)}"`] : [];
     return [...heard, confirmText(draft)];
   }
@@ -221,8 +239,10 @@ export class OwnerAssistantService {
       source: state.source,
       transcript: state.transcript,
       createdById,
+      assigneeId: d.assigneeId ?? null,
     });
     const out = [`✅ काम #${row.number} दर्ज हो गया। पूरा होने पर "${row.number} हो गया" लिखें।`];
+    if (d.assigneeId) out.push(await this.tellAssignee(d.assigneeId, row.number, d));
     // Papers can be asked for on WhatsApp straight away -- only after the owner says हाँ.
     if (DEED_TASK_TYPES.includes(d.workType) && d.partyPhone) {
       await this.setState(phone, { mode: "task-outreach", taskId: row.id });
@@ -253,6 +273,21 @@ export class OwnerAssistantService {
     return d.status === "SENT"
       ? [`📨 पार्टी को संदेश भेज दिया (काम #${t.number})। कागज़ आते ही अनुरोध इस काम से जुड़ जाएगा।`]
       : [`⚠️ पार्टी को संदेश नहीं जा सका (${d.reason ?? "कारण नहीं पता"})। WhatsApp टेम्पलेट स्वीकृत होने के बाद दोबारा कोशिश करें।`];
+  }
+
+  /** The staff member the work was given to gets it on WhatsApp (text in the 24h window, else staff_task). */
+  private async tellAssignee(userId: string, number: number, d: TaskDraft): Promise<string> {
+    const s = (await this.staff()).find((x) => x.userId === userId);
+    if (!s) return "";
+    if (!s.phone) return `👤 ${s.name} को सौंपा। उनका मोबाइल Team पेज पर नहीं है, इसलिए WhatsApp नहीं गया।`;
+    const what = [d.title, d.dueAt ? formatDueHi(d.dueAt) : null].filter(Boolean).join(" — ");
+    const r = await this.outbox.deliverDirect(s.phone, `नमस्ते ${s.firstName}, ऑफिस से नया काम #${number}:\n${what}\nपूरा होने पर "${number} हो गया" लिखें।`, {
+      name: WA_TEMPLATES.staffTask.name,
+      language: WA_TEMPLATES.staffTask.language,
+      params: [s.firstName, `#${number} ${what}`.replace(/\s+/g, " ").slice(0, 200)],
+    });
+    this.log.log(`task #${number} assigned; staff told: ${r.status}`);
+    return r.status === "SENT" ? `👤 ${s.name} को सौंपा और WhatsApp पर बता दिया।` : `👤 ${s.name} को सौंपा, पर WhatsApp नहीं जा सका (${r.reason ?? "कारण नहीं पता"})।`;
   }
 
   /** "सब स्टाफ को: ..." → one task per staff member with a mobile, and a WhatsApp to each. */

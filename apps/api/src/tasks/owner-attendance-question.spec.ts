@@ -154,7 +154,7 @@ describe("owner: a question without a clear instruction is not a task", () => {
     expect(await w.say("रमेश की फाइल किसके पास है?")).toEqual([TASK_OR_QUESTION]);
     expect(w.extractor.extract).not.toHaveBeenCalled();
     expect((await w.say("1"))[0]).toContain("ठीक?");
-    expect(w.extractor.extract).toHaveBeenCalledWith("रमेश की फाइल किसके पास है?", NOW);
+    expect(w.extractor.extract).toHaveBeenCalledWith("रमेश की फाइल किसके पास है?", NOW, []);
 
     const w2 = world();
     await w2.say("रमेश की फाइल किसके पास है?");
