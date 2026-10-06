@@ -425,4 +425,12 @@ export const waStrings = {
   wcTokenDebug: { en: "Token details (debug_token)", hi: "Token विवरण (debug_token)" },
   wcWabaOwner: { en: "WABA owner business", hi: "WABA किस business का है" },
   wcAppOwner: { en: "App and its business", hi: "App और उसका business" },
+  wcRegister: { en: "Register number on this app", hi: "नंबर इस app पर register करें" },
+  wcRegisterConfirm: {
+    en: "Register the office number on this app (Cloud API) with the two-step PIN from WA_REGISTER_PIN? If the number is still connected elsewhere (e.g. AiSensy), it will stop working there.",
+    hi: "ऑफ़िस नंबर को WA_REGISTER_PIN वाले two-step PIN से इस app (Cloud API) पर register करें? अगर नंबर कहीं और (जैसे AiSensy) जुड़ा है तो वहाँ काम करना बंद कर देगा।",
+  },
+  wcRegistration: { en: "Number registration and WABA access", hi: "नंबर registration और WABA access" },
+  wcRegPhone: { en: "Number status (Cloud API)", hi: "नंबर की स्थिति (Cloud API)" },
+  wcAssignedUsers: { en: "People / system users assigned to the WABA", hi: "WABA पर assigned लोग / system users" },
 } as const;

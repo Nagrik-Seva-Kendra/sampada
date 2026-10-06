@@ -294,6 +294,8 @@ export interface WaConnectionReport {
   lastOutbound: { at: string; ok: boolean; kind: string; error: WaMetaError | null } | null;
   /** What WA_ACCESS_TOKEN is allowed to do (never the token itself). */
   token: WaTokenInfo;
+  /** Is the number registered on this app (Cloud API), and who may use the WABA. */
+  registration: WaRegistrationInfo;
   /** Plain-language findings (Hindi), most important first. */
   findings: string[];
 }
@@ -322,6 +324,24 @@ export interface WaTokenInfo {
   app: WaGraphRead<{ id: string | null; name: string | null; link: string | null; ownerBusinessId: string | null; ownerBusinessName: string | null }>;
   /** Plain-language verdicts (Hindi + English). */
   verdicts: string[];
+}
+
+export interface WaRegistrationInfo {
+  /** WA_REGISTER_PIN is set (never its value). */
+  pinConfigured: boolean;
+  /** GET /{phone-number-id}?fields=code_verification_status,platform_type,status,is_pin_enabled */
+  phone: WaGraphRead<{ codeVerificationStatus: string | null; platformType: string | null; status: string | null; isPinEnabled: boolean | null }>;
+  /** GET /{WABA}/assigned_users?business={owner business}: who has access, with which tasks. */
+  assignedUsers: WaGraphRead<{ id: string; name: string | null; tasks: string[]; isTokenUser: boolean }[]>;
+  /** Plain-language verdicts (Hindi + English). */
+  verdicts: string[];
+}
+
+/** POST /{phone-number-id}/register result: Meta's answer (PIN never included). */
+export interface WaRegisterResult {
+  ok: boolean;
+  error: WaMetaError | null;
+  hint: string | null;
 }
 
 export interface WaTestMessageResult {
