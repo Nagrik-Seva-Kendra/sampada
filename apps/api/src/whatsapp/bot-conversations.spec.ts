@@ -210,3 +210,21 @@ describe("owner", () => {
     expect((await owner().say("aaj kitne customer aaye"))[0]).toContain("यह काम दर्ज करूँ या सवाल का जवाब चाहिए?");
   });
 });
+
+describe("staff attendance: only the live location, only near the office", () => {
+  it("a picked / searched place (name or address) is refused; the live location goes to the distance check", async () => {
+    const contacts = new Map<string, any>();
+    const prisma: any = { waContact: { findUnique: async ({ where }: any) => contacts.get(where.phone) ?? null, upsert: async ({ where, create, update }: any) => { const c = contacts.get(where.phone); contacts.set(where.phone, c ? { ...c, ...update } : { ...create }); } } };
+    const owner: any = { staffForPhone: async () => ({ userId: "u-m", name: "Muskan Mishra", firstName: "Muskan", phone: P }), handleStaff: async () => null };
+    const punch = vi.fn(async () => ({ code: "tooFar", distanceM: 2400, record: null }));
+    const svc = new StaffModeService(prisma, { punch } as any, owner, { post: async () => ({ ok: false }) } as any);
+    await svc.handle(P, { type: "text", text: "attendance laga do" });
+    const picked = await svc.handle(P, { type: "location", location: { latitude: 26.2, longitude: 78.18, name: "Nagrik Seva Kendra", address: "City Centre, Gwalior" } });
+    expect(picked![0]).toContain("चुनी हुई जगह");
+    expect(punch).not.toHaveBeenCalled();
+    // The live position still goes to AttendanceService.punch, which refuses IN outside the office radius.
+    const live = await svc.handle(P, { type: "location", location: { latitude: 26.25, longitude: 78.2 } });
+    expect(punch).toHaveBeenCalledWith("org-1", "u-m", { kind: "IN", lat: 26.25, lng: 78.2 }, "whatsapp", expect.any(Date));
+    expect(live![0]).not.toContain("हाज़िर");
+  });
+});
