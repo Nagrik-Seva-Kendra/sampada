@@ -111,6 +111,24 @@ export function ConnectionPanel() {
                 v: r.lastOutbound ? `${when(r.lastOutbound.at, lang)} · ${r.lastOutbound.kind} · ${r.lastOutbound.ok ? "✅" : `❌ ${errText(r.lastOutbound.error)}`}` : "—",
               })}
             </p>
+            {r.token && (
+              <>
+                <div style={{ fontWeight: 700, marginTop: 10 }}>🔑 {t("wcToken")}</div>
+                <ul style={{ paddingLeft: 18, margin: "6px 0" }}>
+                  {r.token.verdicts.map((v, i) => (
+                    <li key={i} className={v.startsWith("❌") ? "modal-error" : "doc-sub"} style={{ marginBottom: 4 }}>
+                      {v}
+                    </li>
+                  ))}
+                </ul>
+                <p className="doc-sub" style={{ margin: "4px 0" }}>
+                  {t("wcTokenTail", { tail: r.token.tail ?? "—", len: r.token.length })}
+                </p>
+                <Section title={t("wcTokenDebug")} read={r.token.debug} t={t} />
+                <Section title={t("wcWabaOwner")} read={r.token.wabaOwner} t={t} />
+                <Section title={t("wcAppOwner")} read={r.token.app} t={t} />
+              </>
+            )}
             <div style={{ fontWeight: 700, marginTop: 10 }}>{t("wcConfig")}</div>
             <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "4px 0" }}>{JSON.stringify(r.config, null, 2)}</pre>
             <Section title={t("wcApps")} read={r.subscribedApps} t={t} />

@@ -292,8 +292,36 @@ export interface WaConnectionReport {
     lastStoredMessageAt: string | null;
   };
   lastOutbound: { at: string; ok: boolean; kind: string; error: WaMetaError | null } | null;
+  /** What WA_ACCESS_TOKEN is allowed to do (never the token itself). */
+  token: WaTokenInfo;
   /** Plain-language findings (Hindi), most important first. */
   findings: string[];
+}
+
+/** GET /debug_token for WA_ACCESS_TOKEN, plus who owns the WABA and the app. */
+export interface WaTokenInfo {
+  /** Last 6 characters and length only -- to tell whether the server holds the new token. */
+  tail: string | null;
+  length: number;
+  debug: WaGraphRead<{
+    isValid: boolean | null;
+    type: string | null;
+    appId: string | null;
+    application: string | null;
+    userId: string | null;
+    /** ISO time, "never" (0 from Meta) or null. */
+    expiresAt: string | null;
+    dataAccessExpiresAt: string | null;
+    scopes: string[];
+    granularScopes: { scope: string; targetIds: string[] | null }[];
+    error: { code: number | null; subcode: number | null; message: string | null } | null;
+  }>;
+  /** GET /{WABA}?fields=id,name,owner_business_info */
+  wabaOwner: WaGraphRead<{ id: string | null; name: string | null; ownerBusinessId: string | null; ownerBusinessName: string | null }>;
+  /** GET /{APP_ID}?fields=id,name,link(,owner_business) */
+  app: WaGraphRead<{ id: string | null; name: string | null; link: string | null; ownerBusinessId: string | null; ownerBusinessName: string | null }>;
+  /** Plain-language verdicts (Hindi + English). */
+  verdicts: string[];
 }
 
 export interface WaTestMessageResult {
