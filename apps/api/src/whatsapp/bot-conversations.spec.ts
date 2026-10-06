@@ -95,12 +95,19 @@ describe("customer", () => {
     const m = await w.say("नामांतरण करवाना है");
     expect(m.route).toBe("mutation");
     expect(w.outbox.alertOwners).toHaveBeenCalledWith("📞 WhatsApp नंबर +91 90000 05648 नामांतरण के लिए बात करना चाहते हैं।");
-    expect((await w.say("guideline kya hai")).replies[0]).toContain("कॉलोनी / मोहल्ले का नाम");
+    const g = (await w.say("guideline kya hai")).replies[0]!;
+    expect(g).toContain("कलेक्टर दर");
+    expect(g).toContain("कॉलोनी / मोहल्ले का नाम");
   });
 
   it("the deed words still start a draft; numbers still work", async () => {
     const w = front();
-    expect((await w.say("वसीयत बनवानी है")).replies).toEqual(["DRAFT-HOWTO"]);
+    expect((await w.say("बंधक बनवाना है")).replies).toEqual(["DRAFT-HOWTO"]);
+    // Other documents: said plainly that the office makes them, and the owner is told.
+    const will = await w.say("वसीयत बनवानी है");
+    expect(will.route).toBe("faq-other-doc");
+    expect(will.replies[0]).toContain("हम वसीयत भी बनाते हैं");
+    expect(w.outbox.alertOwners).toHaveBeenLastCalledWith("📞 WhatsApp नंबर +91 90000 05648 वसीयत के लिए पूछ रहे हैं।");
     expect((await w.say("2")).replies[0]).toContain("कौन सा दस्तावेज़");
     await w.say("4");
     // 11:09 PM screenshot: the owner sees the whole number once, not "********5646 (+91…)".
