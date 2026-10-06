@@ -146,7 +146,8 @@ export function ColonyPage() {
             {tab === "dashboard" && <DashboardTab project={project} isOwner={isOwner} />}
             {tab === "sales" && <SalesTab project={project} />}
             {tab === "plots" && <PlotsTab projectId={project.id} canManage={canManage} />}
-            {tab === "setup" && canManage && <SetupTab project={project} />}
+            {/* Keyed by project: switching project starts a fresh form and a fresh "from old deeds" panel. */}
+            {tab === "setup" && canManage && <SetupTab key={project.id} project={project} />}
           </>
         )}
       </div>

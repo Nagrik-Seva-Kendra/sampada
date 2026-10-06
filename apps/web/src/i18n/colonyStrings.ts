@@ -129,6 +129,7 @@ export const colonyStrings = {
   coImportSold: { en: "Import {n} as SOLD", hi: "{n} को 'बिका' के रूप में आयात करें" },
   coCorner: { en: "Corner", hi: "कॉर्नर" },
   coNewProject: { en: "New project", hi: "नया प्रोजेक्ट" },
+  coUnplaced: { en: "Block not found — fill by hand (not imported)", hi: "ब्लॉक नहीं मिला — हाथ से भरें (आयात नहीं होंगे)" },
   coCreate: { en: "Create", hi: "बनाएँ" },
   coOptional: { en: "optional", hi: "वैकल्पिक" },
   coMaintChosen: {

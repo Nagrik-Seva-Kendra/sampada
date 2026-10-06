@@ -89,11 +89,11 @@ export function plotBlock(
   const sqft = p.areaSqft ?? (p.ewFt && p.nsFt ? p.ewFt * p.nsFt : null);
   const dims = p.ewFt && p.nsFt ? `${r2(p.ewFt)} फुट x ${r2(p.nsFt)} फुट होकर ` : "";
   if (kind === "SHOP") {
+    // The wording of the office's shop deeds ("प्रकोष्‍ठ/SHOP क्रमांक - TF - 21", "फ्‍लोर - Third", "एरिया - …").
     return [
-      `यूनिट / दुकान क्रमांक - ${p.plotNo}`,
-      ...(p.block ? [`ब्लॉक / विंग - ${p.block}`] : []),
-      `तल - ${p.floor?.trim() || "____"}`,
-      sqft ? `क्षेत्रफल - ${dims}${r2(sqft)} वर्गफुट यानी ${r2(sqft * SQM_PER_SQFT)} वर्गमीटर है` : "क्षेत्रफल - ____",
+      `प्रकोष्ठ/SHOP क्रमांक - ${p.plotNo.replace(/\s*-\s*/g, " - ")}`,
+      `फ्लोर - ${floorEn(p.floor) || "____"}`,
+      sqft ? `एरिया - ${r2(sqft)} वर्गफुट यानि ${r2(sqft * SQM_PER_SQFT)} वर्गमीटर है।` : "एरिया - ____",
     ].join("\n");
   }
   return [
@@ -103,8 +103,16 @@ export function plotBlock(
   ].join("\n");
 }
 
-export function boundaryBlock(p: { east: string | null; west: string | null; north: string | null; south: string | null }): string {
+/** "तृतीय तल" → "Third" (shop deeds write the floor in English). */
+export function floorEn(floor: string | null | undefined): string {
+  const f = (floor ?? "").trim();
+  const map: [RegExp, string][] = [[/लोअर\s*ग्राउंड/, "Lower Ground"], [/अपर\s*ग्राउंड/, "Upper Ground"], [/भूतल|ग्राउंड/, "Ground"], [/प्रथम/, "First"], [/द्वितीय/, "Second"], [/तृतीय/, "Third"], [/चतुर्थ/, "Fourth"], [/पंचम/, "Fifth"]];
+  return map.find(([re]) => re.test(f))?.[1] ?? f.replace(/\s*floor$/i, "").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+export function boundaryBlock(p: { east: string | null; west: string | null; north: string | null; south: string | null }, kind: string = "PLOT"): string {
   const v = (x: string | null) => (x?.trim() ? x.trim() : "____");
+  if (kind === "SHOP") return [`पूरब दिशा में : ${v(p.east)}`, `पश्चिम दिशा में : ${v(p.west)}`, `उत्तर दिशा में : ${v(p.north)}`, `दक्षिण दिशा में : ${v(p.south)}`].join("\n");
   return ["जिसकी चतुःसीमा निम्न प्रकार है -", `पूर्व - ${v(p.east)}`, `पश्चिम - ${v(p.west)}`, `उत्तर - ${v(p.north)}`, `दक्षिण - ${v(p.south)}`].join("\n");
 }
 
