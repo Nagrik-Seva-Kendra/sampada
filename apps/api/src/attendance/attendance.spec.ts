@@ -323,8 +323,9 @@ describe("owner reports", () => {
     await jobs.reports(new Date("2026-10-01T10:45:00+05:30"));
     expect(w.sent).toHaveLength(1);
     expect(w.sent[0]!.to).toBe(OWNER_PHONE);
-    expect(w.sent[0]!.template.name).toBe("staff_notice");
-    expect(w.sent[0]!.template.params[1]).not.toContain("\n");
+    expect(w.sent[0]!.template.name).toBe("staff_notice_v2");
+    expect(w.sent[0]!.template.params[1]).toBe("हाज़िरी रिपोर्ट 01/10/2026"); // the record the message is about
+    expect(w.sent[0]!.template.params[2]).not.toContain("\n");
     // A restart late in the day does not send a stale morning report.
     const w2 = await world();
     const jobs2 = new AttendanceJobsService(w2.prisma, w2.attendance, w2.salary, w2.outbox);

@@ -251,7 +251,9 @@ describe("follow-ups", () => {
     expect(await w.f.send(ist("2026-10-31T11:30:00"))).toBe(1);
     expect(await w.f.send(ist("2026-10-31T12:30:00"))).toBe(0);
     const m = (w.outbox.send.mock.calls[0] as any)[0];
-    expect(m).toMatchObject({ kind: "FOLLOWUP", to: PHONE, template: { name: "follow_up_reminder" } });
+    expect(m).toMatchObject({ kind: "FOLLOWUP", to: PHONE, template: { name: "follow_up_reminder_v2" } });
+    // Name, request number, deed kind, date -- the fixed template text carries the rest.
+    expect(m.template.params.slice(1)).toEqual([expect.stringMatching(/^[A-Z0-9]{6}$/), "विक्रय पत्र", "01/10/2026"]);
     expect(m.text).toContain("नामांतरण (mutation)");
     expect(m.text).toContain('"बंद" लिखें');
     expect(m.template.params[0]).not.toContain("\n");

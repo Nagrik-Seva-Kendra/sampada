@@ -141,7 +141,7 @@ export class SalaryService {
     const d = await this.outbox.deliverDirect(staff.phone, text, {
       name: WA_TEMPLATES.staffNotice.name,
       language: WA_TEMPLATES.staffNotice.language,
-      params: [staff.firstName, `${month} की वेतन पर्ची तैयार है, कृपया इस नंबर पर कोई संदेश भेजें`],
+      params: [staff.firstName, `वेतन पर्ची ${month}`, "आपकी पर्ची तैयार है, देखने के लिए इस नंबर पर कोई संदेश भेजें"],
     });
     if (d.status === "SENT") {
       const row = await this.prisma.salarySheet.findUnique({ where: { organizationId_month: { organizationId: t.organizationId, month } } });

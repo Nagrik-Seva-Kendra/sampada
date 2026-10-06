@@ -308,7 +308,7 @@ describe("morning list and reminders", () => {
     expect(to).toBe(OWNER);
     expect(text).toContain("1. आज का");
     expect(text).toContain("⏰ पुराने बाकी (1)");
-    expect(tpl).toMatchObject({ name: "owner_task_digest", params: ["1", "1"] });
+    expect(tpl).toMatchObject({ name: "owner_task_digest_v2", params: ["01/10/2026", "1", "1"] });
     expect(await jobs.digest(istDate(2026, 9, 1, 9, 2))).toBe(false); // not twice
 
     expect(await jobs.reminders(istDate(2026, 9, 1, 10, 45))).toBe(1); // 12:30 is within 2 h

@@ -77,12 +77,13 @@ export const WA_TEMPLATES = {
     body: "नमस्ते {{1}}, ऑफिस से नया काम: {{2}}। पूरा होने पर इसी नंबर पर हो गया लिखें। धन्यवाद।",
     example: ["राहुल", "कल 10 बजे तहसील जाना है"],
   },
+  // v2 (Meta re-classified the v1 texts as MARKETING): each one now names the record it is about.
   ownerDigest: {
-    name: "owner_task_digest",
+    name: "owner_task_digest_v2",
     language: "hi",
     category: "UTILITY",
-    body: "नमस्ते, आज {{1}} काम हैं और {{2}} पुराने काम बाकी हैं। पूरी सूची के लिए काम लिखें। धन्यवाद।",
-    example: ["3", "1"],
+    body: "नमस्ते, {{1}} की काम-सूची: आपके खाते में आज के {{2}} काम और {{3}} पुराने बाकी काम दर्ज हैं। पूरी सूची देखने के लिए इसी नंबर पर काम लिखें। धन्यवाद।",
+    example: ["05/10/2026", "3", "1"],
   },
   leaveRequest: {
     name: "leave_request",
@@ -92,11 +93,11 @@ export const WA_TEMPLATES = {
     example: ["5", "राहुल, 12/10 से 13/10, बीमारी"],
   },
   staffNotice: {
-    name: "staff_notice",
+    name: "staff_notice_v2",
     language: "hi",
     category: "UTILITY",
-    body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से सूचना: {{2}}। धन्यवाद।",
-    example: ["राहुल", "आपकी छुट्टी की अर्ज़ी #5 मंज़ूर हो गई"],
+    body: "नमस्ते {{1}}, ऑफिस के रिकॉर्ड {{2}} में अपडेट: {{3}}। विवरण के लिए इसी नंबर पर कोई संदेश भेजें या ऐप खोलें। धन्यवाद।",
+    example: ["राहुल", "छुट्टी अर्ज़ी #5", "आपकी 12/10/2026 से 13/10/2026 की छुट्टी मंज़ूर हो गई"],
   },
   registryDate: {
     name: "registry_date_confirmed",
@@ -113,11 +114,11 @@ export const WA_TEMPLATES = {
     example: ["AB12CD", "15/10/2026 (गुरुवार), 11:00 बजे", "जियो-टैग फ़ोटो संपदा 2.0 ऐप से ले ली हो तो ठीक, नहीं तो ऑफिस से संपर्क करें।"],
   },
   followUp: {
-    name: "follow_up_reminder",
+    name: "follow_up_reminder_v2",
     language: "hi",
     category: "UTILITY",
-    body: "नागरिक सेवा केंद्र से सूचना: {{1}} ऐसे संदेश बंद करने के लिए बंद लिखें। धन्यवाद।",
-    example: ["आपके पट्टे (अनुरोध AB12CD) की अवधि 15/11/2026 को पूरी हो रही है। नवीनीकरण करवाना हो तो हाँ करवाना है लिखें।"],
+    body: "नमस्ते {{1}}, आपके अनुरोध नंबर {{2}} ({{3}}) की तारीख {{4}} के संबंध में सूचना: इससे जुड़ा अगला सरकारी काम (जैसे नामांतरण या नवीनीकरण) बाकी हो सकता है। जानकारी के लिए इसी नंबर पर जवाब दें। ऐसे संदेश बंद करने के लिए बंद लिखें। धन्यवाद।",
+    example: ["रमेश जी", "AB12CD", "पट्टा", "15/11/2026"],
   },
   rating: {
     name: "service_rating_request",
@@ -138,14 +139,25 @@ export type WaTemplateProblem =
   | "variableNumbering"
   | "exampleCount"
   | "exampleFormat"
-  | "tooManyVariables";
+  | "tooManyVariables"
+  | "noReference"
+  | "promotional";
+
+/**
+ * Words that tie a message to one record (request number, date, application,
+ * task ...): Meta treats a body without any as MARKETING.
+ */
+const REFERENCE_RE = /अनुरोध|ड्राफ्ट|तारीख|दिनांक|रजिस्ट्री|अर्ज़ी|पर्ची|रिकॉर्ड|काम|#\{\{\d+\}\}/;
+const PROMO_RE = /ऑफ़र|ऑफर|छूट|मुफ़्त|मुफ्त|सेल|डिस्काउंट|offer|discount|free|sale|deal|cashback/i;
 
 /**
  * Problems Meta would refuse (code 100) a template for: lower-case name, body
  * ≤ 1024 characters, no variable at the very start or end, no two variables
  * side by side, {{1}}..{{n}} in order, one plain example per variable, and
  * enough words around the variables (Meta refuses "too many variables for the
- * length"; we ask for at least 3 words per variable).
+ * length"; we ask for at least 3 words per variable), a concrete reference in
+ * the fixed text (request no. / date / application / task -- else Meta calls it
+ * MARKETING) and no promotional words.
  */
 export function templateProblems(t: Pick<WaTemplateDef, "name" | "body" | "example">): WaTemplateProblem[] {
   const out: WaTemplateProblem[] = [];
@@ -164,6 +176,9 @@ export function templateProblems(t: Pick<WaTemplateDef, "name" | "body" | "examp
     .split(/\s+/)
     .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
   if (nums.length && words < 3 * nums.length) out.push("tooManyVariables");
+  // The fixed text (not a variable) must name the record the message is about.
+  if (!REFERENCE_RE.test(body)) out.push("noReference");
+  if (PROMO_RE.test(body.replace(/\{\{\d+\}\}/g, " "))) out.push("promotional");
   return out;
 }
 

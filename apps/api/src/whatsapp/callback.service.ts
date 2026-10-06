@@ -86,7 +86,7 @@ export class CallbackService {
         .deliverDirect(n, text, {
           name: WA_TEMPLATES.staffNotice.name,
           language: WA_TEMPLATES.staffNotice.language,
-          params: ["जी", `कॉल बैक #${row.number}: ${row.customerName ?? "ग्राहक"} (+${row.phone}), ${when}, काम: ${String(row.purpose).replace(/\s+/g, " ").slice(0, 150)}`],
+          params: ["जी", `कॉल बैक #${row.number}`, `${row.customerName ?? "ग्राहक"} (+${row.phone}), ${when}, काम: ${String(row.purpose).replace(/\s+/g, " ").slice(0, 150)}`],
         })
         .catch(() => undefined);
     }
