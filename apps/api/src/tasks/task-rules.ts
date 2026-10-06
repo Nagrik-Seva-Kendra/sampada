@@ -140,6 +140,26 @@ export interface TaskDraft {
   assigneeUnknown?: string | null;
 }
 
+// ---------- the work named in the owner's own words ----------
+const WORD_TYPES: [TaskWorkType, RegExp][] = [
+  ["will", /वसीयत|वसियत|wasiyat|vasiyat|vasiyatnama|wasiyatnama|\bwill\b/i],
+  ["mortgage", /बंधक|बन्धक|mortgage|bandhak/i],
+  ["agreement", /अनुबंध|एग्रीमेंट|इकरारनामा|agreement|anubandh|ikrarnama/i],
+  ["patta", /पट्टा|patta|lease/i],
+  ["mutation", /नामांतरण|नामान्तरण|namantaran|mutation/i],
+  ["sale", /बैनामा|विक्रय|bainama|vikray|sale\s*deed/i],
+  ["copy", /नकल|nakal|certified\s*copy/i],
+];
+
+/**
+ * The document the owner named ("कल वसीयत होनी है"): exactly one kind of
+ * document in the words → that kind, over the model's guess; none or two → null.
+ */
+export function workTypeFromWords(text: string): TaskWorkType | null {
+  const hits = WORD_TYPES.filter(([, re]) => re.test(text)).map(([t]) => t);
+  return hits.length === 1 ? hits[0]! : null;
+}
+
 // ---------- a file sent with a task ----------
 /** What a read document (deed extractor) adds to a task: only what was clearly read. */
 export interface TaskFileFill {
