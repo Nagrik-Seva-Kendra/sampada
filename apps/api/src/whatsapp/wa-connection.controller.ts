@@ -12,7 +12,7 @@ export function webhookUrl(req: Pick<Request, "headers">): string | null {
   return `https://${host}${WEBHOOK_PATH}`;
 }
 
-/** OWNER: WhatsApp connection check, a test message, re-subscribe the app to the WABA. */
+/** OWNER: WhatsApp connection check, a test message, register the number, re-subscribe the app to the WABA. */
 @Controller("whatsapp/connection")
 @UseGuards(JwtStaffGuard)
 export class WaConnectionController {
@@ -26,6 +26,11 @@ export class WaConnectionController {
   @Post("test")
   test() {
     return this.service.testMessage();
+  }
+
+  @Post("register")
+  register() {
+    return this.service.register();
   }
 
   @Post("resubscribe")

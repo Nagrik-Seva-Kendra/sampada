@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import type { WaConnectionReport, WaGraphRead, WaMetaError, WaTestMessageResult } from "@sampada/shared";
+import type { WaConnectionReport, WaGraphRead, WaMetaError, WaRegisterResult, WaTestMessageResult } from "@sampada/shared";
 import { api, apiErrorMessage } from "../../lib/api";
 import { authHeaders, useActiveOrganization, useAuthStore } from "../../stores/authStore";
 import { useWaT, type WaT } from "./waI18n";
@@ -42,6 +42,7 @@ export function ConnectionPanel() {
   const check = useMutation<WaConnectionReport, Error, void>({ mutationFn: () => api.get("whatsapp/connection", h).json<WaConnectionReport>() });
   const test = useMutation<WaTestMessageResult, Error, void>({ mutationFn: () => api.post("whatsapp/connection/test", h).json<WaTestMessageResult>() });
   const resub = useMutation<WaGraphRead, Error, boolean>({ mutationFn: (override) => api.post("whatsapp/connection/resubscribe", { ...h, json: { override } }).json<WaGraphRead>() });
+  const register = useMutation<WaRegisterResult, Error, void>({ mutationFn: () => api.post("whatsapp/connection/register", h).json<WaRegisterResult>() });
   const [error, setError] = useState<string | null>(null);
   if (org?.role !== "OWNER") return null;
 
@@ -66,6 +67,14 @@ export function ConnectionPanel() {
           <button type="button" className="doc-btn" disabled={test.isPending} onClick={() => run(() => test.mutateAsync())}>
             {test.isPending ? "…" : t("wcTest")}
           </button>
+          <button
+            type="button"
+            className="doc-btn"
+            disabled={register.isPending}
+            onClick={() => window.confirm(t("wcRegisterConfirm")) && run(() => register.mutateAsync().then(() => check.mutateAsync()))}
+          >
+            {register.isPending ? "…" : t("wcRegister")}
+          </button>
           <button type="button" className="doc-btn" disabled={resub.isPending} onClick={() => run(() => resub.mutateAsync(false).then(() => check.mutateAsync()))}>
             {t("wcResub")}
           </button>
@@ -83,6 +92,12 @@ export function ConnectionPanel() {
           <p className={test.data.ok ? "doc-sub" : "modal-error"} role="status" style={{ marginTop: 8 }}>
             {test.data.ok ? `✅ ${t("wcTestOk", { to: test.data.to ?? "" })}` : `❌ ${t("wcTestFail", { to: test.data.to ?? "" })} ${errText(test.data.error)}`}
             {test.data.hint && <span style={{ display: "block" }}>{test.data.hint}</span>}
+          </p>
+        )}
+        {register.data && (
+          <p className={register.data.ok ? "doc-sub" : "modal-error"} role="status" style={{ marginTop: 8 }}>
+            {register.data.ok ? "" : `❌ ${errText(register.data.error)}`}
+            {register.data.hint && <span style={{ display: "block" }}>{register.data.hint}</span>}
           </p>
         )}
         {resub.data && (
@@ -127,6 +142,20 @@ export function ConnectionPanel() {
                 <Section title={t("wcTokenDebug")} read={r.token.debug} t={t} />
                 <Section title={t("wcWabaOwner")} read={r.token.wabaOwner} t={t} />
                 <Section title={t("wcAppOwner")} read={r.token.app} t={t} />
+              </>
+            )}
+            {r.registration && (
+              <>
+                <div style={{ fontWeight: 700, marginTop: 10 }}>📱 {t("wcRegistration")}</div>
+                <ul style={{ paddingLeft: 18, margin: "6px 0" }}>
+                  {r.registration.verdicts.map((v, i) => (
+                    <li key={i} className={v.startsWith("❌") ? "modal-error" : "doc-sub"} style={{ marginBottom: 4 }}>
+                      {v}
+                    </li>
+                  ))}
+                </ul>
+                <Section title={t("wcRegPhone")} read={r.registration.phone} t={t} />
+                <Section title={t("wcAssignedUsers")} read={r.registration.assignedUsers} t={t} />
               </>
             )}
             <div style={{ fontWeight: 700, marginTop: 10 }}>{t("wcConfig")}</div>

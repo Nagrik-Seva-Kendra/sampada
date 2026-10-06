@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
-import type { WaConnectionReport, WaGraphRead, WaMetaError, WaTestMessageResult, WaTokenInfo } from "@sampada/shared";
+import type { WaConnectionReport, WaGraphRead, WaMetaError, WaRegisterResult, WaRegistrationInfo, WaTestMessageResult, WaTokenInfo } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { ownerNumbers } from "./owner-assistant.service.js";
@@ -43,7 +43,7 @@ function safe(v: unknown, depth = 0): unknown {
  * config, this app not subscribed, 'messages' not subscribed, the webhook sent
  * elsewhere (override), number not on Cloud API, no webhook since start.
  */
-export function connectionFindings(r: Omit<WaConnectionReport, "findings" | "token">, now = new Date()): string[] {
+export function connectionFindings(r: Omit<WaConnectionReport, "findings" | "token" | "registration">, now = new Date()): string[] {
   const out: string[] = [];
   const c = r.config;
   if (!c.accessToken || !c.phoneNumberId || !c.wabaId) out.push("❌ WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID / WA_WABA_ID में से कुछ सेट नहीं है।");
@@ -176,6 +176,88 @@ export function tokenVerdicts(
   return out;
 }
 
+/** WA_REGISTER_PIN, only when it is exactly 6 digits. */
+function registerPin(): string | null {
+  const pin = process.env.WA_REGISTER_PIN?.trim();
+  return pin && /^\d{6}$/.test(pin) ? pin : null;
+}
+
+/** A Meta error with every copy of the PIN removed. */
+function withoutPin(e: WaMetaError, pin: string): WaMetaError {
+  const hide = (v: string | null) => (v ? v.split(pin).join("[pin]") : v);
+  return { ...e, type: hide(e.type), title: hide(e.title), message: hide(e.message), details: hide(e.details) };
+}
+
+/**
+ * Verdicts on registration and WABA access (pure): number not on Cloud API /
+ * not connected → register; PIN set or not; the token's system user missing
+ * from the WABA's assigned users, or without full control.
+ */
+export function registrationVerdicts(r: Omit<WaRegistrationInfo, "verdicts">, tokenUserId: string | null): string[] {
+  const out: string[] = [];
+  const p = r.phone.data;
+  if (r.phone.ok && p) {
+    if (p.platformType && p.platformType !== "CLOUD_API") {
+      out.push(`❌ नंबर इस app पर Cloud API में register नहीं है (platform_type=${p.platformType}) — "Register number on this app" दबाएँ। / Number is not registered on Cloud API.`);
+    } else if (p.status && p.status !== "CONNECTED") {
+      out.push(`❌ नंबर की स्थिति ${p.status} है (CONNECTED होनी चाहिए) — "Register number on this app" दबाएँ। / Number status is ${p.status}; register it.`);
+    }
+    if (p.codeVerificationStatus && p.codeVerificationStatus !== "VERIFIED") {
+      out.push(`ℹ️ code_verification_status=${p.codeVerificationStatus} — पुराने (AiSensy) setup का OTP सत्यापन; register करने पर Meta PIN माँगेगा। / Code verification ${p.codeVerificationStatus}.`);
+    }
+    if (p.isPinEnabled === true) out.push("ℹ️ नंबर पर two-step PIN पहले से लगा है — WA_REGISTER_PIN में वही PIN होना चाहिए (याद न हो तो WhatsApp Manager → Phone numbers → Two-step verification में बदलें)। / Two-step PIN is already set.");
+    if (p.isPinEnabled === false) out.push("ℹ️ नंबर पर अभी two-step PIN नहीं है — register करने पर WA_REGISTER_PIN वाला PIN लग जाएगा। / No two-step PIN yet; register sets it.");
+  } else if (r.phone.error) {
+    out.push(`⚠️ नंबर की registration स्थिति पढ़ी नहीं जा सकी (कोड ${r.phone.error.code ?? r.phone.error.http ?? "-"}: ${r.phone.error.message ?? ""})। / Could not read registration status.`);
+  }
+  if (!r.pinConfigured) out.push("⚠️ WA_REGISTER_PIN सेट नहीं है (या 6 अंक का नहीं) — register बटन के लिए Coolify में यह env डालकर API redeploy करें। / WA_REGISTER_PIN is not set.");
+
+  const users = r.assignedUsers.data;
+  if (r.assignedUsers.ok && users) {
+    const me = users.find((u) => u.isTokenUser);
+    if (tokenUserId && !me) {
+      out.push(
+        `❌ Token वाला system user (${tokenUserId}) इस WABA के assigned users में नहीं है (${users.map((u) => u.name ?? u.id).join(", ") || "कोई नहीं"}) — Business Settings → System users → Assign assets → यह WABA → Full control। / The token's system user is not assigned to this WABA.`,
+      );
+    } else if (me && !me.tasks.includes("MANAGE")) {
+      out.push(`⚠️ System user को WABA पर सिर्फ़ ये अधिकार हैं: ${me.tasks.join(", ") || "—"} (Full control = MANAGE चाहिए)। / System user lacks full control.`);
+    } else if (me) {
+      out.push(`✅ System user (${me.name ?? me.id}) इस WABA पर assigned है: ${me.tasks.join(", ")}। / System user is assigned.`);
+    }
+  } else if (r.assignedUsers.error) {
+    out.push(`⚠️ WABA के assigned users पढ़े नहीं जा सके (कोड ${r.assignedUsers.error.code ?? r.assignedUsers.error.http ?? "-"}: ${r.assignedUsers.error.message ?? ""})। / Could not read assigned users.`);
+  }
+  return out;
+}
+
+/** What a failed register means, in Hindi. */
+export function registerHint(e: WaMetaError): string | null {
+  switch (e.code) {
+    case 133005:
+      return "Two-step PIN गलत है: इस नंबर पर पहले से two-step verification PIN लगा है — WA_REGISTER_PIN में वही 6 अंक का PIN डालें (याद न हो तो WhatsApp Manager → Phone numbers → Settings → Two-step verification में PIN बदलें, फिर env बदलकर redeploy करें)।";
+    case 133006:
+      return "नंबर का सत्यापन (OTP) ज़रूरी है: WhatsApp Manager में इस नंबर को SMS/कॉल कोड से verify करें, फिर register दोबारा दबाएँ।";
+    case 133008:
+    case 133009:
+      return "PIN की बहुत ज़्यादा / बहुत तेज़ कोशिशें — Meta के बताए समय तक रुकें, फिर सही PIN से दोबारा कोशिश करें।";
+    case 133016:
+      return "बहुत बार register की कोशिश — 72 घंटे की सीमा लगी है; उसके बाद दोबारा करें।";
+    case 133015:
+      return "नंबर हाल ही में हटाया गया था — Meta के अनुसार कुछ मिनट रुककर दोबारा करें।";
+    case 133004:
+      return "Meta का सर्वर अभी उपलब्ध नहीं — थोड़ी देर बाद दोबारा करें।";
+    case 190:
+      return "Access token अमान्य / समाप्त — नया system-user token डालें।";
+    case 10:
+    case 200:
+      return "Token को इस नंबर/WABA पर register की अनुमति नहीं है — system user को WABA पर Full control दें (नीचे assigned users देखें)।";
+    case 100:
+      return "Meta ने अनुरोध अमान्य बताया — phone number ID (WA_PHONE_NUMBER_ID) और PIN (6 अंक) जाँचें।";
+    default:
+      return null;
+  }
+}
+
 /**
  * OWNER: "WhatsApp connection check" -- what Meta says about the number, the
  * WABA, the subscribed apps and this app's webhook, plus what this server has
@@ -246,6 +328,44 @@ export class WaConnectionService {
     return { ...info, verdicts: tokenVerdicts(info, { appId, wabaId, phoneNumberId: env.WA_PHONE_NUMBER_ID ?? null }) };
   }
 
+  /** Registration status of the number and who has the WABA. */
+  private async registrationInfo(tokenUserId: string | null, ownerBusinessId: string | null): Promise<WaRegistrationInfo> {
+    const env = process.env;
+    const token = env.WA_ACCESS_TOKEN;
+    const phoneId = env.WA_PHONE_NUMBER_ID;
+    const wabaId = env.WA_WABA_ID;
+    const none = { ok: false, data: null, error: null };
+
+    const p = phoneId ? await this.read(`/${phoneId}?fields=code_verification_status,platform_type,status,is_pin_enabled`, token) : none;
+    const phone: WaRegistrationInfo["phone"] = p.ok
+      ? {
+          ok: true,
+          error: null,
+          data: {
+            codeVerificationStatus: str(p.data?.code_verification_status, 40),
+            platformType: str(p.data?.platform_type, 40),
+            status: str(p.data?.status, 40),
+            isPinEnabled: typeof p.data?.is_pin_enabled === "boolean" ? p.data.is_pin_enabled : null,
+          },
+        }
+      : { ok: false, data: null, error: p.error };
+
+    const u = wabaId ? await this.read(`/${wabaId}/assigned_users${ownerBusinessId ? `?business=${ownerBusinessId}` : ""}`, token) : none;
+    const assignedUsers: WaRegistrationInfo["assignedUsers"] = u.ok
+      ? {
+          ok: true,
+          error: null,
+          data: ((u.data?.data ?? []) as any[]).slice(0, 50).map((x) => {
+            const id = String(x?.id ?? "");
+            return { id, name: str(x?.name), tasks: Array.isArray(x?.tasks) ? x.tasks.slice(0, 20).map((t: unknown) => String(t)) : [], isTokenUser: !!tokenUserId && id === tokenUserId };
+          }),
+        }
+      : { ok: false, data: null, error: u.error };
+
+    const info = { pinConfigured: !!registerPin(), phone, assignedUsers };
+    return { ...info, verdicts: registrationVerdicts(info, tokenUserId) };
+  }
+
   async check(now = new Date()): Promise<WaConnectionReport> {
     this.owner();
     const env = process.env;
@@ -291,6 +411,7 @@ export class WaConnectionService {
       : { ok: false, data: null, error: subsApp.error };
 
     const tokenInfo = await this.tokenInfo(appId);
+    const registration = await this.registrationInfo(tokenInfo.debug.data?.userId ?? null, tokenInfo.wabaOwner.data?.ownerBusinessId ?? null);
     const last = await this.prisma.waInboundMessage.findFirst({ orderBy: { createdAt: "desc" }, select: { createdAt: true } }).catch(() => null);
     const st = connectionStats();
     const report: Omit<WaConnectionReport, "findings"> = {
@@ -312,9 +433,10 @@ export class WaConnectionService {
       webhook: { ...st.webhook, lastStoredMessageAt: last?.createdAt.toISOString() ?? null },
       lastOutbound: st.outbound,
       token: tokenInfo,
+      registration,
     };
     let findings = connectionFindings(report, now);
-    const tokenProblems = tokenInfo.verdicts.filter((v) => v.startsWith("❌"));
+    const tokenProblems = [...tokenInfo.verdicts, ...registration.verdicts].filter((v) => v.startsWith("❌"));
     if (tokenProblems.length) findings = [...tokenProblems, ...findings.filter((f) => !f.startsWith("✅"))];
     this.log.log(`connection check: ${findings.filter((f) => f.startsWith("❌")).length} problem(s); webhooks since start ${st.webhook.posts}`);
     return { ...report, findings };
@@ -346,6 +468,35 @@ export class WaConnectionService {
     } catch (e: any) {
       const error: WaMetaError = { http: null, code: null, subcode: null, type: null, title: null, message: cleanMetaText(e?.message) ?? "network error", details: null };
       return { ok: false, to: maskPhone(to), wamid: null, error, hint: null };
+    }
+  }
+
+  /** OWNER: register the number on this app (Cloud API) with WA_REGISTER_PIN as the two-step PIN. */
+  async register(): Promise<WaRegisterResult> {
+    this.owner();
+    const phoneId = process.env.WA_PHONE_NUMBER_ID;
+    const token = process.env.WA_ACCESS_TOKEN;
+    if (!phoneId || !token) throw new BadRequestException("WA_PHONE_NUMBER_ID / WA_ACCESS_TOKEN सेट नहीं है।");
+    const pin = registerPin();
+    if (!pin) throw new BadRequestException("WA_REGISTER_PIN सेट नहीं है (या 6 अंक का नहीं) — Coolify में 6 अंक का two-step PIN डालकर API redeploy करें।");
+    try {
+      const res = await fetch(`${graphBase()}/${phoneId}/register`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      const json: any = await res.json().catch(() => null);
+      if (res.ok && json?.success !== false) {
+        this.log.log("register number: success");
+        return { ok: true, error: null, hint: "✅ नंबर इस app पर register हो गया। अब 'टेस्ट संदेश' भेजें और 'जाँचें' दोबारा दबाएँ।" };
+      }
+      const error = withoutPin(metaErrorOf(json, res.status), pin);
+      this.log.warn(`register number: http=${res.status} code=${error.code ?? "-"} subcode=${error.subcode ?? "-"}`);
+      return { ok: false, error, hint: registerHint(error) };
+    } catch (e: any) {
+      const msg = cleanMetaText(e?.message) ?? "network error";
+      return { ok: false, error: { http: null, code: null, subcode: null, type: null, title: null, message: msg.split(pin).join("[pin]"), details: null }, hint: null };
     }
   }
 
