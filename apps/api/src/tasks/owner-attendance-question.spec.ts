@@ -2,6 +2,7 @@ import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AttendanceService } from "../attendance/attendance.service.js";
 import { OwnerAssistantService } from "../whatsapp/owner-assistant.service.js";
+import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 import { hasTaskInstruction, isAttendanceQuestion, isQuestion, looksLikeTask, QUESTION_HELP, TASK_OR_QUESTION } from "./task-rules.js";
 
 const OWNER = "919111111111";
@@ -47,11 +48,28 @@ describe("owner: attendance questions are answered, not turned into tasks", () =
     "kaun chhutti pe hai",
     "IN/OUT किसका बाकी",
     "out kisne nahi kiya",
+    "आज अटेंडेंस किस-किस ने नहीं लगाई है",
+    "kis kis ne nahi lagai",
+    "Abhi bhi nahi bata raha kis kis ne nahi lagai",
+    "kisne nahi lagayi",
+    "किस-किस ने नहीं लगाई",
+    "आज किसने नहीं लगाई",
+    "attendance",
+    "अटेंडेंस",
+    "हाज़िरी",
+    "aaj ki attendance",
   ])("%s → attendance question", (t) => {
     expect(isAttendanceQuestion(t)).toBe(true);
   });
 
-  it.each(["रमेश शर्मा की रजिस्ट्री सोमवार तक", "Rohit ko kal chhutti de do registry ke liye bank jana hai", "hello", "रमेश को फोन करना है"])(
+  it.each([
+    "रमेश शर्मा की रजिस्ट्री सोमवार तक",
+    "Rohit ko kal chhutti de do registry ke liye bank jana hai",
+    "hello",
+    "रमेश को फोन करना है",
+    "रमेश के कागज़ पर स्टाम्प लगाना है",
+    "Rohit ki chhutti ki arzi bhejna kal",
+  ])(
     "%s → not an attendance question",
     (t) => {
       expect(isAttendanceQuestion(t)).toBe(false);
@@ -73,6 +91,50 @@ describe("owner: attendance questions are answered, not turned into tasks", () =
     expect(r[0]).toBe(REPORT);
     expect(r[1]).toContain("पुष्टि के लिए बाकी");
     expect(w.contacts.get(OWNER).state.mode).toBe("task-confirm");
+  });
+});
+
+describe("webhook → owner number → attendance report (whole path, fetch stubbed)", () => {
+  it("the screenshot message, with a task still waiting from 8:14 PM", async () => {
+    vi.stubEnv("WA_OWNER_NUMBERS", OWNER);
+    vi.stubEnv("WA_DEBOUNCE_MS", "0");
+    vi.stubEnv("WA_ACCESS_TOKEN", "t");
+    vi.stubEnv("WA_PHONE_NUMBER_ID", "1");
+    const sent: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_u: string, init: any) => {
+        const b = JSON.parse(init.body);
+        if (b.type === "text") sent.push(b.text.body);
+        return new Response(JSON.stringify({ messages: [{ id: "w" }] }), { status: 200 });
+      }),
+    );
+    const w = world();
+    const owner = new OwnerAssistantService(
+      { waContact: { findUnique: async () => ({ state: { mode: "task-confirm", draft: {}, transcript: "x", source: "text" } }), upsert: async () => undefined } } as any,
+      {} as any,
+      {} as any,
+      w.extractor as any,
+      {} as any,
+      w.attendance as any,
+    );
+    const front = { handle: vi.fn(), allowInbound: async () => true };
+    const wa = new WhatsappService(
+      { waInboundMessage: { create: async () => ({}) } } as any,
+      {} as any,
+      { touchContact: async () => undefined } as any,
+      {} as any,
+      front as any,
+      owner,
+      { handle: async () => null, ownerText: async () => null, ownerButton: async () => null } as any,
+    );
+    for (const [id, body] of [["m1", "आज अटेंडेंस किस-किस ने नहीं लगाई है"], ["m2", "kis kis ne nahi lagai"]]) {
+      await wa.handlePayload({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { messages: [{ id, from: OWNER, type: "text", text: { body } }] } }] }] });
+    }
+    expect(sent.filter((t) => t === REPORT)).toHaveLength(2);
+    expect(sent.some((t) => t.includes("काम दर्ज"))).toBe(false);
+    expect(front.handle).not.toHaveBeenCalled();
+    expect(w.extractor.extract).not.toHaveBeenCalled();
   });
 });
 
