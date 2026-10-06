@@ -140,6 +140,18 @@ export interface TaskDraft {
   assigneeUnknown?: string | null;
 }
 
+// ---------- "मुस्कान के सारे काम रद्द / डिलीट करो" ----------
+const REMOVE_WORDS = /डिलीट|डिलिट|delete|हटा|hata|मिटा|mita|रद्द|radd|cancel|कैंसल|कैन्सल|खत्म|ख़त्म|khatam|band\s*kar/i;
+const TASK_WORDS = /काम|kaam|kam\b|task|टास्क/i;
+const MANY_WORDS = /सारे|सारी|सभी|सब|sab|sare|saare|sari|all|पुरान|purane|purani|जितने|jitne/i;
+
+/** Removing several tasks at once (not "3 रद्द", which is one task). */
+export function isBulkCancel(text: string): boolean {
+  const s = norm(text);
+  if (/^#?\d{1,4}\s/.test(s)) return false;
+  return REMOVE_WORDS.test(s) && TASK_WORDS.test(s) && MANY_WORDS.test(s);
+}
+
 // ---------- the work named in the owner's own words ----------
 const WORD_TYPES: [TaskWorkType, RegExp][] = [
   ["will", /वसीयत|वसियत|wasiyat|vasiyat|vasiyatnama|wasiyatnama|\bwill\b/i],
