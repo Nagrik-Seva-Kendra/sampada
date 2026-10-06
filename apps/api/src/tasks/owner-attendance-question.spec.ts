@@ -1,6 +1,8 @@
 import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { dayStatus } from "../attendance/attendance-rules.js";
 import { AttendanceService } from "../attendance/attendance.service.js";
+import { DEFAULT_ATTENDANCE_SETTINGS } from "@sampada/shared";
 import { OwnerAssistantService } from "../whatsapp/owner-assistant.service.js";
 import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 import { hasTaskInstruction, isAttendanceQuestion, isQuestion, looksLikeTask, QUESTION_HELP, TASK_OR_QUESTION } from "./task-rules.js";
@@ -191,7 +193,21 @@ describe("AttendanceService.todayReport", () => {
     expect(text).toContain("🏖️ छुट्टी (2): Pooja, Ravi (आधा दिन)");
     expect(text).toContain("🚶 बाहर का काम (1): Mohan — तहसील");
     expect(text).toContain("✅ आए (3)");
-    expect(text).toContain("(15 मिनट देर)");
+    expect(text).toContain("Rohit Sharma 10:15 am (15 मिनट देर)");
+    expect(text).not.toMatch(/Anmol Kandoi 10:02 am \(/); // on time by the rule: no "देर"
+  });
+
+  it("owner's rule (start 10:30, late after 30 min, half day after 60): 11:06 late, 11:27 late, 11:35 half day, 10:50 on time", async () => {
+    const text = await svc([
+      d("Anmol Kandoi", "late", "2026-10-06T05:36:00Z", null, { lateMin: 36 }),
+      d("Rohit Senwar", "late", "2026-10-06T05:57:00Z", null, { lateMin: 57 }),
+      d("Vikas", "halfDay", "2026-10-06T06:05:00Z", null, { lateMin: 65 }),
+      d("Sunita", "present", "2026-10-06T05:20:00Z", null, { lateMin: 20 }),
+    ]).todayReport("org-1", NOW);
+    expect(text).toContain("Anmol Kandoi 11:06 am (36 मिनट देर)");
+    expect(text).toContain("Vikas 11:35 am (हाफ़ डे — 65 मिनट देर)");
+    expect(text).toContain("Sunita 10:50 am");
+    expect(text).not.toContain("20 मिनट देर");
   });
 
   it("an office holiday, and everyone done", async () => {
@@ -199,5 +215,21 @@ describe("AttendanceService.todayReport", () => {
     const done = await svc([d("A", "present", "2026-10-06T04:30:00Z", "2026-10-06T13:00:00Z")]).todayReport("org-1", NOW);
     expect(done).toContain("✅ आए (1)");
     expect(done).not.toContain("OUT नहीं किया");
+  });
+});
+
+describe("owner's rule in Settings: start 10:30, late after 30 min (11:00), half day after 60 min (11:30)", () => {
+  const settings = { ...DEFAULT_ATTENDANCE_SETTINGS, startTime: "10:30", lateAfterMin: 30, halfDayAfterMin: 60 };
+  const st = (hhmm: string) =>
+    dayStatus({ day: "2026-10-06", today: "2026-10-06", punches: [{ kind: "IN", at: new Date(`2026-10-06T${hhmm}:00+05:30`) } as any], leaves: [], settings, holidays: [] }).status;
+  it.each([
+    ["10:50", "present"],
+    ["11:00", "present"],
+    ["11:01", "late"],
+    ["11:27", "late"],
+    ["11:30", "late"],
+    ["11:31", "halfDay"],
+  ])("IN %s → %s", (hhmm, status) => {
+    expect(st(hhmm)).toBe(status);
   });
 });

@@ -485,13 +485,15 @@ export class AttendanceService {
     const line = (title: string, list: StaffDay[], f: (d: StaffDay) => string) => (list.length ? [`${title} (${list.length}): ${list.map(f).join(", ")}`] : []);
     const notOut = rows.filter((r) => r.inAt && !r.outAt);
     const came = rows.filter((r) => r.inAt);
+    // Only when the owner's rule makes it late / half day (Settings: इतने मिनट बाद देर / आधा दिन).
+    const lateNote = (d: StaffDay) => (d.status === "halfDay" ? ` (हाफ़ डे — ${d.lateMin} मिनट देर)` : d.status === "late" ? ` (${d.lateMin} मिनट देर)` : "");
     const lines = [
       `🕘 आज की हाज़िरी अभी तक (${fmtDay(day)}, ${fmtTime(now)})`,
       ...line("❌ IN नहीं किया", g(["absent"]), (d) => d.name),
       ...line("🌆 OUT नहीं किया", notOut, (d) => `${d.name} (IN ${t(d.inAt)})`),
       ...line("🏖️ छुट्टी", g(["leave", "halfLeave"]), (d) => `${d.name}${d.status === "halfLeave" ? " (आधा दिन)" : ""}`),
       ...line("🚶 बाहर का काम", g(["field"]), (d) => `${d.name}${d.field[0]?.reason ? ` — ${d.field[0].reason}` : ""}`),
-      ...line("✅ आए", came, (d) => `${d.name} ${t(d.inAt)}${d.outAt ? `–${t(d.outAt)}` : ""}${d.lateMin > 0 ? ` (${d.lateMin} मिनट देर)` : ""}`),
+      ...line("✅ आए", came, (d) => `${d.name} ${t(d.inAt)}${d.outAt ? `–${t(d.outAt)}` : ""}${lateNote(d)}`),
     ];
     if (lines.length === 1) lines.push("सबकी हाज़िरी पूरी है।");
     return lines.join("\n");
