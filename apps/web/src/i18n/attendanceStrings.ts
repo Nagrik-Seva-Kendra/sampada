@@ -107,6 +107,11 @@ export const attendanceStrings = {
   atPaidLeave: { en: "Paid leave per month", hi: "हर महीने सवैतनिक छुट्टी" },
   atLateDeduction: { en: "Deduct per late arrival (fraction of a day, 0 = off)", hi: "हर देरी पर कटौती (दिन का हिस्सा, 0 = बंद)" },
   atReports: { en: "Morning / evening WhatsApp reports to the owner", hi: "मालिक को सुबह / शाम WhatsApp रिपोर्ट" },
+  atStaffReminders: {
+    en: "WhatsApp reminder to staff who have not marked IN (morning report time) / OUT (evening report time)",
+    hi: "जिन स्टाफ ने IN (सुबह की रिपोर्ट के समय) / OUT (शाम की रिपोर्ट के समय) नहीं लगाया, उन्हें WhatsApp reminder",
+  },
+  atReminderSkip: { en: "Do not send the reminder to:", hi: "इन्हें reminder न भेजें:" },
   atHolidays: { en: "Holidays (owner's list)", hi: "अवकाश (मालिक की सूची)" },
   atHolidayName: { en: "Name", hi: "नाम" },
   atHolidayAdd: { en: "Add", hi: "जोड़ें" },

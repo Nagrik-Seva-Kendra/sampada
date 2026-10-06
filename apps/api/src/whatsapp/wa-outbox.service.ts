@@ -67,6 +67,7 @@ export function reasonFor(code: number | string | null | undefined, via: "text" 
   if (c === 131047) return "24 घंटे की विंडो बंद — टेम्पलेट ज़रूरी";
   if (c === 132001 || c === 132000 || c === 132015 || c === 132016) return "WhatsApp टेम्पलेट स्वीकृत नहीं / मौजूद नहीं";
   if (c === 131026) return "यह नंबर WhatsApp पर संदेश नहीं ले सकता";
+  if (c === 131042) return "Meta खाते में भुगतान तरीका (payment method) नहीं / समस्या";
   return `भेजा नहीं जा सका (${via}${code ? `, कोड ${code}` : ""})`;
 }
 

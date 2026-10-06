@@ -99,6 +99,13 @@ export const WA_TEMPLATES = {
     body: "नमस्ते {{1}}, ऑफिस के रिकॉर्ड {{2}} में अपडेट: {{3}}। विवरण के लिए इसी नंबर पर कोई संदेश भेजें या ऐप खोलें। धन्यवाद।",
     example: ["राहुल", "छुट्टी अर्ज़ी #5", "आपकी 12/10/2026 से 13/10/2026 की छुट्टी मंज़ूर हो गई"],
   },
+  attendanceReminder: {
+    name: "attendance_reminder_v1",
+    language: "hi",
+    category: "UTILITY",
+    body: "नमस्ते {{1}}, ऑफिस के हाज़िरी रिकॉर्ड में आज आपकी {{2}} अटेंडेंस दर्ज नहीं है। कृपया इसी संदेश के जवाब में वही शब्द (IN या OUT) लिखकर भेजें या ऐप के हाज़िरी पेज पर लगाएँ। धन्यवाद।",
+    example: ["राहुल", "OUT"],
+  },
   registryDate: {
     name: "registry_date_confirmed",
     language: "hi",
@@ -193,7 +200,7 @@ export type WaReasonCode =
   | "noticeSent"
   | "sendFailed";
 
-export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT" | "REGISTRY" | "FOLLOWUP";
+export type WaNotificationKind = "STATUS" | "ALERT" | "DRAFT" | "REGISTRY" | "FOLLOWUP" | "ATTENDANCE";
 /** SENT: accepted by WhatsApp. PENDING: could not be sent (window closed and template not approved, ...) -- resend by hand. */
 export type WaNotificationStatus = "SENT" | "PENDING";
 

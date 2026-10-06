@@ -101,6 +101,8 @@ async function world(role = "OWNER") {
     }),
     inWindow: async () => false,
     post: async () => ({ ok: false, wamid: null, code: null }),
+    // Staff reminders (attendance-reminders.spec.ts covers them); mocked, never sent.
+    send: vi.fn(async (m: any) => ({ id: "n", kind: m.kind, status: "SENT", reason: null })),
   };
   const attendance = new AttendanceService(prisma, cls, outbox);
   const salary = new SalaryService(prisma, cls, attendance, outbox);
