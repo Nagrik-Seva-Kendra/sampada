@@ -13,8 +13,12 @@ import {
   type ColonyProjectInput,
   type ColonySale,
   type ColonySaleInput,
+  type ColonyGuidelineRow,
+  type ColonySetupSuggestion,
+  type ColonySoldPlotsInput,
   type Instalment,
 } from "@sampada/shared";
+import { boundaryNamesSelf, buildSetupSuggestion, colonyGuideline, duplicateClauses, guidelineCandidates } from "./colony-setup.js";
 import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
@@ -32,6 +36,7 @@ import {
   parseCompanySale,
   parsePlotRef,
   parsePlots,
+  parseUnitRef,
   paymentBlock,
   plotBlock,
   plotLabel,
@@ -53,6 +58,8 @@ type BuyerStored = Omit<ColonyBuyer, "aadhaar" | "pan"> & { aadhaar: string | nu
 export class ColonyService {
   private readonly log = new Logger("Colony");
   private readonly orgId = process.env.WA_DEFAULT_ORG_ID ?? "";
+  /** Company number → the project it last wrote about (company mode, several projects). */
+  private readonly lastProject = new Map<string, { id: string; until: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -87,7 +94,12 @@ export class ColonyService {
     return {
       id: p.id,
       name: p.name,
+      kind: p.kind === "SHOP" ? "SHOP" : "PLOT",
       village: p.village,
+      ward: p.ward ?? "",
+      surveyNos: p.surveyNos ?? "",
+      aliases: p.aliases ?? "",
+      guidelineSno: p.guidelineSno ?? null,
       developer: p.developer,
       partners: (p.partners as ColonyPartner[]) ?? [],
       devPermissions: (p.devPermissions as string[]) ?? [],
@@ -129,7 +141,12 @@ export class ColonyService {
   private projectData(i: ColonyProjectInput) {
     return {
       name: i.name,
+      kind: i.kind,
       village: i.village,
+      ward: i.ward,
+      surveyNos: i.surveyNos,
+      aliases: i.aliases,
+      guidelineSno: i.guidelineSno,
       developer: i.developer,
       partners: i.partners as any,
       devPermissions: i.devPermissions as any,
@@ -170,7 +187,7 @@ export class ColonyService {
     await this.project(projectId, t.organizationId);
     const rows = await this.prisma.colonyPlot.findMany({ where: { projectId }, orderBy: [{ block: "asc" }, { plotNo: "asc" }] });
     return rows
-      .map((r) => ({ id: r.id, block: r.block, plotNo: r.plotNo, ewFt: r.ewFt, nsFt: r.nsFt, areaSqft: r.areaSqft, east: r.east, west: r.west, north: r.north, south: r.south, status: r.status as ColonyPlot["status"] }))
+      .map((r) => ({ id: r.id, block: r.block, plotNo: r.plotNo, ewFt: r.ewFt, nsFt: r.nsFt, areaSqft: r.areaSqft, east: r.east, west: r.west, north: r.north, south: r.south, corner: r.corner, floor: r.floor, status: r.status as ColonyPlot["status"] }))
       .sort((a, b) => a.block.localeCompare(b.block) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true }));
   }
 
@@ -224,7 +241,7 @@ export class ColonyService {
       instalments: sale.instalments,
       buyers: sale.buyers.map((b) => ({ ...b, aadhaar: b.aadhaar ? "x" : "", pan: b.pan ? "x" : "" })),
       plot: { areaSqft: plot?.areaSqft ?? null, ewFt: plot?.ewFt ?? null, nsFt: plot?.nsFt ?? null },
-      guidelineRatePerSqm: project.guidelineRatePerSqm,
+      guideline: plot ? colonyGuideline(project, plot) : null,
       otherSaleOfPlot: !!other,
       plotSold: plot?.status === "SOLD",
     });
@@ -232,6 +249,7 @@ export class ColonyService {
       checks.push({ level: "error", code: "partner", message: "भागीदार चुनें।" });
     }
     if (!project.live) checks.push({ level: "warning", code: "notLive", message: "प्रोजेक्ट अभी लाइव नहीं — डीड मालिक के लाइव करने के बाद बनेगी।" });
+    checks.push(...contentChecks(project, plot));
     return checks;
   }
 
@@ -341,7 +359,7 @@ export class ColonyService {
       BUYER: buyerBlock(
         buyers.map((b) => ({ ...b, aadhaar: "", pan: "", aadhaarText: b.aadhaar ? safeDecrypt(b.aadhaar) : undefined, panText: b.pan ? safeDecrypt(b.pan) : undefined })),
       ),
-      PLOT: plotBlock(plot),
+      PLOT: plotBlock(plot, p.kind),
       BOUNDARY: boundaryBlock(plot),
       PAYMENT: paymentBlock(s.consideration, instalments),
       PARTNER: partner.text,
@@ -472,13 +490,127 @@ export class ColonyService {
     };
   }
 
+  // ---------- Setup from the project's old deeds ----------
+  /** The words to find the project's old deeds / to spot it in a message: name + aliases. */
+  static names(p: { name: string; aliases?: string | null }): string[] {
+    return [p.name, ...String(p.aliases ?? "").split(/[,\n]/)].map((x) => x.trim()).filter((x) => x.length >= 3);
+  }
+
+  /**
+   * Reads the office's old sale deeds of this project (title / text with the
+   * name or an alias; similar titles too, e.g. "phlora siti") and suggests the
+   * whole Setup with the deed each value came from. Nothing is saved here.
+   */
+  async setupSuggest(projectId: string, extra = ""): Promise<ColonySetupSuggestion> {
+    const t = this.manager();
+    const p = await this.project(projectId, t.organizationId);
+    const names = [...ColonyService.names(p), ...extra.split(",").map((x) => x.trim()).filter((x) => x.length >= 3)];
+    const generated = new Set(
+      (await this.prisma.colonySale.findMany({ where: { projectId, deedId: { not: null } }, select: { deedId: true } })).map((x) => x.deedId),
+    );
+    const byText = await this.prisma.deedTemplate.findMany({
+      where: { status: "active", OR: names.flatMap((n) => [{ title: { contains: n, mode: "insensitive" as const } }, { content: { contains: n, mode: "insensitive" as const } }]) },
+      select: { id: true, title: true, content: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    });
+    // Titles spelt differently ("phlora siti"): trigram similarity, this office only.
+    let similar: { id: string }[] = [];
+    try {
+      similar = await this.prisma.$unscoped.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "DeedTemplate"
+        WHERE "organizationId" = ${t.organizationId} AND status = 'active' AND similarity(title, ${p.name}) > 0.25
+        ORDER BY "updatedAt" DESC LIMIT 40`;
+    } catch {
+      similar = [];
+    }
+    const missing = similar.map((x) => x.id).filter((id) => !byText.some((d) => d.id === id));
+    const more = missing.length
+      ? await this.prisma.deedTemplate.findMany({ where: { id: { in: missing } }, select: { id: true, title: true, content: true, updatedAt: true } })
+      : [];
+    const deeds = [...byText, ...more]
+      .filter((d) => !generated.has(d.id))
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, 80);
+    const suggestion = buildSetupSuggestion(deeds, names);
+    this.log.log(`setup suggestion for ${p.name}: ${deeds.length} deed(s), ${suggestion.plots.length} plot(s), ${suggestion.partners.length} partner variant(s)`);
+    return suggestion;
+  }
+
+  /** Plots / units read from the old deeds, imported as SOLD (existing rows are updated and marked SOLD). */
+  async importSoldPlots(projectId: string, input: ColonySoldPlotsInput): Promise<ColonyImportResult> {
+    const t = this.manager();
+    await this.project(projectId, t.organizationId);
+    let added = 0;
+    let updated = 0;
+    for (const x of input.plots) {
+      const data = { ...x, block: x.block.toUpperCase(), status: "SOLD" };
+      const existing = await this.prisma.colonyPlot.findFirst({ where: { projectId, block: data.block, plotNo: x.plotNo } });
+      if (existing) {
+        await this.prisma.colonyPlot.update({ where: { id: existing.id }, data });
+        updated++;
+      } else {
+        await this.prisma.colonyPlot.create({ data: { organizationId: t.organizationId, projectId, ...data } });
+        added++;
+      }
+    }
+    this.log.log(`sold plots from old deeds: +${added} ~${updated}`);
+    return { added, updated, errors: [] };
+  }
+
+  async setCorner(projectId: string, plotId: string, corner: boolean): Promise<ColonyPlot[]> {
+    const t = this.manager();
+    await this.project(projectId, t.organizationId);
+    const r = await this.prisma.colonyPlot.updateMany({ where: { id: plotId, projectId }, data: { corner } });
+    if (!r.count) throw new NotFoundException("प्लाट नहीं मिला।");
+    return this.plots(projectId);
+  }
+
+  /** Guideline rows of the office calculator matching a name (for the Setup picker). */
+  guidelineSearch(q: string): ColonyGuidelineRow[] {
+    this.manager();
+    return guidelineCandidates([q], undefined, 8);
+  }
+
+  /** Company mode for a SHOP project: "TF-16" (unit status), "स्थिति". Sales of units are entered on the web. */
+  private async handleCompanyUnits(p: any, phone: string, text: string): Promise<string[]> {
+    const s = text.trim();
+    const units = await this.prisma.colonyPlot.findMany({ where: { projectId: p.id } });
+    if (/(स्थिति|status|डैशबोर्ड|dashboard|हिसाब)/i.test(s)) {
+      const n = (st: string) => units.filter((x) => x.status === st).length;
+      return [`${p.name}: कुल ${units.length} यूनिट — उपलब्ध ${n("AVAILABLE")}, ड्राफ्ट ${n("DRAFTED")}, बिके ${n("SOLD")}।`];
+    }
+    const ref = parseUnitRef(s.replace(new RegExp(p.name, "i"), ""));
+    if (ref) {
+      const u = units.find((x) => x.plotNo.replace(/\s+/g, "").toUpperCase() === ref);
+      if (!u) return [`${p.name}: यूनिट ${ref} मास्टर में नहीं है।`];
+      const st = u.status === "AVAILABLE" ? "उपलब्ध" : u.status === "DRAFTED" ? "बिक्री दर्ज (डीड बाकी)" : "बिक चुका";
+      this.log.log(`company unit lookup from ${maskPhone(phone)}`);
+      return [`${p.name} यूनिट ${u.plotNo}: ${st}\n${plotBlock(u, "SHOP")}`];
+    }
+    return [`${p.name} — कंपनी मोड:\n• यूनिट देखें: "TF-16"\n• कुल स्थिति: "स्थिति"\n• बिक्री: ऑफिस वेब पर दर्ज होगी।`];
+  }
+
   // ---------- company mode (WhatsApp) ----------
   /** Messages from a project's company numbers: plot status, counts, or a sale draft. null for anyone else. */
   async handleCompany(phone: string, text: string): Promise<string[] | null> {
     if (!this.orgId) return null;
-    const projects = await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } });
-    const p = projects.find((x) => ((x.companyNumbers as string[]) ?? []).includes(phone));
-    if (!p) return null;
+    const projects = (await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } })).filter((x) =>
+      ((x.companyNumbers as string[]) ?? []).includes(phone),
+    );
+    if (!projects.length) return null;
+    // One number may send for several projects: the project's name / alias in the message picks it,
+    // else the one this number last wrote about (30 minutes), else ask.
+    const named = pickProject(projects, text);
+    const remembered = this.lastProject.get(phone);
+    const p =
+      named ??
+      (projects.length === 1 ? projects[0]! : remembered && remembered.until > Date.now() ? projects.find((x) => x.id === remembered.id) : undefined);
+    if (!p) {
+      return [`यह नंबर ${projects.length} प्रोजेक्ट से जुड़ा है — संदेश में प्रोजेक्ट का नाम लिखें:\n${projects.map((x) => `• ${x.name}`).join("\n")}`];
+    }
+    this.lastProject.set(phone, { id: p.id, until: Date.now() + 30 * 60_000 });
+    if (p.kind === "SHOP") return this.handleCompanyUnits(p, phone, text);
     const s = text.trim();
     const sale = parseCompanySale(s);
     if (sale) {
@@ -524,6 +656,42 @@ export class ColonyService {
     }
     return [`${p.name} — कंपनी मोड:\n• प्लाट देखें: "E-47"\n• कुल स्थिति: "स्थिति"\n• बिक्री दर्ज: पहली पंक्ति "बिक्री E-47", फिर क्रेता:, पता:, मोबाइल:, राशि:, भागीदार:`];
   }
+}
+
+/** The project a company message names (name or an alias, spaces / case ignored). */
+export function pickProject<T extends { name: string; aliases?: string | null }>(projects: T[], text: string): T | null {
+  const flat = (x: string) => x.toLowerCase().replace(/[\s.-]/g, "");
+  const msg = flat(text);
+  const full = projects.filter((p) => ColonyService.names(p).some((n) => msg.includes(flat(n))));
+  if (full.length === 1) return full[0]!;
+  // A distinctive word of the name ("Woods", "Flora") that no other project of this number has.
+  const words = (p: T) => ColonyService.names(p).flatMap((n) => n.toLowerCase().split(/\s+/)).filter((w) => w.length >= 4 && !/^(city|colony|business|courtyard|residency|nagar|सिटी|कॉलोनी|नगर)$/.test(w));
+  const hits = projects.filter((p) => words(p).some((w) => msg.includes(w) && !projects.some((o) => o !== p && words(o).includes(w))));
+  return hits.length === 1 ? hits[0]! : null;
+}
+
+/**
+ * Checks on what the deed will say (warnings): a boundary that names the very
+ * plot / unit being sold, and a maintenance paragraph that appears twice
+ * (e.g. one "1 अप्रैल 2026 से", the other "रजिस्ट्री दिनांक से").
+ */
+export function contentChecks(project: any, plot: any): ColonyCheck[] {
+  const out: ColonyCheck[] = [];
+  const dir = plot ? boundaryNamesSelf(plot) : null;
+  if (dir) out.push({ level: "warning", code: "boundarySelf", message: `चतुःसीमा (${dir}) में वही नंबर (${plot.plotNo}) लिखा है जो बिक रहा है — प्लाट मास्टर में सही पड़ोसी लिखें।` });
+  const preview = fillTemplate(project.template ?? "", {
+    DEV_PERMISSION: ((project.devPermissions as string[]) ?? []).filter(Boolean).join("\n"),
+    MAINTENANCE: ((project.maintenanceClauses as string[]) ?? []).filter(Boolean).join("\n\n"),
+  });
+  const dup = duplicateClauses(preview);
+  if (dup) {
+    out.push({
+      level: "warning",
+      code: "duplicateClause",
+      message: `रखरखाव वाला पैरा डीड में दो बार आएगा ("${dup.a}" / "${dup.b}") — मानक टेक्स्ट या रखरखाव शर्तों में से एक हटाएँ।`,
+    });
+  }
+  return out;
 }
 
 function safeDecrypt(v: string): string | undefined {

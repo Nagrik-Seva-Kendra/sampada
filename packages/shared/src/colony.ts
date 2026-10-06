@@ -14,22 +14,34 @@ export const ColonyPartner = z.object({
   key: z.string().trim().min(1).max(30),
   /** Shown in the sale form ("महेश"). */
   label: z.string().trim().min(1).max(60),
-  /** The text put in {{PARTNER}} ("द्वारा भागीदार श्री महेश ... पुत्र श्री ..."). */
-  text: z.string().trim().min(5).max(600),
+  /** The text put in {{PARTNER}} (the whole seller block of that partner pair). */
+  text: z.string().trim().min(5).max(4000),
 });
 export type ColonyPartner = z.infer<typeof ColonyPartner>;
+
+/** PLOT: a plotted colony (block / plot). SHOP: a commercial building (unit no. / floor), e.g. "TF-16". */
+export const ColonyProjectKind = z.enum(["PLOT", "SHOP"]);
+export type ColonyProjectKind = z.infer<typeof ColonyProjectKind>;
 
 export const ColonyProjectInput = z
   .object({
     name: z.string().trim().min(2).max(100),
+    kind: ColonyProjectKind.default("PLOT"),
     village: z.string().trim().max(100),
+    ward: z.string().trim().max(40).default(""),
+    /** Survey / khasra numbers of the project land ("123, 124/2"). */
+    surveyNos: z.string().trim().max(400).default(""),
+    /** Other names to find the old deeds / the project in a message ("फ्लोरा सिटी, phlora siti"). */
+    aliases: z.string().trim().max(300).default(""),
+    /** Guideline row (office calculator) the project lies in -- the guideline value comes from the calculator. */
+    guidelineSno: z.number().int().min(1).max(100_000).nullable().default(null),
     developer: z.string().trim().max(200),
     partners: z.array(ColonyPartner).max(6),
     /** Two development-permission references (T&CP / colony permission ...). */
     devPermissions: z.array(z.string().trim().max(400)).max(2),
     /** Two maintenance clauses. */
     maintenanceClauses: z.array(z.string().trim().max(1500)).max(2),
-    /** Guideline rate ₹ per square metre (for the "less than guideline" check). */
+    /** Fallback only, when no guideline row is chosen: ₹ per square metre. */
     guidelineRatePerSqm: z.number().min(0).max(10_000_000).nullable(),
     /** Colony standard text with {{BUYER}} {{PLOT}} {{BOUNDARY}} {{PAYMENT}}. */
     template: z.string().max(60_000),
@@ -43,7 +55,12 @@ export type ColonyProjectInput = z.infer<typeof ColonyProjectInput>;
 /** FLORA CITY, prefilled for the first project (partners' full text is the owner's to fill). */
 export const FLORA_CITY_DEFAULTS: ColonyProjectInput = {
   name: "FLORA CITY",
+  kind: "PLOT",
   village: "डोंगरपुर",
+  ward: "",
+  surveyNos: "",
+  aliases: "फ्लोरा सिटी",
+  guidelineSno: null,
   developer: "मेसर्स ग्रीन इन्फ्राटेक",
   partners: [
     { key: "mahesh", label: "महेश", text: "मेसर्स ग्रीन इन्फ्राटेक द्वारा भागीदार श्री महेश ____ पुत्र श्री ____" },
@@ -79,6 +96,10 @@ export interface ColonyPlot {
   west: string | null;
   north: string | null;
   south: string | null;
+  /** Corner plot: the calculator's +10%. */
+  corner: boolean;
+  /** SHOP projects: the floor ("तृतीय तल"). */
+  floor: string | null;
   status: ColonyPlotStatus;
 }
 
@@ -128,7 +149,17 @@ export type ColonySaleInput = z.infer<typeof ColonySaleInput>;
 export type ColonyCheckLevel = "error" | "warning";
 export interface ColonyCheck {
   level: ColonyCheckLevel;
-  code: "doubleSale" | "belowGuideline" | "areaMismatch" | "sampadaFields" | "paymentTotal" | "cashLimit" | "notLive" | "partner";
+  code:
+    | "doubleSale"
+    | "belowGuideline"
+    | "areaMismatch"
+    | "sampadaFields"
+    | "paymentTotal"
+    | "cashLimit"
+    | "notLive"
+    | "partner"
+    | "boundarySelf"
+    | "duplicateClause";
   message: string;
 }
 
@@ -156,3 +187,71 @@ export interface ColonyDashboard {
   plots: { total: number; available: number; drafted: number; sold: number; byBlock: { block: string; total: number; available: number }[] };
   sales: { total: number; deeds: number; consideration: number; withErrors: number; withWarnings: number };
 }
+
+// ---------- Setup from the old deeds of the project ----------
+/** Which old deed(s) a suggested value came from (shown next to every field). */
+export interface ColonySource {
+  deedId: string;
+  title: string;
+}
+export interface ColonySourced<T> {
+  value: T;
+  from: ColonySource[];
+}
+
+export interface ColonySetupSuggestion {
+  /** The old deeds that were read (most recent first). */
+  deeds: ColonySource[];
+  kind: ColonySourced<ColonyProjectKind> | null;
+  developer: ColonySourced<string> | null;
+  village: ColonySourced<string> | null;
+  ward: ColonySourced<string> | null;
+  surveyNos: ColonySourced<string> | null;
+  /** One variant per distinct partner pair; label = the partner who changes. */
+  partners: (ColonyPartner & { from: ColonySource[] })[];
+  devPermissions: ColonySourced<string>[];
+  maintenanceClauses: ColonySourced<string>[];
+  /** Standard text with the markers; no party Aadhaar / PAN / mobile. */
+  template: (ColonySourced<string> & { found: string[]; missing: string[] }) | null;
+  /** Sold plots / units read from the deeds (import as SOLD). */
+  plots: (Omit<ColonyPlot, "id" | "status"> & { from: ColonySource })[];
+  /** Guideline rows matching the project name (office calculator). */
+  guideline: ColonyGuidelineRow[];
+  /** Things the owner should look at (Hindi). */
+  warnings: string[];
+}
+
+export interface ColonyGuidelineRow {
+  sno: number;
+  hi: string;
+  en: string;
+  ward: string;
+  /** ₹ / sqm: residential plot, commercial plot, multi-storey commercial (shops). */
+  plotRes: number;
+  plotCom: number;
+  multiCom: number;
+}
+
+export const ColonySoldPlotsInput = z
+  .object({
+    plots: z
+      .array(
+        z.object({
+          block: z.string().trim().max(20),
+          plotNo: z.string().trim().min(1).max(20),
+          ewFt: z.number().positive().nullable(),
+          nsFt: z.number().positive().nullable(),
+          areaSqft: z.number().positive().nullable(),
+          east: z.string().trim().max(300).nullable(),
+          west: z.string().trim().max(300).nullable(),
+          north: z.string().trim().max(300).nullable(),
+          south: z.string().trim().max(300).nullable(),
+          corner: z.boolean(),
+          floor: z.string().trim().max(60).nullable(),
+        }),
+      )
+      .min(1)
+      .max(1000),
+  })
+  .strict();
+export type ColonySoldPlotsInput = z.infer<typeof ColonySoldPlotsInput>;
