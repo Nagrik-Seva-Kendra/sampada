@@ -110,9 +110,11 @@ const LEGAL: { topic: string; test: (s: string) => boolean; text: string; alert?
   },
   {
     topic: "agri-land",
+    // "खेती की ज़मीन की गाइडलाइन": the guideline questions, not this.
     test: (s) =>
-      /डायवर्सन|डायवर्जन|व्यपवर्तन|diversion|diversan|divarsan/i.test(s) ||
-      (/खेती|kheti|कृषि|krishi|agricultur|farm|खेत|\bkhet\b/i.test(s) && /ज़मीन|जमीन|zameen|jameen|zamin|jamin|land|भूमि|bhumi|खरीद|kharid|buy/i.test(s)),
+      !/guide\s*line|गाइड\s*लाइन|\brate\b|रेट|कीमत|keemat|kimat|value|मूल्य|खर्च|kharch/i.test(s) &&
+      (/डायवर्सन|डायवर्जन|व्यपवर्तन|diversion|diversan|divarsan/i.test(s) ||
+        /खेती|kheti|कृषि|krishi|agricultur|farm|खेत|\bkhet\b/i.test(s) && /ज़मीन|जमीन|zameen|jameen|zamin|jamin|land|भूमि|bhumi|खरीद|kharid|buy/i.test(s)),
     text: "खेती की ज़मीन कोई भी ख़रीद सकता है। उपयोग के अनुसार (मकान, दुकान आदि) उसका डायवर्सन भी करवाया जा सकता है।",
   },
   {
