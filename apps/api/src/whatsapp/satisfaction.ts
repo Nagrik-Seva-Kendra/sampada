@@ -1,4 +1,5 @@
 import { officeFeeFor, type WaOfficeFees } from "@sampada/shared";
+import { underValueWarning } from "./under-value.js";
 import { dayHi } from "./registry-date.js";
 
 /**
@@ -76,6 +77,8 @@ export function fullCostText(d: any, fees: WaOfficeFees, geoTagFee: number): str
   }
   if (d.geoTagMode === "STAFF") lines.push(`• जियो-टैग फ़ोटो (स्टाफ से): ₹${inr(geoTagFee)} प्रति फ़ोटो (गिनती स्टाफ बताएगा)`);
   if (total) lines.push(`कुल लगभग: ₹${inr(total)}${d.geoTagMode === "STAFF" ? " + जियो-टैग" : ""}`);
+  const warn = underValueWarning(d.amount, g?.marketValue);
+  if (warn) lines.push(warn);
   lines.push("अंतिम राशि संपदा पोर्टल पर तय होगी; कोई छुपा शुल्क नहीं।");
   return lines.join("\n");
 }
