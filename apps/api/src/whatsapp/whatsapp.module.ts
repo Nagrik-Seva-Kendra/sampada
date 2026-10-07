@@ -1,5 +1,6 @@
 import { WaConnectionController } from "./wa-connection.controller.js";
 import { CustomerQuestionsService } from "./customer-questions.service.js";
+import { LeadNudgeService } from "./lead-nudge.service.js";
 import { WaConnectionService } from "./wa-connection.service.js";
 import { Module } from "@nestjs/common";
 import { AttendanceModule } from "../attendance/attendance.module.js";
@@ -59,6 +60,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     OwnerAssistantService,
     TaskJobsService,
     CustomerQuestionsService,
+    LeadNudgeService,
   ],
 })
 export class WhatsappModule {}

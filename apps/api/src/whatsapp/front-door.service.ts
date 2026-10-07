@@ -10,6 +10,7 @@ import { FollowUpService } from "./followup.service.js";
 import { ArchiveCopyService } from "./archive-copy.service.js";
 import { SatisfactionService } from "./satisfaction.service.js";
 import { CustomerQuestionsService } from "./customer-questions.service.js";
+import { LEAD_ENDS, leadKindOf } from "./lead-nudge.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -203,6 +204,19 @@ export class FrontDoorService {
    * `deedWords` is the old intake reply for messages like "बंधक बनाना है".
    */
   async handle(phone: string, text: string, deedWords: () => Promise<string[] | null>, now = new Date()): Promise<FrontReply> {
+    const r = await this.route(phone, text, deedWords, now);
+    await this.markLead(phone, r.route, now).catch(() => this.log.warn("lead not marked"));
+    return r;
+  }
+
+  /** Interest (cost, how to start, a will) → one reminder tomorrow if no papers come (lead-nudge.ts); "बंद" / staff ends it. */
+  private async markLead(phone: string, route: string, now: Date): Promise<void> {
+    const kind = leadKindOf(route);
+    if (kind) await this.setContact(phone, { leadKind: kind, leadAt: now });
+    else if (LEAD_ENDS.has(route)) await this.prisma.waContact.updateMany({ where: { phone, leadAt: { not: null } }, data: { leadAt: null, leadKind: null } });
+  }
+
+  private async route(phone: string, text: string, deedWords: () => Promise<string[] | null>, now: Date): Promise<FrontReply> {
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
     const state = (c?.state as State) ?? null;
 
