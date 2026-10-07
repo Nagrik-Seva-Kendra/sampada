@@ -280,6 +280,10 @@ describe("ColonyService", () => {
       expect(deed.createdByName).toBe("WhatsApp कंपनी (Anuj Sharma)");
       expect(deed.content).toContain("श्याम सुंदर");
       expect(deed.content).toContain("UTR 99");
+      // The owner: mother's name and mobile are never printed in the deed (kept only for Sampada).
+      expect(deed.content).not.toContain("सीता");
+      expect(deed.content).not.toContain("माता");
+      expect(deed.content).not.toContain("9876543210");
       expect(cls.set).toHaveBeenCalledWith("tenant", expect.objectContaining({ organizationId: ORG, role: "OWNER" }));
       // Aadhaar stored encrypted, never in a log.
       expect(prisma.t.colonySale[0].buyers[0].aadhaar).toMatch(/^enc:/);
