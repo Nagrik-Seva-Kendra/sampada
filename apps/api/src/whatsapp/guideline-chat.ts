@@ -10,6 +10,7 @@
  * is guessed: a missing locality / row / type / area / corner / boundary is asked, more
  * than one row is listed for the customer to choose.
  */
+import { underValueWarning } from "./under-value.js";
 import { soundKey, soundsIn } from "./name-sound.js";
 import { officeFeeFor, type WaOfficeFees } from "@sampada/shared";
 import {
@@ -368,6 +369,8 @@ export function guideAnswer(
   );
   const fee = officeFeeFor("registry", base, fees);
   lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
+  const warn = underValueWarning(amount, value);
+  if (warn) lines.push("", warn);
   lines.push(
     "",
     `मान्यता: सड़क प्रीमियम ${roadPct}%${corner ? "" : "; कॉर्नर नहीं"}${boundary ? "" : "; बाउंड्री वॉल / नींव नहीं"}।`,
@@ -395,6 +398,8 @@ function dutyLines(entry: GuidelineEntry, valueRaw: number, amount: number | nul
   );
   const fee = officeFeeFor("registry", base, fees);
   lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
+  const warn = underValueWarning(amount, value);
+  if (warn) lines.push("", warn);
   return { lines, stamp: st };
 }
 

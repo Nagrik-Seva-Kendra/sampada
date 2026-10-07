@@ -3,6 +3,7 @@
  * gibberish / abuse detection, what may be sent to the model, and the cost
  * estimate text. No Nest/Prisma imports.
  */
+import { underValueWarning } from "./under-value.js";
 import { officeFeeFor, type WaFeeKind, type WaOfficeFees } from "@sampada/shared";
 import { inr, normDigits } from "./intake-rules.js";
 
@@ -212,6 +213,8 @@ export function registryCostText(
   }
   lines.push(`पंजीयन शुल्क: पुरुष क्रेता 3% = ₹${inr(Math.round(base * 0.03))}, महिला क्रेता 1% = ₹${inr(Math.round(base * 0.01))}`);
   lines.push(feeLine(officeFeeFor("registry", base, cfg)));
+  const warn = underValueWarning(input.amount, input.guideline?.value);
+  if (warn) lines.push("", warn);
   lines.push("", "यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।", 'नया ड्राफ्ट बनवाना हो तो "1" लिखें।');
   return lines.join("\n");
 }

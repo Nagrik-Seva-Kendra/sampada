@@ -1,4 +1,5 @@
 import { isClose } from "./chat-words.js";
+import { underValueWarning } from "./under-value.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import {
   formatParty,
@@ -761,6 +762,8 @@ export class DraftIntakeService {
           `ध्यान दें: यह राशि गाइडलाइन मूल्य (₹${inr(g.marketValue)}) से कम है। ` +
             "स्टाम्प शुल्क गाइडलाइन मूल्य के हिसाब से लग सकता है — स्टाफ इसकी पुष्टि करेगा।",
         );
+        const warn = underValueWarning(n, g.marketValue);
+        if (warn) out.push(warn);
       }
     }
 
