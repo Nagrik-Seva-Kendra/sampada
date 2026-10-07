@@ -707,6 +707,11 @@ model WaContact {
   ownerTestUntil  DateTime?
   /// The customer wrote "बंद" / STOP: no follow-up reminders any more.
   followUpOptOutAt DateTime?
+  /// Showed interest (asked the cost, a document, how to start) -- see lead-nudge.ts: draft | cost | other-doc | question.
+  leadKind         String?
+  leadAt           DateTime?
+  /// The one "आपका काम अभी शुरू नहीं हुआ" reminder (at most one per 7 days).
+  leadNudgedAt     DateTime?
 
   @@index([organizationId, blockedAt])
 }
