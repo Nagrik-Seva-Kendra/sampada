@@ -8,7 +8,15 @@ import {
   GUIDE_ASK_IRRIGATED,
   GUIDE_ASK_LIFT,
   GUIDE_ASK_PARTIES,
+  readAge,
+  readBuildKind,
+  readFloors,
   readParties,
+  GUIDE_ASK_AGE,
+  GUIDE_ASK_FLOORS,
+  GUIDE_ASK_HOUSE_KIND,
+  GUIDE_ASK_HOUSE_PLOT,
+  GUIDE_ASK_SHOP_KIND,
   GUIDE_ASK_BOUNDARY,
   GUIDE_ASK_CORNER,
   GUIDE_ASK_NAME,
@@ -23,7 +31,7 @@ import {
   localityOf,
   mergeFacts,
 } from "./guideline-chat.js";
-import { agriValue, divertedValue, flatValue, GUIDELINE_DATA, plotAreaToSqm, plotValue, stampDuty } from "./guideline/calculator.js";
+import { agriValue, buildingValue, divertedValue, flatValue, GUIDELINE_DATA, plotAreaToSqm, plotValue, stampDuty } from "./guideline/calculator.js";
 
 const TEXT = "33,47,000/- pe hogi\nGanga vihar ward 60 ki rate k hisaab se 2770 sqft ka bata do guideline";
 const fees = DEFAULT_OFFICE_FEES;
@@ -159,17 +167,17 @@ describe("guideline questions: never a guess, never silent", () => {
     expect(t.replies[0]).toContain("+ कॉर्नर 10%");
   });
 
-  it("several rows → listed to choose; 'none' → PDF; house / shop → not guessed", () => {
+  it("several rows → listed to choose; 'none' → PDF; house / shop → row listed first", () => {
     let t = guideNext(start("Ganga vihar ka plot guideline", null), fees);
     expect(t.state!.step).toBe("PICK");
     expect(t.state!.options!.length).toBeGreaterThan(1);
     const none = guideReply(t.state!, "0", fees);
     expect(none).toMatchObject({ state: null, outcome: "not-found" });
     expect(none.replies[0]).toContain("PDF");
+    // House / shop are worked out now: the row is listed first, nothing guessed.
     for (const w of ["makan", "दुकान"]) {
       t = guideNext(start(`Ganga vihar ward 60 ${w} 2770 sqft guideline`, null), fees);
-      expect(t.outcome).toBe("unsupported-type");
-      expect(t.replies[0]).toContain("अनुमान नहीं लगाता");
+      expect(t.state!.step).toBe("PICK");
     }
   });
 });
@@ -281,10 +289,67 @@ describe("the rest of the calculator: sellers / buyers, industrial plot, road pr
     expect(t.replies[0]).toContain("× 0.9 (मंज़िल)");
   });
 
-  it("commercial flat above the ground floor → staff, not a guess", () => {
+  it("commercial flat: the calculator's floor factors (ground 100, mezzanine 90, 1st 80, 2nd 70, 3rd+ 60%)", () => {
     const g = { mode: "guide" as const, step: "FLOOR" as const, amount: null, sno: 820, type: "flat" as const, area: { value: 50, unit: "sqm" as const }, flatCom: true };
-    const t = guideReply(g, "2", fees);
-    expect(t.outcome).toBe("unsupported-type");
-    expect(t.replies[0]).toContain("स्टाफ बताएगा");
+    for (const [ans, f] of [["0", 1], ["M", 0.9], ["1", 0.8], ["2", 0.7], ["5", 0.6]] as const) {
+      const t = guideReply(g, ans, fees);
+      const want = flatValue({ entry: ALAPUR, areaSqm: 50, commercial: true, commercialFloorFactor: f });
+      expect(t.outcome).toBe("answered");
+      expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.value).toLocaleString("en-IN")}`);
+    }
+    // Mezzanine is asked again for a residential flat.
+    expect(guideReply({ ...g, flatCom: false }, "M", fees).replies).toEqual([GUIDE_ASK_FLOOR]);
+  });
+});
+
+describe("house / shop building (the office calculator's bldg mode)", () => {
+  const ALAPUR = GUIDELINE_DATA.find((e) => e.sno === 820)!;
+  const sqft = (v: number) => plotAreaToSqm(v, "sqft");
+
+  it("reads the construction kind, floors and age", () => {
+    expect(readBuildKind("1", false)).toBe("rcc");
+    expect(readBuildKind("पक्की छत", false)).toBe("rcc");
+    expect(readBuildKind("tin shed", false)).toBe("tin");
+    expect(readBuildKind("2", true)).toBe("office");
+    expect(readBuildKind("गोदाम", true)).toBe("godown");
+    expect(readFloors("1000, 800 sqft", "sqm")).toEqual([sqft(1000), sqft(800)]);
+    expect(readFloors("1000", "sqft")).toEqual([sqft(1000)]);
+    expect(readFloors("2 मंज़िल, हर मंज़िल 900 वर्गफुट", "sqm")).toEqual([sqft(900), sqft(900)]);
+    expect(readFloors("भूतल 100 वर्गमीटर, 1st floor 80", "sqft")).toEqual([100, 80]);
+    expect(readFloors("pata nahi", "sqft")).toBeNull();
+    expect(readAge("12 साल")).toBe(12);
+    expect(readAge("नया है")).toBe(0);
+    expect(readAge("pata nahi")).toBeNull();
+  });
+
+  it("house: plot → corner → RCC → floors → age → buildingValue, with the amount warning", () => {
+    let t = guideNext(start("Alapur mukhya road makan guideline", 2_000_000), fees);
+    t = guideReply(t.state!, "1", fees); // the row
+    expect(t.replies).toEqual([GUIDE_ASK_HOUSE_PLOT]);
+    t = guideReply(t.state!, "1500 sqft", fees);
+    t = guideReply(t.state!, "2", fees); // not corner
+    expect(t.replies).toEqual([GUIDE_ASK_HOUSE_KIND]);
+    t = guideReply(t.state!, "1", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_FLOORS]);
+    t = guideReply(t.state!, "1200, 1000", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_AGE]);
+    t = guideReply(t.state!, "15", fees);
+    const want = buildingValue({ entry: ALAPUR, plotSqm: sqft(1500), corner: false, rescom: false, floors: [{ age: 15, parts: { rcc: sqft(1200) } }, { age: 15, parts: { rcc: sqft(1000) } }] });
+    expect(t.outcome).toBe("answered");
+    expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.total).toLocaleString("en-IN")}`);
+    expect(t.replies[0]).toContain("अवक्षयण 10%");
+    expect(t.replies[0]).toContain("पहली मंज़िल");
+    expect(t.replies[0]).toContain("⚠️ चेतावनी");
+  });
+
+  it("shop: commercial plot rate and shop construction", () => {
+    const g = { mode: "guide" as const, step: "BUILD_KIND" as const, amount: null, sno: 820, type: "shop" as const, area: { value: 50, unit: "sqm" as const }, corner: true };
+    let t = guideReply(g, "1", fees);
+    t = guideReply(t.state!, "40 वर्गमीटर", fees);
+    t = guideReply(t.state!, "0", fees);
+    const want = buildingValue({ entry: ALAPUR, plotSqm: 50, corner: true, rescom: true, floors: [{ age: 0, parts: { shop: 40 } }] });
+    expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.total).toLocaleString("en-IN")}`);
+    expect(t.replies[0]).toContain("व्यावसायिक भूखण्ड दर + कॉर्नर 10%");
+    expect(guideReply(g, "5", fees).replies[0]).toContain(GUIDE_ASK_SHOP_KIND);
   });
 });

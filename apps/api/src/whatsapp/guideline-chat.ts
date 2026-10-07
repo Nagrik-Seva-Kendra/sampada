@@ -19,7 +19,12 @@ import {
   type BreakdownLine,
   detectZoneType,
   divertedValue,
+  buildingValue,
+  COMMERCIAL_FLAT_FACTORS,
+  type ConstructionKind,
+  depr,
   flatValue,
+  netRates,
   zoneThreshold,
   GUIDELINE_DATA,
   type GuidelineEntry,
@@ -34,7 +39,8 @@ export type GuideType = "plotRes" | "plotCom" | "plotInd" | "house" | "shop" | "
 export type GuideStep =
   | "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY"
   | "AGRI_AREA" | "DIVERTED" | "IRRIGATED" | "PARTIES"
-  | "FLAT_USE" | "FLOOR" | "LIFT";
+  | "FLAT_USE" | "FLOOR" | "LIFT"
+  | "BUILD_KIND" | "FLOORS" | "AGE";
 export type AgriUnit = "hect" | "acre" | "bigha_p" | "bigha_k" | "sqm";
 export type AgriArea = { value: number; unit: AgriUnit };
 /** Agricultural land: not diverted, or diverted for homes / shops (calculator isDiv + use). */
@@ -63,6 +69,10 @@ export interface GuideState {
   flatCom?: boolean | null;
   floor?: number | null;
   lift?: boolean | null;
+  /** House / shop building: construction kind, built-up area per floor (sqm, ground first), age in years. */
+  buildKind?: ConstructionKind | null;
+  floorAreas?: number[] | null;
+  age?: number | null;
   /** Road premium % the customer stated (calculator road input; else 0). */
   roadPct?: number | null;
 }
@@ -230,7 +240,7 @@ const rowLabel = (e: GuidelineEntry) => {
 export const GUIDE_ASK_NAME = "गाइडलाइन के लिए कॉलोनी / मोहल्ले का नाम और वार्ड नंबर लिखें (जैसे: गंगा विहार वार्ड 60)।";
 export const GUIDE_ASK_WARD = "इस नाम की कई पंक्तियाँ हैं। वार्ड नंबर लिखें (जैसे: वार्ड 60)।";
 export const GUIDE_ASK_TYPE =
-  "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस\n5. फ़्लैट (बहुमंज़िला भवन में)\n6. खेती की ज़मीन\n7. खाली प्लॉट (औद्योगिक)";
+  "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस / गोदाम (ज़मीन सहित भवन)\n5. फ़्लैट, या कॉम्प्लेक्स में दुकान / ऑफिस\n6. खेती की ज़मीन\n7. खाली प्लॉट (औद्योगिक)";
 export const GUIDE_ASK_AREA = "प्लॉट का क्षेत्रफल लिखें (जैसे: 2770 वर्गफुट, 257 वर्गमीटर या 30x40 फुट)।";
 export const GUIDE_ASK_CORNER = "क्या प्लॉट कॉर्नर (दो तरफ़ सड़क) का है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_ASK_BOUNDARY = "क्या प्लॉट पर बाउंड्री वॉल बनी है या नींव भरी है? नंबर लिखें:\n1. हाँ\n2. नहीं";
@@ -243,6 +253,14 @@ export const GUIDE_ASK_PARTIES =
 export const GUIDE_ASK_FLAT_AREA = "फ़्लैट का क्षेत्रफल लिखें (जैसे: 1200 वर्गफुट या 110 वर्गमीटर)।";
 export const GUIDE_ASK_FLAT_USE = "फ़्लैट किस काम का है? नंबर लिखें:\n1. रहने के लिए (आवासीय)\n2. ऑफिस / दुकान (व्यावसायिक)";
 export const GUIDE_ASK_FLOOR = "फ़्लैट किस मंज़िल पर है? नंबर लिखें: 0 = भूतल (ग्राउंड), 1, 2, या 3 (तीसरी या ऊपर)।";
+export const GUIDE_ASK_FLOOR_COM =
+  "ऑफिस / दुकान किस मंज़िल पर है? लिखें: 0 = भूतल (ग्राउंड), M = मेज़ानाइन / लोअर-अपर ग्राउंड, 1, 2, या 3 (तीसरी या ऊपर)।";
+export const GUIDE_ASK_HOUSE_PLOT = "जिस प्लॉट (ज़मीन) पर निर्माण है उसका क्षेत्रफल लिखें (जैसे: 1500 वर्गफुट, 140 वर्गमीटर या 30x50 फुट)।";
+export const GUIDE_ASK_HOUSE_KIND = "निर्माण किस प्रकार का है? नंबर लिखें:\n1. RCC (पक्की छत)\n2. RBC\n3. टिनशेड\n4. कच्चा / कवेलू";
+export const GUIDE_ASK_SHOP_KIND = "निर्माण किस काम का है? नंबर लिखें:\n1. दुकान\n2. ऑफिस\n3. गोदाम";
+export const GUIDE_ASK_FLOORS =
+  "हर मंज़िल पर कितना निर्माण है? भूतल से क्रम में लिखें — जैसे: 1000 वर्गफुट (सिर्फ़ भूतल) या 1000, 800 वर्गफुट (भूतल, पहली मंज़िल)।\nहर मंज़िल बराबर हो तो: 2 मंज़िल, हर मंज़िल 900 वर्गफुट।";
+export const GUIDE_ASK_AGE = "निर्माण कितने साल पुराना है? साल लिखें (जैसे: 12) — नया हो तो 0।";
 export const GUIDE_ASK_LIFT = "क्या बिल्डिंग में लिफ्ट है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_ASK_IRRIGATED = "ज़मीन सिंचित है या असिंचित? नंबर लिखें:\n1. सिंचित\n2. असिंचित";
 export const GUIDE_DISCLAIMER = "⚠️ यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।";
@@ -304,11 +322,56 @@ export function readFlatUse(text: string): boolean | null {
   if (/आवासीय|awasiy|aawasiy|residential|रहने|rehne|rahne/i.test(text)) return false;
   return null;
 }
+/** Floor: 0 = ground; -1 = mezzanine / lower-upper ground (commercial flats only). */
 export function readFloor(text: string): number | null {
   const n = bare(text).toLowerCase();
+  if (/^m$/.test(n) || /मेज़ानाइन|मेजानाइन|mezz|lower\s*ground|upper\s*ground|लोअर|अपर\s*ग्राउंड/i.test(text)) return -1;
   if (/^(0|g|ground|भूतल|ग्राउंड|ground floor)$/.test(n) || /भूतल|ग्राउंड|ground/i.test(text)) return 0;
   const m = /^(\d{1,2})(?:st|nd|rd|th)?(?:\s*(?:floor|मंज़िल|मंजिल|manzil|manjil|वीं|वी|री|ी))?$/.exec(n) ?? /(\d{1,2})\s*(?:st|nd|rd|th)?\s*(?:floor|मंज़िल|मंजिल|manzil|manjil)/i.exec(text);
   return m ? Math.min(3, Number(m[1])) : null;
+}
+const KIND_WORDS: [RegExp, ConstructionKind][] = [
+  [/rcc|आरसीसी|आर\.?सी\.?सी|पक्की\s*छत|pakki\s*chhat|lintel|लिंटर|लेंटर/i, "rcc"],
+  [/rbc|आरबीसी|आर\.?बी\.?सी/i, "rbc"],
+  [/टिन|tin|shed|शेड/i, "tin"],
+  [/कच्च|kachch|kacch|kacha|कवेलू|kavelu|खपरैल/i, "kac"],
+  [/गोदाम|godown|godam|warehouse/i, "godown"],
+  [/ऑफिस|ऑफ़िस|office/i, "office"],
+  [/दुकान|dukan|shop|शोरूम|showroom/i, "shop"],
+];
+/** House: 1 RCC, 2 RBC, 3 tin shed, 4 kachcha; shop: 1 shop, 2 office, 3 godown; or the words. */
+export function readBuildKind(text: string, shop: boolean): ConstructionKind | null {
+  const n = bare(text);
+  const byNo: Record<string, ConstructionKind> = shop ? { "1": "shop", "2": "office", "3": "godown" } : { "1": "rcc", "2": "rbc", "3": "tin", "4": "kac" };
+  if (byNo[n]) return byNo[n]!;
+  const allowed: ConstructionKind[] = shop ? ["shop", "office", "godown"] : ["rcc", "rbc", "tin", "kac"];
+  return KIND_WORDS.find(([re, k]) => allowed.includes(k) && re.test(text))?.[1] ?? null;
+}
+/**
+ * Built-up area per floor in sqm, ground first: "1000, 800 sqft", "1000 वर्गफुट",
+ * "2 मंज़िल, हर मंज़िल 900 वर्गफुट". Without a unit the plot's unit is meant.
+ */
+export function readFloors(text: string, defaultUnit: "sqft" | "sqm"): number[] | null {
+  const s = normDigits(text).replace(/(\d),(?=\d{2,3}\b)/g, "$1");
+  const unit: "sqft" | "sqm" = new RegExp(SQM, "i").test(s) ? "sqm" : new RegExp(SQFT, "i").test(s) ? "sqft" : defaultUnit;
+  const toSqm = (v: number) => plotAreaToSqm(v, unit);
+  const count = /(\d{1,2})\s*(?:मंज़िल|मंजिल|मंज़िला|मंजिला|manzil|manjil|floors?|storey|storeys)/i.exec(s);
+  const each = /(हर|प्रत्येक|सब|sab|har|each|per|every)/i.test(s);
+  const nums = (t: string) => (t.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+  if (count && each) {
+    const rest = nums(s.replace(count[0], " ")).filter((v) => v >= 20);
+    const n = Number(count[1]);
+    if (rest.length === 1 && n >= 1 && n <= 10) return Array.from({ length: n }, () => toSqm(rest[0]!));
+  }
+  // "1st floor 800" / "पहली मंज़िल": ordinals are not areas.
+  const areas = nums(s.replace(/\d+\s*(?:st|nd|rd|th)\b/gi, " ").replace(/\d{1,2}\s*(?:वीं|वी|री|ी)?\s*(?:मंज़िल|मंजिल|manzil|manjil|floor)/gi, " ")).filter((v) => v >= 20);
+  if (!areas.length || areas.length > 10) return null;
+  return areas.map(toSqm);
+}
+export function readAge(text: string): number | null {
+  if (/^(नया|naya|new|नई|nayi)\b/i.test(text.trim()) || /नया|naya|new construction/i.test(text)) return 0;
+  const m = /(\d{1,3})/.exec(normDigits(text));
+  return m && Number(m[1]) <= 150 ? Number(m[1]) : null;
 }
 export function readIrrigated(text: string): boolean | null {
   const n = bare(text);
@@ -490,11 +553,13 @@ export function flatAnswer(
 ): { text: string; value: number } | null {
   const { entry, area, commercial, floor, lift, amount } = input;
   const sqm = plotAreaToSqm(area.value, area.unit);
-  const r = flatValue({ entry, areaSqm: sqm, commercial, floorIdx: floor, lift });
+  const comFactor =
+    floor === -1 ? COMMERCIAL_FLAT_FACTORS.mezzanine : floor === 0 ? COMMERCIAL_FLAT_FACTORS.ground : floor === 1 ? COMMERCIAL_FLAT_FACTORS.first : floor === 2 ? COMMERCIAL_FLAT_FACTORS.second : COMMERCIAL_FLAT_FACTORS.thirdUp;
+  const r = flatValue({ entry, areaSqm: sqm, commercial, floorIdx: Math.max(0, floor), lift, commercialFloorFactor: commercial ? comFactor : undefined });
   if (!r.baseRate) return null;
   const value = Math.round(r.value);
   const d = dutyLines(entry, r.value, amount, fees);
-  const floorHi = floor === 0 ? "भूतल" : floor >= 3 ? "तीसरी या ऊपर की मंज़िल" : `${floor} मंज़िल`;
+  const floorHi = floor === -1 ? "मेज़ानाइन / लोअर-अपर ग्राउंड" : floor === 0 ? "भूतल" : floor >= 3 ? "तीसरी या ऊपर की मंज़िल" : `${floor} मंज़िल`;
   const lines = [
     `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
@@ -510,16 +575,66 @@ export function flatAnswer(
   return { text: lines.join("\n"), value };
 }
 
+const KIND_HI: Record<ConstructionKind, string> = { rcc: "RCC", rbc: "RBC", tin: "टिनशेड", kac: "कच्चा / कवेलू", shop: "दुकान", office: "ऑफिस", godown: "गोदाम" };
+const FLOOR_HI = (i: number) => (i === 0 ? "भूतल" : i === 1 ? "पहली मंज़िल" : i === 2 ? "दूसरी मंज़िल" : i === 3 ? "तीसरी मंज़िल" : `${i}वीं मंज़िल`);
+
+/**
+ * A house / shop building by the office calculator's buildingValue ("bldg"):
+ * the plot at the residential (shop: commercial) plot rate, corner +10%, plus
+ * each floor's construction at the row's net building rate × floor factor ×
+ * (1 − depreciation by age). The whole building is taken as one kind.
+ */
+export function buildingAnswer(
+  input: { entry: GuidelineEntry; shop: boolean; plot: { value: number; unit: "sqft" | "sqm" }; corner: boolean; kind: ConstructionKind; floorAreas: number[]; age: number; amount: number | null },
+  fees: WaOfficeFees,
+): { text: string; value: number } | null {
+  const { entry, shop, plot, corner, kind, floorAreas, age, amount } = input;
+  if (!netRates(entry)[kind]) return null;
+  const plotSqm = plotAreaToSqm(plot.value, plot.unit);
+  const r = buildingValue({ entry, plotSqm, corner, rescom: shop, floors: floorAreas.map((a) => ({ age, parts: { [kind]: a } })) });
+  const value = Math.round(r.total);
+  const d = dutyLines(entry, r.total, amount, fees);
+  const dp = depr(age);
+  const lines = [
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
+    `प्रकार: ${shop ? "व्यावसायिक भवन" : "मकान / डुप्लेक्स"} — ${KIND_HI[kind]}, ${age} साल पुराना${dp ? ` (अवक्षयण ${dp}%)` : ""}`,
+    "गणना:",
+    `• भूखण्ड: ${plot.value} ${plot.unit === "sqft" ? `वर्गफुट (${+plotSqm.toFixed(2)} वर्गमीटर)` : "वर्गमीटर"} × ₹${inr(Math.round(r.plotRate))} (${shop ? "व्यावसायिक" : "आवासीय"} भूखण्ड दर${corner ? " + कॉर्नर 10%" : ""}) = ₹${inr(Math.round(r.plotValue))}`,
+    ...r.floors.map((f) => {
+      const p = f.parts[0]!;
+      return `• ${FLOOR_HI(f.idx)}: ${+p.area.toFixed(2)} वर्गमीटर × ₹${inr(Math.round(p.rate))} (निर्माण दर × ${Math.round(p.ff * 100)}%${dp ? ` − ${dp}%` : ""}) = ₹${inr(Math.round(p.value))}`;
+    }),
+    `गाइडलाइन मूल्य: ₹${inr(value)}`,
+    ...d.lines,
+    "",
+    "मान्यता: पूरा निर्माण एक ही प्रकार का और सब मंज़िलें एक ही उम्र की मानी हैं (अलग-अलग हों तो स्टाफ सही गणना बताएगा)।",
+    GUIDE_DISCLAIMER,
+    'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
+  ];
+  return { text: lines.join("\n"), value };
+}
+
+/** House / shop: plot area, corner, construction kind, floors, age. */
+function buildingNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[]): GuideTurn {
+  const entry = data.find((e) => e.sno === g.sno)!;
+  const shop = g.type === "shop";
+  if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_HOUSE_PLOT] };
+  if (g.corner == null) return { state: { ...g, step: "CORNER" }, replies: [GUIDE_ASK_CORNER] };
+  if (!g.buildKind) return { state: { ...g, step: "BUILD_KIND" }, replies: [shop ? GUIDE_ASK_SHOP_KIND : GUIDE_ASK_HOUSE_KIND] };
+  if (!g.floorAreas?.length) return { state: { ...g, step: "FLOORS" }, replies: [GUIDE_ASK_FLOORS] };
+  if (g.age == null) return { state: { ...g, step: "AGE" }, replies: [GUIDE_ASK_AGE] };
+  const a = buildingAnswer({ entry, shop, plot: g.area, corner: g.corner, kind: g.buildKind, floorAreas: g.floorAreas, age: g.age, amount: g.amount }, fees);
+  if (!a) return { state: null, replies: [`इस पंक्ति में ${KIND_HI[g.buildKind]} निर्माण की दर नहीं है, इसलिए अनुमान नहीं दिया जा रहा। ${GUIDE_PDF_HINT}`], outcome: "not-found" };
+  return { state: null, replies: [a.text], outcome: "answered" };
+}
+
 /** Flat: area, residential / commercial, floor, lift (residential above the ground floor). */
 function flatNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[]): GuideTurn {
   const entry = data.find((e) => e.sno === g.sno)!;
   if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_FLAT_AREA] };
   if (g.flatCom == null) return { state: { ...g, step: "FLAT_USE" }, replies: [GUIDE_ASK_FLAT_USE] };
-  if (g.floor == null) return { state: { ...g, step: "FLOOR" }, replies: [GUIDE_ASK_FLOOR] };
-  // The calculator's commercial floor factors are not in the bot: only the ground floor is worked out.
-  if (g.flatCom && g.floor > 0) {
-    return { state: null, replies: [`ऊपर की मंज़िल वाले ऑफिस / दुकान की गाइडलाइन मंज़िल के हिसाब से अलग होती है — हमारा स्टाफ बताएगा। ${GUIDE_PDF_HINT}`], outcome: "unsupported-type" };
-  }
+  if (g.floor == null || (g.floor === -1 && !g.flatCom)) return { state: { ...g, step: "FLOOR", floor: null }, replies: [g.flatCom ? GUIDE_ASK_FLOOR_COM : GUIDE_ASK_FLOOR] };
   if (!g.flatCom && g.floor > 0 && g.lift == null) return { state: { ...g, step: "LIFT" }, replies: [GUIDE_ASK_LIFT] };
   const a = flatAnswer({ entry, area: g.area, commercial: !!g.flatCom, floor: g.floor, lift: !!g.lift, amount: g.amount }, fees);
   if (!a) return { state: null, replies: [`इस पंक्ति में ${g.flatCom ? "व्यावसायिक" : "आवासीय"} फ़्लैट की दर नहीं है, इसलिए अनुमान नहीं दिया जा रहा। ${GUIDE_PDF_HINT}`], outcome: "not-found" };
@@ -554,9 +669,6 @@ export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
 
 /** The next question, or the answer when everything is known. */
 export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[] = GUIDELINE_DATA): GuideTurn {
-  if (g.type === "house" || g.type === "shop") {
-    return { state: null, replies: [unsupportedTypeText(g.type)], outcome: "unsupported-type" };
-  }
   if (!g.sno) {
     if (!g.name) return { state: { ...g, step: "NAME" }, replies: [GUIDE_ASK_NAME] };
     const rows = guideRows(g.name, g.ward ?? null, data);
@@ -568,6 +680,7 @@ export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntr
   if (!g.type) return { state: { ...g, step: "TYPE" }, replies: [GUIDE_ASK_TYPE] };
   if (g.type === "agri") return agriNext(g, fees, data);
   if (g.type === "flat") return flatNext(g, fees, data);
+  if (g.type === "house" || g.type === "shop") return buildingNext(g, fees, data);
   if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_AREA] };
   if (g.corner == null) return { state: { ...g, step: "CORNER" }, replies: [GUIDE_ASK_CORNER] };
   if (g.boundary == null) return { state: { ...g, step: "BOUNDARY" }, replies: [GUIDE_ASK_BOUNDARY] };
@@ -614,7 +727,7 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       break;
     }
     case "AREA": {
-      if (!f.area) unclear = /^\d+(\.\d+)?$/.test(bare(text)) ? "इकाई भी लिखें — वर्गफुट या वर्गमीटर (जैसे: 2770 वर्गफुट)।" : g.type === "flat" ? GUIDE_ASK_FLAT_AREA : GUIDE_ASK_AREA;
+      if (!f.area) unclear = /^\d+(\.\d+)?$/.test(bare(text)) ? "इकाई भी लिखें — वर्गफुट या वर्गमीटर (जैसे: 2770 वर्गफुट)।" : g.type === "flat" ? GUIDE_ASK_FLAT_AREA : g.type === "house" || g.type === "shop" ? GUIDE_ASK_HOUSE_PLOT : GUIDE_ASK_AREA;
       next = { ...g, area: f.area };
       break;
     }
@@ -661,8 +774,26 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
     }
     case "FLOOR": {
       const fl = readFloor(text);
-      if (fl == null) unclear = GUIDE_ASK_FLOOR;
+      if (fl == null) unclear = g.flatCom ? GUIDE_ASK_FLOOR_COM : GUIDE_ASK_FLOOR;
       next = { ...g, floor: fl };
+      break;
+    }
+    case "BUILD_KIND": {
+      const k = readBuildKind(text, g.type === "shop");
+      if (!k) unclear = g.type === "shop" ? GUIDE_ASK_SHOP_KIND : GUIDE_ASK_HOUSE_KIND;
+      next = { ...g, buildKind: k };
+      break;
+    }
+    case "FLOORS": {
+      const fs = readFloors(text, g.area?.unit ?? "sqft");
+      if (!fs) unclear = GUIDE_ASK_FLOORS;
+      next = { ...g, floorAreas: fs };
+      break;
+    }
+    case "AGE": {
+      const a = readAge(text);
+      if (a == null) unclear = GUIDE_ASK_AGE;
+      next = { ...g, age: a };
       break;
     }
     case "LIFT": {
@@ -678,7 +809,7 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       break;
     }
   }
-  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "AGRI_AREA" ? unclear : `समझ नहीं आया। ${unclear}`] };
+  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "AGRI_AREA" || g.step === "FLOORS" ? unclear : `समझ नहीं आया। ${unclear}`] };
   // Anything else the answer also says (e.g. the area together with the type).
   return guideNext(mergeFacts(next, f), fees, data);
 }

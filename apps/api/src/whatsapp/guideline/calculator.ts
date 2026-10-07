@@ -252,6 +252,70 @@ export function divertedValue(d: DivertedInput) {
   return { total, lines, threshold, partyMul, baseRate: baseDiv };
 }
 
+// ---------------------------------------------------------------- building / duplex
+/** calculator depr(): depreciation % by age in years. */
+export const depr = (a: number): number =>
+  a <= 10 ? 0 : a <= 20 ? 10 : a <= 25 ? 15 : a <= 30 ? 20 : a <= 35 ? 25 : a <= 40 ? 30 : a <= 45 ? 36 : a <= 50 ? 40 : a <= 55 ? 45 : 50;
+/** calculator floorFactor(): residential construction, ground 100%, 1st 95%, 2nd 90%, 3rd+ 85%. */
+export const floorFactor = (i: number): number => (i === 0 ? 1.0 : i === 1 ? 0.95 : i === 2 ? 0.9 : 0.85);
+/** calculator floorFactorCommercial(): shop / office / godown, ground 100%, 1st 80%, 2nd 70%, 3rd+ 60%. */
+export const floorFactorCommercial = (i: number): number => (i === 0 ? 1.0 : i === 1 ? 0.8 : i === 2 ? 0.7 : 0.6);
+
+/** calculator getNetRates(): construction rate = the row's building rate less the plot rate (never below 0). */
+export function netRates(e: GuidelineEntry) {
+  return {
+    rcc: Math.max(0, e.brt - e.pr),
+    rbc: Math.max(0, e.bbt - e.pr),
+    tin: Math.max(0, e.btt - e.pr),
+    kac: Math.max(0, e.ktt - e.pr),
+    shop: Math.max(0, e.shop - e.pc),
+    office: Math.max(0, e.office - e.pc),
+    godown: Math.max(0, e.godown - e.pc),
+  };
+}
+export type ConstructionKind = keyof ReturnType<typeof netRates>;
+const COMMERCIAL_KINDS: ConstructionKind[] = ["shop", "office", "godown"];
+
+export interface BuildingFloor {
+  /** Age in years (whole floor). */
+  age: number;
+  /** Built-up area (sqm) by construction kind. */
+  parts: Partial<Record<ConstructionKind, number>>;
+}
+export interface BuildingInput {
+  entry: GuidelineEntry;
+  /** Plot area (sqm) under the building; 0 = construction only. */
+  plotSqm: number;
+  corner: boolean;
+  /** Residential-cum-commercial: plot at the commercial rate. */
+  rescom: boolean;
+  /** Index 0 = ground floor. */
+  floors: BuildingFloor[];
+}
+/** calculator calc(), mode "bldg": plot (pr / pc, corner +10%) + each floor's construction (net rate × floor factor × (1 − depreciation)). */
+export function buildingValue(b: BuildingInput) {
+  const plotRate = (b.rescom ? b.entry.pc : b.entry.pr) * (b.corner ? 1.1 : 1.0);
+  const plotValue = b.plotSqm * plotRate;
+  const nr = netRates(b.entry);
+  const floors = b.floors.map((f, idx) => {
+    const dp = depr(f.age);
+    const parts = (Object.keys(f.parts) as ConstructionKind[])
+      .map((k) => {
+        const area = f.parts[k] ?? 0;
+        const ff = COMMERCIAL_KINDS.includes(k) ? floorFactorCommercial(idx) : floorFactor(idx);
+        const rate = nr[k] * ff * (1 - dp / 100);
+        return { kind: k, area, rate, value: rate * area, ff };
+      })
+      .filter((p) => p.area > 0);
+    return { idx, dp, parts, area: parts.reduce((s, p) => s + p.area, 0), value: parts.reduce((s, p) => s + p.value, 0) };
+  });
+  const constructionValue = floors.reduce((s, f) => s + f.value, 0);
+  return { plotRate, plotValue, floors, constructionValue, total: plotValue + constructionValue };
+}
+
+/** calculator select flatFloorCom: ground 100%, mezzanine / lower-upper ground 90%, 1st 80%, 2nd 70%, 3rd+ 60%. */
+export const COMMERCIAL_FLAT_FACTORS = { ground: 1.0, mezzanine: 0.9, first: 0.8, second: 0.7, thirdUp: 0.6 } as const;
+
 // ---------------------------------------------------------------- flat
 export function flatValue(f: {
   entry: GuidelineEntry;
