@@ -157,6 +157,9 @@ function fakePrisma() {
     colonyPlot: model("colonyPlot", () => ({ status: "AVAILABLE" })),
     colonySale: model("colonySale", () => ({ status: "DRAFT", deedId: null, source: "web" })),
     deedTemplate: model("deedTemplate"),
+    membership: {
+      findFirst: async () => ({ id: "m-owner", userId: "u-owner", organizationId: "org-1", role: "OWNER", user: { id: "u-owner", fname: "Anuj", lname: "Sharma" } }),
+    },
   } as any;
 }
 
@@ -243,6 +246,72 @@ describe("ColonyService", () => {
     const s = await svc().createSale(p.id, sale(plot.id, { consideration: 2_000_000 }));
     expect(s.checks.find((c) => c.code === "paymentTotal")?.level).toBe("error");
     await expect(svc().createDeed(p.id, s.id, user)).rejects.toThrow(/किश्तों का जोड़/);
+  });
+
+  describe("company paper on WhatsApp → deed by itself", () => {
+    const PAPER = {
+      project: "Flora City",
+      plot: { block: "E", plotNo: "47" },
+      buyers: [{ name: "श्याम सुंदर", relation: "पुत्र", guardian: "मोहन लाल", motherName: "सीता", address: "लश्कर", mobile: "9876543210", email: "s@x.in", aadhaar: "2345 6789 0123", pan: "ABCDE1234F" }],
+      consideration: 1_500_000,
+      instalments: [{ date: "2026-10-01", amount: 1_500_000, mode: "rtgs", ref: "UTR 99" }],
+      partner: "महेश",
+    };
+    const FILE = { buf: Buffer.from("paper"), mime: "image/jpeg" };
+    const cls = { get: () => undefined, set: vi.fn(), run: (fn: () => any) => fn() };
+    const withPaper = (raw: any) => new ColonyService(prisma, cls as any, { extract: vi.fn(async () => raw) } as any);
+    beforeEach(() => vi.stubEnv("ANTHROPIC_API_KEY", "k"));
+
+    it("a complete paper: sale entered, deed made in the owner's name, plot sold, owner told", async () => {
+      const p = await project();
+      await svc().setLive(p.id, true);
+      const logs: string[] = [];
+      const s = withPaper(PAPER);
+      (s as any).log = { log: (m: string) => logs.push(m), warn: () => undefined, error: () => undefined };
+      expect(await s.isCompanyNumber("919111111111")).toBe(true);
+      expect(await s.isCompanyNumber("919000000000")).toBe(false);
+      const r = await s.handleCompanyFile("919111111111", FILE, "");
+      expect(r!.replies[0]).toContain("✅ FLORA CITY — बिक्री #1: ब्लॉक E - प्लाट 47, क्रेता श्याम सुंदर, राशि ₹15,00,000");
+      expect(r!.replies[0]).toContain("डीड बन गई");
+      expect(r!.ownerAlert).toContain("कंपनी के कागज़ से डीड बनी — बिक्री #1, ब्लॉक E - प्लाट 47");
+      expect(prisma.t.colonySale[0]).toMatchObject({ status: "DEED_CREATED", source: "whatsapp", partnerKey: "mahesh" });
+      expect(prisma.t.colonyPlot.find((x: any) => x.plotNo === "47").status).toBe("SOLD");
+      const deed = prisma.t.deedTemplate[0];
+      expect(deed.createdByName).toBe("WhatsApp कंपनी (Anuj Sharma)");
+      expect(deed.content).toContain("श्याम सुंदर");
+      expect(deed.content).toContain("UTR 99");
+      expect(cls.set).toHaveBeenCalledWith("tenant", expect.objectContaining({ organizationId: ORG, role: "OWNER" }));
+      // Aadhaar stored encrypted, never in a log.
+      expect(prisma.t.colonySale[0].buyers[0].aadhaar).toMatch(/^enc:/);
+      expect(logs.join("\n")).not.toMatch(/234567890123|श्याम|9876543210|9111111111/);
+      // The same paper again: the plot is sold.
+      expect((await s.handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("पहले से दर्ज / बिका");
+    });
+
+    it("something missing → draft with the list; the full paper sent again updates the same sale and makes the deed", async () => {
+      const p = await project();
+      await svc().setLive(p.id, true);
+      const half = await withPaper({ ...PAPER, buyers: [{ ...PAPER.buyers[0], aadhaar: null }], instalments: [] }).handleCompanyFile("919111111111", FILE, "");
+      expect(half!.replies[0]).toContain("ड्राफ्ट दर्ज");
+      expect(half!.replies[0]).toContain("• क्रेता का आधार");
+      expect(half!.replies[0]).toContain("• भुगतान की किश्तें");
+      expect(half!.ownerAlert).toBeNull();
+      expect(prisma.t.colonyPlot.find((x: any) => x.plotNo === "47").status).toBe("DRAFTED");
+      const full = await withPaper(PAPER).handleCompanyFile("919111111111", FILE, "");
+      expect(full!.replies[0]).toContain("बिक्री #1");
+      expect(full!.replies[0]).toContain("डीड बन गई");
+      expect(prisma.t.colonySale).toHaveLength(1);
+    });
+
+    it("not live → draft only; unknown plot / unreadable paper / other numbers explained", async () => {
+      await project();
+      const r = await withPaper(PAPER).handleCompanyFile("919111111111", FILE, "");
+      expect(r!.replies[0]).toContain("प्रोजेक्ट अभी लाइव नहीं है");
+      expect(prisma.t.deedTemplate).toHaveLength(0);
+      expect((await withPaper({ ...PAPER, plot: { block: "Z", plotNo: "9" } }).handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("ब्लॉक Z - प्लाट 9 प्लाट मास्टर में नहीं");
+      expect((await withPaper(null).handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("कागज़ पढ़ा नहीं जा सका");
+      expect(await withPaper(PAPER).handleCompanyFile("919000000000", FILE, "")).toBeNull();
+    });
   });
 
   it("company mode on WhatsApp: status, plot, sale draft (no Aadhaar over chat)", async () => {
