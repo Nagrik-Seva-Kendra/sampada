@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { CustomerQuestionsService } from "./customer-questions.service.js";
+import { parseQuestionCommand } from "./customer-questions.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
@@ -100,6 +102,7 @@ export class OwnerAssistantService {
     private readonly outbox: WaOutboxService,
     @Optional() private readonly attendance?: AttendanceService,
     @Optional() private readonly deeds?: DeedExtractorService,
+    @Optional() private readonly questions?: CustomerQuestionsService,
   ) {}
 
   isOwner(phone: string): boolean {
@@ -138,6 +141,13 @@ export class OwnerAssistantService {
     }
     text = text.trim();
     if (!text) return [];
+
+    // "जवाब 12 ...", "याद रखो 12", "सवाल": customers' questions, never a task.
+    const qc = this.questions ? parseQuestionCommand(text) : null;
+    if (qc) {
+      this.log.log(`owner question command ${qc.kind}`);
+      return this.questions!.command(qc, now);
+    }
 
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
     let state = (c?.state as OwnerState) ?? null;

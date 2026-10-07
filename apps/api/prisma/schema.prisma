@@ -1197,3 +1197,38 @@ model SatisfactionConfig {
   ratingsEnabled   Boolean  @default(true)
   updatedAt        DateTime @updatedAt
 }
+
+/// A customer's question the bot could not answer: the owner answers it on
+/// WhatsApp ("जवाब 12 ...") and the answer goes to the customer. Text is
+/// stored with numbers / IDs masked (redactForModel).
+model WaQuestion {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         Int
+  phone          String
+  text           String    @db.Text
+  /// OPEN | ANSWERED
+  status         String    @default("OPEN")
+  answer         String?   @db.Text
+  answeredAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+/// An answer the owner told the bot to remember ("याद रखो 12"): the same
+/// question later gets it straight away. `keys` are the question's content words.
+model WaLearnedAnswer {
+  id             String   @id @default(cuid())
+  organizationId String
+  questionNumber Int
+  question       String   @db.Text
+  answer         String   @db.Text
+  keys           String[]
+  enabled        Boolean  @default(true)
+  uses           Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, enabled])
+}

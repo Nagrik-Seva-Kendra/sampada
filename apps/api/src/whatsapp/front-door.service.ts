@@ -9,6 +9,7 @@ import { CallbackService } from "./callback.service.js";
 import { FollowUpService } from "./followup.service.js";
 import { ArchiveCopyService } from "./archive-copy.service.js";
 import { SatisfactionService } from "./satisfaction.service.js";
+import { CustomerQuestionsService } from "./customer-questions.service.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -64,6 +65,7 @@ export type FrontRoute =
   | "ask-away"
   | "draft-question"
   | "question-forwarded"
+  | "learned"
   | "greeting"
   | "draft-howto"
   | "cost"
@@ -124,6 +126,7 @@ export class FrontDoorService {
     private readonly attendance: AttendanceService,
     @Optional() private readonly copies?: ArchiveCopyService,
     @Optional() private readonly satisfaction?: SatisfactionService,
+    @Optional() private readonly questions?: CustomerQuestionsService,
   ) {}
 
   private callNumber(): string | null {
@@ -289,11 +292,9 @@ export class FrontDoorService {
         await this.setContact(phone, { state: null });
         // "kya NRI ki registry ho sakti hai": a question about a registry, not "make one" -- the office answers it too.
         if (looksLikeQuestion(text) && text.trim().split(/\s+/).length >= 4 && !WANTS_ONE.test(text)) {
-          if (this.questionAlertDue(phone, now)) {
-            await this.outbox
-              .alertOwners(`❓ WhatsApp नंबर ${fullPhone(phone)} का सवाल:\n"${redactForModel(text).slice(0, 300)}"`)
-              .catch(() => undefined);
-          }
+          const learned = await this.questions?.learnedAnswer(text).catch(() => null);
+          if (learned) return { replies: [learned], route: "learned", force: true };
+          await this.forwardQuestion(phone, text, now);
           return { replies: [QUESTION_NOTED, DRAFT_HOWTO], route: "draft-question", force: true };
         }
         return { replies: [DRAFT_HOWTO], route: "draft-howto" };
@@ -336,14 +337,25 @@ export class FrontDoorService {
     }
     // A question the bot has no answer for: the office answers it -- never just the menu again.
     if (!state && !isGreeting(text) && looksLikeQuestion(text)) {
-      if (this.questionAlertDue(phone, now)) {
-        await this.outbox
-          .alertOwners(`❓ WhatsApp नंबर ${fullPhone(phone)} का सवाल (बॉट जवाब नहीं दे पाया):\n"${redactForModel(text).slice(0, 300)}"`)
-          .catch(() => undefined);
-      }
+      const learned = await this.questions?.learnedAnswer(text).catch(() => null);
+      if (learned) return { replies: [learned], route: "learned", force: true };
+      await this.forwardQuestion(phone, text, now);
       return { replies: [QUESTION_FORWARDED], route: "question-forwarded", force: true };
     }
     return { replies: [menuText(callOn)], route: isGreeting(text) ? "greeting" : "menu" };
+  }
+
+  /** To the owner: numbered and kept (answered with "जवाब N ..."), else a plain alert. */
+  private async forwardQuestion(phone: string, text: string, now: Date): Promise<void> {
+    if (this.questions) {
+      await this.questions.record(phone, text, now).catch(() => this.log.warn("question not recorded"));
+      return;
+    }
+    if (this.questionAlertDue(phone, now)) {
+      await this.outbox
+        .alertOwners(`❓ WhatsApp नंबर ${fullPhone(phone)} का सवाल (बॉट जवाब नहीं दे पाया):\n"${redactForModel(text).slice(0, 300)}"`)
+        .catch(() => undefined);
+    }
   }
 
   private readonly questionAlerts = new Map<string, number>();
