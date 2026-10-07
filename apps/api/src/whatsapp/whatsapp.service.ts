@@ -138,9 +138,31 @@ export class WhatsappService {
         return;
       }
       const testing = await this.owner.inCustomerTest(from);
-      if (testing && /^(ओनर|owner|मालिक|malik)\s*(मोड|mode)$/i.test(body.trim())) {
+      const companyMode = !!this.colony?.inOwnerCompanyMode(from);
+      if ((testing || companyMode) && /^(ओनर|owner|मालिक|malik)\s*(मोड|mode)$/i.test(body.trim())) {
+        this.colony?.endOwnerCompanyMode(from);
         await this.send(from, await this.owner.endCustomerTest(from));
         return;
+      }
+      // "कंपनी मोड": the owner sends a colony sale paper the way the company would (the deed is made from it).
+      if (this.colony && /^(कंपनी|कम्पनी|company|kampani|kmpni)\s*(मोड|mode|मॉड)$/i.test(body.trim())) {
+        await this.send(from, this.colony.startOwnerCompanyMode(from));
+        this.log.log(`message ${msg.id} from owner route=company-mode-on`);
+        return;
+      }
+      if (companyMode && this.colony) {
+        if (msg.type === "document" || msg.type === "image") {
+          await this.queuePaper(from, msg);
+          return;
+        }
+        if (msg.type === "text") {
+          const company = await this.colony.handleCompany(from, body);
+          if (company) {
+            await this.send(from, company);
+            this.log.log(`message ${msg.id} from owner route=company replies=${company.length}`);
+            return;
+          }
+        }
       }
       // A PDF / photo from the owner belongs to a task, never to the customer draft flow.
       if (!testing && (msg.type === "document" || msg.type === "image")) {
@@ -172,20 +194,8 @@ export class WhatsappService {
     }
     // A colony company's sale paper (photo / PDF): read it, enter the sale, make the deed.
     if ((msg.type === "document" || msg.type === "image") && this.colony && (await this.colony.isCompanyNumber(from))) {
-      const media = msg[msg.type]; // { id, mime_type, filename?, caption? }
-      const file = await this.downloadMedia(media.id, media.filename);
-      try {
-        const r = await this.colony.handleCompanyFile(from, { buf: file.buf, mime: file.mime }, String(media.caption ?? ""));
-        if (r) {
-          await this.send(from, r.replies);
-          if (r.ownerAlert) await this.outbox.alertOwners(r.ownerAlert).catch(() => undefined);
-          this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=company-paper replies=${r.replies.length}`);
-          return;
-        }
-      } finally {
-        // The paper carries Aadhaar / PAN: what was needed is in the sale (encrypted); the file is not kept.
-        await deleteMedia(file.key).catch(() => this.log.warn("company paper not deleted"));
-      }
+      await this.queuePaper(from, msg);
+      return;
     }
     // A colony project's company people (company mode): plot status, counts, sale drafts.
     if (msg.type === "text" && this.colony) {
@@ -250,10 +260,53 @@ export class WhatsappService {
         return;
       }
       default: {
-        const replies = await this.front.withoutRepeats(from, ["कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।"]);
+        // "unsupported": WhatsApp did not pass the message on (e.g. an HD / view-once photo).
+        const ask = msg.type === "unsupported" ? "यह संदेश खुल नहीं पाया। फ़ोटो सामान्य (HD नहीं) भेजें, या PDF भेजें।" : "कृपया टेक्स्ट संदेश, फ़ोटो या PDF भेजें।";
+        const replies = await this.front.withoutRepeats(from, [ask]);
         await this.send(from, replies);
         this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=unsupported replies=${replies.length}${replies.length ? "" : " silent=repeat-suppressed"}`);
       }
+    }
+  }
+
+  // ---------- colony sale papers ----------
+  /** Pages of a sale paper sent one after another (details, payment, map) are read together. */
+  private readonly papers = new Map<string, { files: IncomingFile[]; caption: string; timer?: NodeJS.Timeout }>();
+  private paperWaitMs(): number {
+    const n = Number(process.env.WA_PAPER_WAIT_MS ?? 15_000);
+    return Number.isFinite(n) && n >= 0 ? n : 15_000;
+  }
+
+  private async queuePaper(from: string, msg: any): Promise<void> {
+    const media = msg[msg.type]; // { id, mime_type, filename?, caption? }
+    const file = await this.downloadMedia(media.id, media.filename);
+    const wait = this.paperWaitMs();
+    const cur = this.papers.get(from) ?? { files: [], caption: "" };
+    cur.files.push(file);
+    if (media.caption) cur.caption = `${cur.caption} ${String(media.caption)}`.trim();
+    this.papers.set(from, cur);
+    this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=company-paper page=${cur.files.length}`);
+    if (wait <= 0) return this.readPaper(from);
+    if (cur.files.length === 1) await this.send(from, ["📄 कागज़ मिला — पढ़ रहा हूँ। बाकी पन्ने (भुगतान, नक्शा) हों तो अभी भेज दें।"]);
+    clearTimeout(cur.timer);
+    cur.timer = setTimeout(() => void this.readPaper(from).catch((e) => this.log.error(`company paper failed: ${e?.name ?? "error"}`)), wait);
+    cur.timer.unref?.();
+  }
+
+  private async readPaper(from: string): Promise<void> {
+    const cur = this.papers.get(from);
+    this.papers.delete(from);
+    if (!cur?.files.length || !this.colony) return;
+    try {
+      const r = await this.colony.handleCompanyFile(from, cur.files.map((f) => ({ buf: f.buf, mime: f.mime })), cur.caption);
+      if (r) {
+        await this.send(from, r.replies);
+        if (r.ownerAlert) await this.outbox.alertOwners(r.ownerAlert).catch(() => undefined);
+        this.log.log(`company paper from ${maskPhone(from)} pages=${cur.files.length} replies=${r.replies.length}`);
+      }
+    } finally {
+      // The paper carries Aadhaar / PAN: what was needed is in the sale (encrypted); the files are not kept.
+      for (const f of cur.files) await deleteMedia(f.key).catch(() => this.log.warn("company paper not deleted"));
     }
   }
 
