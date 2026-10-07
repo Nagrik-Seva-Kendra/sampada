@@ -425,7 +425,7 @@ export class OwnerAssistantService {
       : [`⚠️ पार्टी को संदेश नहीं जा सका (${d.reason ?? "कारण नहीं पता"})। WhatsApp टेम्पलेट स्वीकृत होने के बाद दोबारा कोशिश करें।`];
   }
 
-  /** The staff member the work was given to gets it on WhatsApp (text in the 24h window, else staff_task). */
+  /** The staff member the work was given to gets it on WhatsApp (text in the 24h window, else the staff_task_v2 template). */
   private async tellAssignee(userId: string, number: number, d: TaskDraft): Promise<string> {
     const s = (await this.staff()).find((x) => x.userId === userId);
     if (!s) return "";

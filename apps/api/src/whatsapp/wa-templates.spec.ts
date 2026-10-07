@@ -42,6 +42,15 @@ describe("template rules (checked before submitting)", () => {
     expect(templateProblems({ name: "x", body: "नमस्ते {{1}}, अनुरोध पर आज 20% छूट वाला ऑफर है, जल्दी करें आज ही", example: ["a"] })).toContain("promotional");
   });
 
+  it("staff work goes as staff_task_v2 (Meta held the name staff_task); attendance stays attendance_reminder_v1", () => {
+    const names = Object.values(WA_TEMPLATES as Record<string, WaTemplateDef>).map((t) => t.name);
+    expect(WA_TEMPLATES.staffTask.name).toBe("staff_task_v2");
+    expect(names).not.toContain("staff_task");
+    expect(WA_TEMPLATES.staffTask).toMatchObject({ language: "hi", category: "UTILITY" });
+    expect(WA_TEMPLATES.staffTask.body).toBe("नमस्ते {{1}}, ऑफिस से नया काम: {{2}}। पूरा होने पर इसी नंबर पर हो गया लिखें। धन्यवाद।");
+    expect(WA_TEMPLATES.attendanceReminder.name).toBe("attendance_reminder_v1");
+  });
+
   it("start / end / adjacent / numbering / example count / name", () => {
     expect(templateProblems({ name: "x", body: "{{1}} नमस्ते आप कैसे हैं आज", example: ["a"] })).toContain("startsWithVariable");
     expect(templateProblems({ name: "x", body: "नमस्ते आप कैसे हैं आज {{1}}।", example: ["a"] })).toContain("endsWithVariable");
@@ -105,6 +114,15 @@ describe("WaTemplatesService.submit", () => {
     // Once finished, the next click works again.
     graph(Object.values(WA_TEMPLATES as Record<string, WaTemplateDef>).map((t) => t.name));
     expect((await svc.submit()).every((o) => o.code === "exists")).toBe(true);
+  });
+
+  it("the app's 'Meta को भेजें' list: staff_task_v2 is listed and sent when Meta lacks it; the old staff_task is not", async () => {
+    const posts = graph(others.filter((n) => n !== "staff_task_v2").concat(["staff_task"]));
+    const out = await new WaTemplatesService(ctx).submit();
+    expect(posts).toContain("staff_task_v2");
+    expect(posts).not.toContain("staff_task");
+    expect(out.map((o) => o.name)).toContain("staff_task_v2");
+    expect(out.map((o) => o.name)).not.toContain("staff_task");
   });
 
   it("cleanMetaText: hides tokens and long numbers, bounded", () => {

@@ -70,8 +70,9 @@ export const WA_TEMPLATES = {
     body: "नमस्ते {{1}}, नागरिक सेवा केंद्र से संदेश: आपके {{2}} के ड्राफ्ट के लिए कृपया इस नंबर पर ज़रूरी कागज़ की PDF या साफ़ फ़ोटो भेजें। धन्यवाद।",
     example: ["रमेश जी", "विक्रय पत्र"],
   },
+  // v2: Meta held the name "staff_task" for 4 weeks (older Hindi content); same text under a new name.
   staffTask: {
-    name: "staff_task",
+    name: "staff_task_v2",
     language: "hi",
     category: "UTILITY",
     body: "नमस्ते {{1}}, ऑफिस से नया काम: {{2}}। पूरा होने पर इसी नंबर पर हो गया लिखें। धन्यवाद।",

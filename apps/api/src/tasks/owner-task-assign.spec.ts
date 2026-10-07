@@ -85,7 +85,7 @@ describe("owner gives the work to a staff member", () => {
     expect(to).toBe("917974876905");
     expect(text).toContain("नमस्ते Muskan, ऑफिस से नया काम #7:");
     expect(text).toContain("वसीयत");
-    expect(template).toMatchObject({ name: "staff_task", params: ["Muskan", expect.stringContaining("#7 वसीयत")] });
+    expect(template).toMatchObject({ name: "staff_task_v2", params: ["Muskan", expect.stringContaining("#7 वसीयत")] });
   });
 
   it("a name not in Team → asked to correct; two staff with the same first name → not guessed", async () => {
