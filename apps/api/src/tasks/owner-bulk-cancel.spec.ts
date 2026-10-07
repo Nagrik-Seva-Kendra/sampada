@@ -70,13 +70,16 @@ describe("cancel all of a staff member's tasks", () => {
     ]);
   });
 
-  it("नहीं → nothing cancelled; no name → asked for one", async () => {
+  it("नहीं → nothing cancelled; no name but 'सारे / पुराना सब' → every open task listed and asked first", async () => {
     const w = world();
     await w.say(TEXT);
     expect(await w.say("नहीं")).toEqual(["ठीक है, कोई काम रद्द नहीं किया।"]);
     expect(w.tasks.setStatus).not.toHaveBeenCalled();
-    const w2 = world(null);
-    expect((await w2.say("सारे काम डिलीट कर दो"))[0]).toContain("किसके काम रद्द करने हैं?");
-    expect(w2.tasks.setStatus).not.toHaveBeenCalled();
+    for (const t of ["सारे काम डिलीट कर दो", "Purana delete Kar do sab"]) {
+      const w2 = world(null);
+      const r = (await w2.say(t))[0]!;
+      expect(r).toMatch(/^सारे \d+ खुले काम:|^कोई खुला काम नहीं है।$/);
+      expect(w2.tasks.setStatus).not.toHaveBeenCalled();
+    }
   });
 });

@@ -17,6 +17,7 @@ import {
   suggestTemplate,
 } from "./colony-rules.js";
 import { ColonyService } from "./colony.service.js";
+import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 
 const OLD_FLORA = `विक्रय पत्र
 
@@ -288,8 +289,8 @@ describe("ColonyService", () => {
       // Aadhaar stored encrypted, never in a log.
       expect(prisma.t.colonySale[0].buyers[0].aadhaar).toMatch(/^enc:/);
       expect(logs.join("\n")).not.toMatch(/234567890123|श्याम|9876543210|9111111111/);
-      // The same paper again: the plot is sold.
-      expect((await s.handleCompanyFile("919111111111", [FILE], ""))!.replies[0]).toContain("पहले से दर्ज / बिका");
+      // The same paper again: the deed is already made.
+      expect((await s.handleCompanyFile("919111111111", [FILE], ""))!.replies[0]).toContain("की डीड पहले ही बन चुकी है");
     });
 
     it("something missing → draft with the list; the full paper sent again updates the same sale and makes the deed", async () => {
@@ -331,6 +332,109 @@ describe("ColonyService", () => {
       s.startOwnerCompanyMode(OWNER);
       expect(s.endOwnerCompanyMode(OWNER)).toBe(true);
       expect(await s.handleCompanyFile(OWNER, [FILE], "")).toBeNull();
+    });
+
+    describe("the 10:33 AM conversation, replayed through the webhook", () => {
+      const OWNER = "919999900000";
+      async function phone(colony: ColonyService) {
+        vi.stubEnv("WA_ACCESS_TOKEN", "t");
+        vi.stubEnv("WA_PHONE_NUMBER_ID", "111");
+        vi.stubEnv("WA_PAPER_WAIT_MS", "15000");
+        vi.stubEnv("WA_MEDIA_DIR", await import("node:fs/promises").then((f) => f.mkdtemp(`${(process.env.TMPDIR ?? "/tmp").replace(/\/$/, "")}/wa-e2e-`)));
+        for (const k of ["R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]) vi.stubEnv(k, "");
+        const sent: string[] = [];
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(async (u: string, init?: any) => {
+            const url = String(u);
+            if (/\/img\d$/.test(url)) return new Response(JSON.stringify({ url: `https://media.example/${url.split("/").pop()}`, mime_type: "image/jpeg" }), { status: 200 });
+            if (url.startsWith("https://media.example/")) return new Response(Buffer.from("jpg"), { status: 200 });
+            const b = JSON.parse(init.body);
+            if (b.type === "text") sent.push(b.text.body);
+            return new Response(JSON.stringify({ messages: [{ id: "w" }] }), { status: 200 });
+          }),
+        );
+        const owner: any = {
+          isOwner: (p: string) => p === OWNER,
+          inCustomerTest: async () => false,
+          endCustomerTest: async () => ["✅ ओनर मोड चालू।"],
+          handle: vi.fn(async () => ["TASK"]),
+          handleFile: vi.fn(async () => ["TASK-FILE"]),
+        };
+        const outbox: any = { touchContact: async () => undefined, alertOwners: vi.fn(async () => 1), inWindow: async () => true };
+        const wa = new WhatsappService(
+          { waInboundMessage: { create: vi.fn(async () => ({})) } } as any,
+          { hasActive: async () => false, handleText: async () => null } as any,
+          outbox,
+          { handleReply: async () => null, flushPending: async () => undefined } as any,
+          { allowInbound: async () => true, withoutRepeats: async (_p: string, r: string[]) => r } as any,
+          owner,
+          { ownerText: async () => null, ownerButton: async () => null, handle: async () => null } as any,
+          colony,
+        );
+        let n = 0;
+        const msg = (m: any) => wa.handlePayload({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { contacts: [{ profile: { name: "A" } }], messages: [{ id: `m${++n}`, from: OWNER, ...m }] } }] }] });
+        return {
+          sent,
+          owner,
+          outbox,
+          text: (body: string) => msg({ type: "text", text: { body } }),
+          image: (i: number) => msg({ type: "image", image: { id: `img${i}`, mime_type: "image/jpeg" } }),
+          hd: () => msg({ type: "unsupported" }),
+        };
+      }
+      afterEach(() => vi.unstubAllGlobals());
+
+      it("कंपनी मोड → photo + HD photo → 'Sab bhej diya' → deed; 'Deed bana do' / 'Haan' never tasks", async () => {
+        const p = await project();
+        await svc().setLive(p.id, true);
+        const E20 = { ...PAPER, plot: { block: "E", plotNo: "47" } };
+        const colony = withPaper(E20);
+        const w = await phone(colony);
+        await w.text("कंपनी मोड");
+        expect(w.sent.at(-1)).toContain("कंपनी मोड 30 मिनट");
+        await w.image(1);
+        expect(w.sent.at(-1)).toContain("कागज़ मिला — पढ़ रहा हूँ");
+        await w.hd();
+        expect(w.sent.at(-1)).toContain("HD नहीं");
+        await w.text("Sab bhej diya");
+        expect(w.sent.at(-1)).toContain("डीड बन गई");
+        expect(w.outbox.alertOwners).toHaveBeenCalledWith(expect.stringContaining("कंपनी के कागज़ से डीड बनी"));
+        await w.text("Deed bana do");
+        expect(w.sent.at(-1)).toContain("की डीड बन चुकी है ✅");
+        await w.text("Haan");
+        expect(w.sent.at(-1)).not.toBe("TASK");
+        expect(w.owner.handle).not.toHaveBeenCalled();
+        expect(w.owner.handleFile).not.toHaveBeenCalled();
+        await w.text("ओनर मोड");
+        await w.text("Purana delete kar do sab");
+        expect(w.owner.handle).toHaveBeenCalledTimes(1);
+      });
+
+      it("'फ्लोर की डिड बनानी है न्यू' turns company mode on by itself", async () => {
+        const p = await project();
+        await svc().setLive(p.id, true);
+        await svc().update(p.id, { ...ready(), aliases: "फ़्लोरा सिटी, Flora" } as any).catch(() => undefined);
+        const w = await phone(withPaper(PAPER));
+        await w.text("फ्लोर की डिड बनानी है न्यू");
+        expect(w.sent.at(-1)).toContain("की डीड — कागज़ के सारे पन्ने");
+        expect(w.owner.handle).not.toHaveBeenCalled();
+        await w.text("कल रमेश की रजिस्ट्री है");
+        expect(w.sent.at(-1)).toContain("कंपनी मोड:");
+      });
+
+      it("a draft entered on the web is filled by the paper; a made deed tells which sale to cancel", async () => {
+        const p = await project();
+        await svc().setLive(p.id, true);
+        const plot = prisma.t.colonyPlot.find((x: any) => x.plotNo === "47");
+        await svc().createSale(p.id, sale(plot.id, { instalments: [{ date: "2026-10-01", amount: 100, mode: "cash", ref: "" }] }));
+        const r = await withPaper(PAPER).handleCompanyFile("919111111111", [FILE], "");
+        expect(r!.replies[0]).toContain("बिक्री #1");
+        expect(r!.replies[0]).toContain("डीड बन गई");
+        const again = await withPaper(PAPER).handleCompanyFile("919111111111", [FILE], "");
+        expect(again!.replies[0]).toContain("बिक्री #1 की डीड पहले ही बन चुकी है");
+        expect(again!.replies[0]).toContain('"रद्द" करें');
+      });
     });
 
     it("not live → draft only; unknown plot / unreadable paper / other numbers explained", async () => {
