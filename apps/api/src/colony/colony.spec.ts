@@ -411,16 +411,17 @@ describe("ColonyService", () => {
         expect(w.owner.handle).toHaveBeenCalledTimes(1);
       });
 
-      it("'फ्लोर की डिड बनानी है न्यू' turns company mode on by itself", async () => {
+      it("company mode only when the owner says it: deed words alone stay with the owner's tasks; others never", async () => {
         const p = await project();
         await svc().setLive(p.id, true);
-        await svc().update(p.id, { ...ready(), aliases: "फ़्लोरा सिटी, Flora" } as any).catch(() => undefined);
-        const w = await phone(withPaper(PAPER));
+        const colony = withPaper(PAPER);
+        const w = await phone(colony);
         await w.text("फ्लोर की डिड बनानी है न्यू");
-        expect(w.sent.at(-1)).toContain("की डीड — कागज़ के सारे पन्ने");
-        expect(w.owner.handle).not.toHaveBeenCalled();
-        await w.text("कल रमेश की रजिस्ट्री है");
-        expect(w.sent.at(-1)).toContain("कंपनी मोड:");
+        expect(w.owner.handle).toHaveBeenCalledTimes(1);
+        expect(colony.inOwnerCompanyMode(OWNER)).toBe(false);
+        // Not a company number, not the owner: a photo / "कंपनी मोड" never reaches the paper reader.
+        expect(await colony.isCompanyNumber("919888877777")).toBe(false);
+        expect(await colony.handleCompanyFile("919888877777", [FILE], "")).toBeNull();
       });
 
       it("a draft entered on the web is filled by the paper; a made deed tells which sale to cancel", async () => {

@@ -111,6 +111,16 @@ describe("colony sale papers on WhatsApp", () => {
     expect(w.owner.handleFile).toHaveBeenCalledTimes(1);
   });
 
+  it("'कंपनी मोड' from anyone but the owner does nothing; their photos never reach the paper reader", async () => {
+    vi.stubEnv("WA_PAPER_WAIT_MS", "0");
+    const w = world();
+    const CUSTOMER = "919888877777";
+    await w.text(CUSTOMER, "कंपनी मोड").catch(() => undefined);
+    expect(w.colony.startOwnerCompanyMode).not.toHaveBeenCalled();
+    await w.image(CUSTOMER, 1).catch(() => undefined);
+    expect(w.colony.handleCompanyFile).not.toHaveBeenCalled();
+  });
+
   it("an 'unsupported' message (HD / view-once photo) is explained", async () => {
     const w = world();
     await w.msg(COMPANY, { type: "unsupported" });

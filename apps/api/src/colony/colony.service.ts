@@ -29,7 +29,6 @@ import type { TenantContext } from "../tenant/tenant-context.js";
 import { normalizePhone } from "../tasks/tasks.service.js";
 import { decrypt, encrypt, mask } from "../whatsapp/pii-crypto.js";
 import { maskPhone } from "../whatsapp/webhook-diagnostics.js";
-import { soundKey } from "../whatsapp/name-sound.js";
 import {
   boundaryBlock,
   buyerBlock,
@@ -633,26 +632,6 @@ export class ColonyService {
     // The owner in "कंपनी मोड" sends for any project, like a company number.
     if (this.inOwnerCompanyMode(phone)) return all;
     return all.filter((x) => ((x.companyNumbers as string[]) ?? []).includes(phone));
-  }
-
-  /**
-   * The owner writes about a colony deed ("फ्लोर की डिड बनानी है", "Flora city deed"):
-   * the project it names, by sound ("फ्लोर" = "Flora"), or null.
-   */
-  async ownerDeedProject(text: string): Promise<string | null> {
-    // Making a deed, not a registry date / a task about it.
-    if (!this.orgId || !/(डीड|डिड|deed|did)/i.test(text) || !/(बना|bana|बनवा|banwa)/i.test(text)) return null;
-    const all = await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } });
-    const said = new Set(text.split(/[^\p{L}\p{M}\d]+/u).filter((w) => w.length >= 3).map((w) => soundKey(w)));
-    const generic = /^(ct|st|klny|kln|ngr|bjns|krtyrd|rsdnsy|rsdns)$/;
-    const hits = all.filter((p) =>
-      ColonyService.names(p)
-        .flatMap((n) => n.split(/\s+/))
-        .filter((w) => w.length >= 4)
-        .map((w) => soundKey(w))
-        .some((k) => k.length >= 3 && !generic.test(k) && said.has(k)),
-    );
-    return hits.length === 1 ? hits[0]!.name : null;
   }
 
   /** The owner's "कंपनी मोड" (30 minutes): their papers / texts go the company way. In memory: a restart ends it. */

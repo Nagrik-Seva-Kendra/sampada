@@ -147,21 +147,12 @@ export class WhatsappService {
         await this.send(from, await this.owner.endCustomerTest(from));
         return;
       }
-      // "कंपनी मोड": the owner sends a colony sale paper the way the company would (the deed is made from it).
+      // "कंपनी मोड" -- only when the owner says it (never by itself): the owner sends a colony sale paper the
+      // way the company would. Papers make deeds only from here and from the projects' company numbers.
       if (this.colony && /^(कंपनी|कम्पनी|company|kampani|kmpni)\s*(मोड|mode|मॉड)$/i.test(body.trim())) {
         await this.send(from, this.colony.startOwnerCompanyMode(from));
         this.log.log(`message ${msg.id} from owner route=company-mode-on`);
         return;
-      }
-      // "फ्लोर की डिड बनानी है": a colony project's deed -- company mode at once, the paper is awaited.
-      if (!companyMode && !testing && this.colony && msg.type === "text") {
-        const project = await this.colony.ownerDeedProject(body);
-        if (project) {
-          const on = this.colony.startOwnerCompanyMode(from);
-          await this.send(from, [`🏢 ${project} की डीड — कागज़ के सारे पन्ने (डिटेल, भुगतान, नक्शा) भेजें, डीड अपने आप बनेगी।\n${on[0]!.split("\n").slice(-1)[0]}`]);
-          this.log.log(`message ${msg.id} from owner route=company-mode-on (deed words)`);
-          return;
-        }
       }
       if (companyMode && this.colony) {
         if (msg.type === "document" || msg.type === "image") {
