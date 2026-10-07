@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { CustomerQuestionsService } from "./customer-questions.service.js";
 import { parseQuestionCommand } from "./customer-questions.js";
+import { WeeklyReportService } from "./weekly-report.service.js";
+import { isWeeklyReportAsk } from "./weekly-report.js";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { DEED_TASK_TYPES, TASK_WORK_LABEL_HI, type TaskWorkType, WA_TEMPLATES } from "@sampada/shared";
@@ -103,6 +105,7 @@ export class OwnerAssistantService {
     @Optional() private readonly attendance?: AttendanceService,
     @Optional() private readonly deeds?: DeedExtractorService,
     @Optional() private readonly questions?: CustomerQuestionsService,
+    @Optional() private readonly weekly?: WeeklyReportService,
   ) {}
 
   isOwner(phone: string): boolean {
@@ -147,6 +150,10 @@ export class OwnerAssistantService {
     if (qc) {
       this.log.log(`owner question command ${qc.kind}`);
       return this.questions!.command(qc, now);
+    }
+    if (this.weekly && isWeeklyReportAsk(text)) {
+      this.log.log("owner asked the weekly report");
+      return [await this.weekly.text(now)];
     }
 
     const c = await this.prisma.waContact.findUnique({ where: { phone } });
