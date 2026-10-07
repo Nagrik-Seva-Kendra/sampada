@@ -65,7 +65,12 @@ describe("shared words", () => {
   });
   it("office info from the attendance settings (+ address when set)", () => {
     const t = officeInfoText({ startTime: "10:30", endTime: "19:00", weeklyOff: [0] }, "78984 75648", {});
-    expect(t).toBe("🏢 नागरिक सेवा केंद्र\nसमय: सुबह 10:30 से शाम 7:00 तक (रविवार बंद)\nफ़ोन: 78984 75648\nपता जानने के लिए ऊपर के नंबर पर कॉल करें।");
+    expect(t).toBe(
+      "🏢 नागरिक सेवा केंद्र\nसमय: सुबह 10:30 से शाम 7:00 तक (रविवार बंद)\n" +
+        "पता: G-11, 12, मिलेनियम प्लाज़ा, गोविंदपुरी, सिटी सेंटर, ग्वालियर (म.प्र.)\n(G-11, 12 Millenium Plaza, Govindpuri, City Centre, Gwalior, M.P.)\n" +
+        "नक्शा: https://www.google.com/maps/search/?api=1&query=G-11%2C%2012%20Millenium%20Plaza%2C%20Govindpuri%2C%20City%20Centre%2C%20Gwalior%2C%20M.P.\n" +
+        "फ़ोन: 78984 75648",
+    );
     expect(officeInfoText({ startTime: "10:30", endTime: "19:00", weeklyOff: [] }, null, { OFFICE_ADDRESS: "सिटी सेंटर, ग्वालियर" })).toContain("पता: सिटी सेंटर, ग्वालियर");
   });
 });

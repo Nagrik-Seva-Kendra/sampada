@@ -45,14 +45,19 @@ const time12 = (hhmm: string) => {
   return `${part} ${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")}`;
 };
 
-/** Office hours from the attendance settings, phone, and OFFICE_ADDRESS / OFFICE_MAP_URL when set. */
+/** The office's address (from the owner); OFFICE_ADDRESS overrides it. */
+export const OFFICE_ADDRESS = "G-11, 12, मिलेनियम प्लाज़ा, गोविंदपुरी, सिटी सेंटर, ग्वालियर (म.प्र.)";
+const OFFICE_ADDRESS_EN = "G-11, 12 Millenium Plaza, Govindpuri, City Centre, Gwalior, M.P.";
+
+/** Office hours from the attendance settings, phone, address and a map link (OFFICE_MAP_URL, else a Google Maps search). */
 export function officeInfoText(s: Pick<AttendanceSettings, "startTime" | "endTime" | "weeklyOff">, phone: string | null, env = process.env): string {
   const off = s.weeklyOff.length ? ` (${s.weeklyOff.map((d) => DAY_HI[d]).join(", ")} बंद)` : "";
+  const custom = env.OFFICE_ADDRESS?.trim();
+  const map = env.OFFICE_MAP_URL?.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(custom || OFFICE_ADDRESS_EN)}`;
   const lines = ["🏢 नागरिक सेवा केंद्र", `समय: ${time12(s.startTime)} से ${time12(s.endTime)} तक${off}`];
-  if (env.OFFICE_ADDRESS?.trim()) lines.push(`पता: ${env.OFFICE_ADDRESS.trim()}`);
-  if (env.OFFICE_MAP_URL?.trim()) lines.push(`नक्शा: ${env.OFFICE_MAP_URL.trim()}`);
+  lines.push(`पता: ${custom || `${OFFICE_ADDRESS}\n(${OFFICE_ADDRESS_EN})`}`);
+  lines.push(`नक्शा: ${map}`);
   if (phone) lines.push(`फ़ोन: ${phone}`);
-  if (!env.OFFICE_ADDRESS?.trim() && phone) lines.push("पता जानने के लिए ऊपर के नंबर पर कॉल करें।");
   return lines.join("\n");
 }
 
