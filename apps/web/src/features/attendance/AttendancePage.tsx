@@ -583,6 +583,10 @@ function SettingsPanel({ settings, holidays }: { settings: AttendanceSettings; h
           {t("atReports")}
         </label>
         <label style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+          <input type="checkbox" checked={f.ownerDailySummary} onChange={(e) => setF({ ...f, ownerDailySummary: e.target.checked })} />
+          {t("atOwnerDailySummary")}
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
           <input type="checkbox" checked={f.staffReminders} onChange={(e) => setF({ ...f, staffReminders: e.target.checked })} />
           {t("atStaffReminders")}
         </label>

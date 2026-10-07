@@ -1,4 +1,5 @@
 import { WaConnectionController } from "./wa-connection.controller.js";
+import { DailySummaryService } from "./daily-summary.service.js";
 import { CustomerQuestionsService } from "./customer-questions.service.js";
 import { LeadNudgeService } from "./lead-nudge.service.js";
 import { WeeklyReportService } from "./weekly-report.service.js";
@@ -63,6 +64,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     CustomerQuestionsService,
     LeadNudgeService,
     WeeklyReportService,
+    DailySummaryService,
   ],
 })
 export class WhatsappModule {}

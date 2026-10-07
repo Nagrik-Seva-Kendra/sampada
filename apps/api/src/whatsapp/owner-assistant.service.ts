@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { DailySummaryService } from "./daily-summary.service.js";
+import { isSummaryAsk } from "./daily-summary.js";
 import { CustomerQuestionsService } from "./customer-questions.service.js";
 import { parseQuestionCommand } from "./customer-questions.js";
 import { WeeklyReportService } from "./weekly-report.service.js";
@@ -106,6 +108,7 @@ export class OwnerAssistantService {
     @Optional() private readonly deeds?: DeedExtractorService,
     @Optional() private readonly questions?: CustomerQuestionsService,
     @Optional() private readonly weekly?: WeeklyReportService,
+    @Optional() private readonly daily?: DailySummaryService,
   ) {}
 
   isOwner(phone: string): boolean {
@@ -150,6 +153,10 @@ export class OwnerAssistantService {
     if (qc) {
       this.log.log(`owner question command ${qc.kind}`);
       return this.questions!.command(qc, now);
+    }
+    if (this.daily && isSummaryAsk(text)) {
+      this.log.log("owner asked the daily summary");
+      return [await this.daily.text(now)];
     }
     if (this.weekly && isWeeklyReportAsk(text)) {
       this.log.log("owner asked the weekly report");
