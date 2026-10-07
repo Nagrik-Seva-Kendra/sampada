@@ -138,6 +138,9 @@ function slabsFor(zone: ZoneType): { threshold: number; slabs: Slab[] } {
   return { threshold: 0, slabs: [] };
 }
 
+/** The zone's plot-rate part of agricultural land, in sqm, for one seller and one buyer (0 = none). */
+export const zoneThreshold = (zone: ZoneType): number => slabsFor(zone).threshold;
+
 export interface BreakdownLine {
   kind: "plot" | "agri" | "agri15";
   sqm: number;

@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   GUIDE_ASK_AREA,
   GUIDE_ASK_DIVERTED,
+  GUIDE_ASK_FLAT_USE,
+  GUIDE_ASK_FLOOR,
   GUIDE_ASK_IRRIGATED,
+  GUIDE_ASK_LIFT,
+  GUIDE_ASK_PARTIES,
+  readParties,
   GUIDE_ASK_BOUNDARY,
   GUIDE_ASK_CORNER,
   GUIDE_ASK_NAME,
@@ -18,7 +23,7 @@ import {
   localityOf,
   mergeFacts,
 } from "./guideline-chat.js";
-import { agriValue, divertedValue, GUIDELINE_DATA, plotAreaToSqm, plotValue, stampDuty } from "./guideline/calculator.js";
+import { agriValue, divertedValue, flatValue, GUIDELINE_DATA, plotAreaToSqm, plotValue, stampDuty } from "./guideline/calculator.js";
 
 const TEXT = "33,47,000/- pe hogi\nGanga vihar ward 60 ki rate k hisaab se 2770 sqft ka bata do guideline";
 const fees = DEFAULT_OFFICE_FEES;
@@ -27,7 +32,7 @@ const SNO_845 = GUIDELINE_DATA.find((e) => e.sno === 845)!;
 
 describe("guideline from the customer's words", () => {
   it("reads locality, ward, area; nothing it was not told", () => {
-    expect(guideFacts(TEXT)).toEqual({ name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null, boundary: null, agriArea: null, diverted: null, irrigated: null });
+    expect(guideFacts(TEXT)).toEqual({ name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null, boundary: null, agriArea: null, diverted: null, irrigated: null, roadPct: null });
     expect(guideFacts("गंगा विहार वार्ड नं. 60 में 257 वर्गमीटर का कॉर्नर प्लॉट")).toEqual({
       name: "गंगा विहार",
       ward: "60",
@@ -38,6 +43,7 @@ describe("guideline from the customer's words", () => {
       agriArea: null,
       diverted: null,
       irrigated: null,
+      roadPct: null,
     });
     expect(guideFacts("30x40 ka plot, corner nahi").area).toEqual({ value: 1200, unit: "sqft" });
     expect(guideFacts("30x40 ka plot, corner nahi").corner).toBe(false);
@@ -153,14 +159,14 @@ describe("guideline questions: never a guess, never silent", () => {
     expect(t.replies[0]).toContain("+ कॉर्नर 10%");
   });
 
-  it("several rows → listed to choose; 'none' → PDF; house / shop / flat → not guessed", () => {
+  it("several rows → listed to choose; 'none' → PDF; house / shop → not guessed", () => {
     let t = guideNext(start("Ganga vihar ka plot guideline", null), fees);
     expect(t.state!.step).toBe("PICK");
     expect(t.state!.options!.length).toBeGreaterThan(1);
     const none = guideReply(t.state!, "0", fees);
     expect(none).toMatchObject({ state: null, outcome: "not-found" });
     expect(none.replies[0]).toContain("PDF");
-    for (const w of ["makan", "दुकान", "flat"]) {
+    for (const w of ["makan", "दुकान"]) {
       t = guideNext(start(`Ganga vihar ward 60 ${w} 2770 sqft guideline`, null), fees);
       expect(t.outcome).toBe("unsupported-type");
       expect(t.replies[0]).toContain("अनुमान नहीं लगाता");
@@ -191,7 +197,9 @@ describe("agricultural land (the office calculator's agriValue / divertedValue)"
     expect(t.replies[0]).toContain("1. क्र. 820 — अलापुर (मुख्य रोड पर) (वार्ड 60)");
     t = guideReply(t.state!, "1", fees);
     expect(t.replies).toEqual([GUIDE_ASK_DIVERTED]);
-    // This row has one rate for irrigated and unirrigated: not asked.
+    // This row has one rate for irrigated and unirrigated: not asked. 2090 sqm > 1000: sellers / buyers asked.
+    t = guideReply(t.state!, "1", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_PARTIES]);
     t = guideReply(t.state!, "1", fees);
     expect(t.outcome).toBe("answered");
     const want = agriValue({ entry: ALAPUR, areaSqm: 2090, irrigated: true, zone: "nigam1" });
@@ -208,13 +216,13 @@ describe("agricultural land (the office calculator's agriValue / divertedValue)"
 
   it("diverted land uses divertedValue; a row with two rates asks irrigation; unclear area asks again", () => {
     const g = { mode: "guide" as const, step: "DIVERTED" as const, amount: null, sno: 820, type: "agri" as const, agriArea: { value: 0.209, unit: "hect" as const } };
-    const div = guideReply(g, "2", fees);
+    const div = guideReply({ ...g, parties: { sellers: 1, buyers: 1 } }, "2", fees);
     const want = divertedValue({ entry: ALAPUR, areaSqm: 2090, use: "res", zone: "nigam1" });
     expect(div.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.total).toLocaleString("en-IN")}`);
     expect(div.replies[0]).toContain("डायवर्टेड ज़मीन (आवासीय)");
 
     const two = GUIDELINE_DATA.find((e) => e.agri_irr && e.agri_unirr && e.agri_irr !== e.agri_unirr && e.ward === "NON-PLANNING AREA")!;
-    const ask = guideReply({ ...g, sno: two.sno }, "1", fees);
+    const ask = guideReply({ ...g, sno: two.sno, parties: { sellers: 1, buyers: 1 } }, "1", fees);
     expect(ask.replies).toEqual([GUIDE_ASK_IRRIGATED]);
     const ans = guideReply(ask.state!, "2", fees);
     const w2 = agriValue({ entry: two, areaSqm: 2090, irrigated: false, zone: "gramin" });
@@ -222,5 +230,61 @@ describe("agricultural land (the office calculator's agriValue / divertedValue)"
 
     const area = guideReply({ ...g, step: "AGRI_AREA", agriArea: null }, "2 बीघा", fees);
     expect(area.replies[0]).toContain("पक्का है या कच्चा");
+  });
+});
+
+describe("the rest of the calculator: sellers / buyers, industrial plot, road premium, flat", () => {
+  const ALAPUR = GUIDELINE_DATA.find((e) => e.sno === 820)!;
+
+  it.each([
+    ["1", { sellers: 1, buyers: 1 }],
+    ["2 1", { sellers: 2, buyers: 1 }],
+    ["2 विक्रेता 3 क्रेता", { sellers: 2, buyers: 3 }],
+    ["sellers 2", { sellers: 2, buyers: 1 }],
+  ])("parties %s", (text, want) => {
+    expect(readParties(text)).toEqual(want);
+  });
+
+  it("2 sellers on farm land: the calculator's party multiplier", () => {
+    const g = { mode: "guide" as const, step: "PARTIES" as const, amount: null, sno: 820, type: "agri" as const, agriArea: { value: 0.209, unit: "hect" as const }, diverted: "no" as const };
+    const t = guideReply(g, "2 1", fees);
+    const want = agriValue({ entry: ALAPUR, areaSqm: 2090, irrigated: true, zone: "nigam1", sellers: 2, buyers: 1 });
+    expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.total).toLocaleString("en-IN")}`);
+    expect(t.replies[0]).toContain("मान्यता: विक्रेता 2 और क्रेता 1;");
+  });
+
+  it("industrial plot (menu 7) and a stated road premium use plotValue", () => {
+    const g = { mode: "guide" as const, step: "TYPE" as const, amount: null, sno: 820, roadPct: 10 };
+    let t = guideReply(g, "7", fees);
+    t = guideReply(t.state!, "300 sqm", fees);
+    t = guideReply(t.state!, "2", fees);
+    t = guideReply(t.state!, "2", fees);
+    const want = plotValue({ entry: ALAPUR, areaSqm: 300, use: "ind", roadPct: 10 });
+    expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.value).toLocaleString("en-IN")}`);
+    expect(t.replies[0]).toContain("औद्योगिक भूखण्ड");
+    expect(t.replies[0]).toContain("सड़क प्रीमियम 10%");
+    expect(guideFacts("road premium 20% wala plot").roadPct).toBe(20);
+  });
+
+  it("residential flat: area → use → floor → lift → flatValue", () => {
+    let t = guideNext(start("Alapur mukhya road flat 1200 sqft", null), fees);
+    t = guideReply(t.state!, "1", fees); // the row
+    expect(t.replies).toEqual([GUIDE_ASK_FLAT_USE]);
+    t = guideReply(t.state!, "1", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_FLOOR]);
+    t = guideReply(t.state!, "2", fees);
+    expect(t.replies).toEqual([GUIDE_ASK_LIFT]);
+    t = guideReply(t.state!, "2", fees);
+    const want = flatValue({ entry: ALAPUR, areaSqm: plotAreaToSqm(1200, "sqft"), commercial: false, floorIdx: 2, lift: false });
+    expect(t.outcome).toBe("answered");
+    expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.value).toLocaleString("en-IN")}`);
+    expect(t.replies[0]).toContain("× 0.9 (मंज़िल)");
+  });
+
+  it("commercial flat above the ground floor → staff, not a guess", () => {
+    const g = { mode: "guide" as const, step: "FLOOR" as const, amount: null, sno: 820, type: "flat" as const, area: { value: 50, unit: "sqm" as const }, flatCom: true };
+    const t = guideReply(g, "2", fees);
+    expect(t.outcome).toBe("unsupported-type");
+    expect(t.replies[0]).toContain("स्टाफ बताएगा");
   });
 });

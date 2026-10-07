@@ -18,6 +18,8 @@ import {
   type BreakdownLine,
   detectZoneType,
   divertedValue,
+  flatValue,
+  zoneThreshold,
   GUIDELINE_DATA,
   type GuidelineEntry,
   plotAreaToSqm,
@@ -27,12 +29,15 @@ import {
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
 import { inr, normDigits } from "./intake-rules.js";
 
-export type GuideType = "plotRes" | "plotCom" | "house" | "shop" | "flat" | "agri";
-export type GuideStep = "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY" | "AGRI_AREA" | "DIVERTED" | "IRRIGATED";
+export type GuideType = "plotRes" | "plotCom" | "plotInd" | "house" | "shop" | "flat" | "agri";
+export type GuideStep =
+  | "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY"
+  | "AGRI_AREA" | "DIVERTED" | "IRRIGATED" | "PARTIES"
+  | "FLAT_USE" | "FLOOR" | "LIFT";
 export type AgriUnit = "hect" | "acre" | "bigha_p" | "bigha_k" | "sqm";
 export type AgriArea = { value: number; unit: AgriUnit };
 /** Agricultural land: not diverted, or diverted for homes / shops (calculator isDiv + use). */
-export type Diverted = "no" | "res" | "com";
+export type Diverted = "no" | "res" | "com" | "ind";
 
 export interface GuideState {
   mode: "guide";
@@ -51,6 +56,14 @@ export interface GuideState {
   agriArea?: AgriArea | null;
   diverted?: Diverted | null;
   irrigated?: boolean | null;
+  /** Separate-khata sellers / non-family buyers (calculator party multiplier). */
+  parties?: { sellers: number; buyers: number } | null;
+  /** Flat: commercial (office / shop in a complex), floor (0 = ground), lift. */
+  flatCom?: boolean | null;
+  floor?: number | null;
+  lift?: boolean | null;
+  /** Road premium % the customer stated (calculator road input; else 0). */
+  roadPct?: number | null;
 }
 
 export interface GuideFacts {
@@ -63,6 +76,7 @@ export interface GuideFacts {
   agriArea: AgriArea | null;
   diverted: Diverted | null;
   irrigated: boolean | null;
+  roadPct: number | null;
 }
 
 // ---------- reading the customer's words ----------
@@ -89,6 +103,8 @@ const NOT_DIVERTED = new RegExp(String.raw`(${DIVERT_WORD})\s*(nahi|nahin|nhi|�
 const DIVERTED_RE = new RegExp(DIVERT_WORD, "i");
 const UNIRRIGATED = /असिंचित|asinchit|asichit|unirrigated|non[\s-]*irrigated|बारानी|barani|सूखी|sukhi/i;
 const IRRIGATED = /सिंचित|sinchit|sichit|irrigated|सिंचाई वाली|sinchai wali/i;
+const INDUSTRIAL = /औद्योगिक|audyogik|industrial|industry|फैक्ट्री|factory|उद्योग/i;
+const ROAD_PCT = /(?:प्रीमियम|premium|सड़क|sadak|road)\s*(?:प्रीमियम|premium)?\s*[:\-]?\s*(\d{1,3})\s*(?:%|प्रतिशत|percent)/i;
 
 const HOUSE = /makan|मकान|house|\bghar\b|घर|kothi|कोठी|bana\s*hua|बना\s*हुआ|construction|निर्माण|duplex|डुप्लेक्स/i;
 const SHOP = /dukan|दुकान|\bshop|showroom|शोरूम|office|ऑफिस|godown|गोदाम/i;
@@ -159,15 +175,17 @@ export function guideFacts(text: string): GuideFacts {
   else if (SHOP.test(s)) type = "shop";
   else if (FLAT.test(s)) type = "flat";
   else if (AGRI.test(s) || AGRI_UNIT.test(s)) type = "agri";
-  else if (PLOT.test(s)) type = COMMERCIAL.test(s) ? "plotCom" : "plotRes";
+  else if (PLOT.test(s)) type = INDUSTRIAL.test(s) ? "plotInd" : COMMERCIAL.test(s) ? "plotCom" : "plotRes";
   const corner = NOT_CORNER.test(s) ? false : CORNER.test(s) ? true : null;
   const boundary = NOT_BOUNDARY.test(s) ? false : BOUNDARY_RE.test(s) ? true : null;
   let agriArea = readAgriArea(s);
   // Farm land measured in square feet / metres.
   if (!agriArea && type === "agri" && area) agriArea = { value: plotAreaToSqm(area.value, area.unit), unit: "sqm" };
-  const diverted: Diverted | null = NOT_DIVERTED.test(s) ? "no" : DIVERTED_RE.test(s) ? (COMMERCIAL.test(s) || SHOP.test(s) ? "com" : "res") : null;
+  const diverted: Diverted | null = NOT_DIVERTED.test(s) ? "no" : DIVERTED_RE.test(s) ? (INDUSTRIAL.test(s) ? "ind" : COMMERCIAL.test(s) || SHOP.test(s) ? "com" : "res") : null;
   const irrigated = UNIRRIGATED.test(s) ? false : IRRIGATED.test(s) ? true : null;
-  return { name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area: type === "agri" ? null : area, corner, boundary, agriArea, diverted, irrigated };
+  const road = ROAD_PCT.exec(s);
+  const roadPct = road && Number(road[1]) <= 100 ? Number(road[1]) : null;
+  return { name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area: type === "agri" ? null : area, corner, boundary, agriArea, diverted, irrigated, roadPct };
 }
 
 // ---------- rows ----------
@@ -211,14 +229,20 @@ const rowLabel = (e: GuidelineEntry) => {
 export const GUIDE_ASK_NAME = "गाइडलाइन के लिए कॉलोनी / मोहल्ले का नाम और वार्ड नंबर लिखें (जैसे: गंगा विहार वार्ड 60)।";
 export const GUIDE_ASK_WARD = "इस नाम की कई पंक्तियाँ हैं। वार्ड नंबर लिखें (जैसे: वार्ड 60)।";
 export const GUIDE_ASK_TYPE =
-  "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस\n5. फ़्लैट\n6. खेती की ज़मीन";
+  "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस\n5. फ़्लैट (बहुमंज़िला भवन में)\n6. खेती की ज़मीन\n7. खाली प्लॉट (औद्योगिक)";
 export const GUIDE_ASK_AREA = "प्लॉट का क्षेत्रफल लिखें (जैसे: 2770 वर्गफुट, 257 वर्गमीटर या 30x40 फुट)।";
 export const GUIDE_ASK_CORNER = "क्या प्लॉट कॉर्नर (दो तरफ़ सड़क) का है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_ASK_BOUNDARY = "क्या प्लॉट पर बाउंड्री वॉल बनी है या नींव भरी है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_PDF_HINT = "सही गाइडलाइन के लिए उसी संपत्ति की पुरानी रजिस्ट्री की PDF या सभी पन्नों की फ़ोटो यहीं भेजें।";
 export const GUIDE_ASK_AGRI_AREA = "ज़मीन का रकबा (क्षेत्रफल) लिखें — जैसे: 0.209 हेक्टेयर, 1.5 एकड़, 2 बीघा पक्का / कच्चा, या वर्गमीटर में।";
 export const GUIDE_ASK_DIVERTED =
-  "क्या ज़मीन का डायवर्सन हो चुका है? नंबर लिखें:\n1. नहीं — खेती की ज़मीन\n2. हाँ — आवासीय डायवर्सन\n3. हाँ — व्यावसायिक डायवर्सन";
+  "क्या ज़मीन का डायवर्सन हो चुका है? नंबर लिखें:\n1. नहीं — खेती की ज़मीन\n2. हाँ — आवासीय डायवर्सन\n3. हाँ — व्यावसायिक डायवर्सन\n4. हाँ — औद्योगिक डायवर्सन";
+export const GUIDE_ASK_PARTIES =
+  "ज़मीन बेचने वाले (अलग-अलग खाते वाले) और खरीदने वाले (परिवार से बाहर के) कितने हैं?\nजैसे: 2 विक्रेता 1 क्रेता। दोनों 1-1 हों तो 1 लिखें।";
+export const GUIDE_ASK_FLAT_AREA = "फ़्लैट का क्षेत्रफल लिखें (जैसे: 1200 वर्गफुट या 110 वर्गमीटर)।";
+export const GUIDE_ASK_FLAT_USE = "फ़्लैट किस काम का है? नंबर लिखें:\n1. रहने के लिए (आवासीय)\n2. ऑफिस / दुकान (व्यावसायिक)";
+export const GUIDE_ASK_FLOOR = "फ़्लैट किस मंज़िल पर है? नंबर लिखें: 0 = भूतल (ग्राउंड), 1, 2, या 3 (तीसरी या ऊपर)।";
+export const GUIDE_ASK_LIFT = "क्या बिल्डिंग में लिफ्ट है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_ASK_IRRIGATED = "ज़मीन सिंचित है या असिंचित? नंबर लिखें:\n1. सिंचित\n2. असिंचित";
 export const GUIDE_DISCLAIMER = "⚠️ यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।";
 
@@ -230,7 +254,7 @@ export function pickText(rows: GuidelineEntry[]): string {
 export const notFoundText = (name: string, ward: string | null) =>
   `गाइडलाइन तालिका में "${name}"${ward ? ` (वार्ड ${ward})` : ""} की पंक्ति नहीं मिली, इसलिए गाइडलाइन मूल्य अंदाज़े से नहीं बताया जा रहा। ${GUIDE_PDF_HINT}`;
 
-const TYPE_LABEL: Record<GuideType, string> = { plotRes: "आवासीय प्लॉट", plotCom: "व्यावसायिक प्लॉट", house: "मकान", shop: "दुकान / ऑफिस", flat: "फ़्लैट", agri: "खेती की ज़मीन" };
+const TYPE_LABEL: Record<GuideType, string> = { plotRes: "आवासीय प्लॉट", plotCom: "व्यावसायिक प्लॉट", plotInd: "औद्योगिक प्लॉट", house: "मकान", shop: "दुकान / ऑफिस", flat: "फ़्लैट", agri: "खेती की ज़मीन" };
 export const unsupportedTypeText = (t: GuideType) =>
   `${TYPE_LABEL[t]} का गाइडलाइन मूल्य मंज़िल / निर्माण / सिंचाई जैसी बातों पर निर्भर है, इसलिए बॉट इसका अनुमान नहीं लगाता। ${GUIDE_PDF_HINT}`;
 
@@ -238,7 +262,7 @@ export const unsupportedTypeText = (t: GuideType) =>
 const bare = (s: string) => normDigits(s).trim().replace(/[.)।]$/, "");
 export function readType(text: string): GuideType | null {
   const n = bare(text);
-  const byNo: Record<string, GuideType> = { "1": "plotRes", "2": "plotCom", "3": "house", "4": "shop", "5": "flat", "6": "agri" };
+  const byNo: Record<string, GuideType> = { "1": "plotRes", "2": "plotCom", "3": "house", "4": "shop", "5": "flat", "6": "agri", "7": "plotInd" };
   return byNo[n] ?? guideFacts(text).type;
 }
 const yesNo = (text: string): boolean | null => {
@@ -254,7 +278,36 @@ export function readDiverted(text: string): Diverted | null {
   if (/^(1|nahi|nahin|nhi|no|नहीं|नही)$/.test(n)) return "no";
   if (n === "2") return "res";
   if (n === "3") return "com";
+  if (n === "4") return "ind";
   return guideFacts(text).diverted;
+}
+/** "1" (both one), "2 1", "2 विक्रेता 3 क्रेता", "sellers 2 buyers 1". */
+export function readParties(text: string): { sellers: number; buyers: number } | null {
+  const t = normDigits(text).toLowerCase();
+  const sell = /(\d{1,2})\s*(?:विक्रेता|vikreta|seller|sellers|बेचने)|(?:विक्रेता|vikreta|sellers?|बेचने वाले)\s*[:\-]?\s*(\d{1,2})/i.exec(t);
+  const buy = /(\d{1,2})\s*(?:क्रेता|kreta|buyer|buyers|खरीदने)|(?:क्रेता|kreta|buyers?|खरीदने वाले)\s*[:\-]?\s*(\d{1,2})/i.exec(t);
+  if (sell || buy) {
+    const n = (m: RegExpExecArray | null) => (m ? Number(m[1] ?? m[2]) : 1);
+    return { sellers: Math.max(1, n(sell)), buyers: Math.max(1, n(buy)) };
+  }
+  const nums = t.match(/\d{1,2}/g)?.map(Number) ?? [];
+  if (nums.length === 1 && /^\s*\d{1,2}\s*[.।]?\s*$/.test(t)) return { sellers: Math.max(1, nums[0]!), buyers: Math.max(1, nums[0]!) };
+  if (nums.length === 2) return { sellers: Math.max(1, nums[0]!), buyers: Math.max(1, nums[1]!) };
+  return null;
+}
+export function readFlatUse(text: string): boolean | null {
+  const n = bare(text);
+  if (n === "1") return false;
+  if (n === "2") return true;
+  if (COMMERCIAL.test(text) || SHOP.test(text)) return true;
+  if (/आवासीय|awasiy|aawasiy|residential|रहने|rehne|rahne/i.test(text)) return false;
+  return null;
+}
+export function readFloor(text: string): number | null {
+  const n = bare(text).toLowerCase();
+  if (/^(0|g|ground|भूतल|ग्राउंड|ground floor)$/.test(n) || /भूतल|ग्राउंड|ground/i.test(text)) return 0;
+  const m = /^(\d{1,2})(?:st|nd|rd|th)?(?:\s*(?:floor|मंज़िल|मंजिल|manzil|manjil|वीं|वी|री|ी))?$/.exec(n) ?? /(\d{1,2})\s*(?:st|nd|rd|th)?\s*(?:floor|मंज़िल|मंजिल|manzil|manjil)/i.exec(text);
+  return m ? Math.min(3, Number(m[1])) : null;
 }
 export function readIrrigated(text: string): boolean | null {
   const n = bare(text);
@@ -279,13 +332,22 @@ export function readPick(text: string, n: number): number | "none" | null {
  * higher of amount and guideline value.
  */
 export function guideAnswer(
-  input: { entry: GuidelineEntry; type: "plotRes" | "plotCom"; area: { value: number; unit: "sqft" | "sqm" }; corner: boolean; boundary: boolean; amount: number | null },
+  input: {
+    entry: GuidelineEntry;
+    type: "plotRes" | "plotCom" | "plotInd";
+    area: { value: number; unit: "sqft" | "sqm" };
+    corner: boolean;
+    boundary: boolean;
+    amount: number | null;
+    roadPct?: number | null;
+  },
   fees: WaOfficeFees,
 ): { text: string; value: number; stamp: ReturnType<typeof stampDuty> } {
   const { entry, area, corner, boundary, amount } = input;
-  const use = input.type === "plotCom" ? "com" : "res";
+  const use = input.type === "plotCom" ? "com" : input.type === "plotInd" ? "ind" : "res";
+  const roadPct = input.roadPct ?? 0;
   const sqm = plotAreaToSqm(area.value, area.unit);
-  const r = plotValue({ entry, areaSqm: sqm, use, corner, foundation: boundary });
+  const r = plotValue({ entry, areaSqm: sqm, use, corner, foundation: boundary, roadPct });
   const value = Math.round(r.value);
   const st = stampDuty(r.value, entry, amount ?? 0);
   const base = Math.max(amount ?? 0, value);
@@ -293,7 +355,7 @@ export function guideAnswer(
   const lines = [
     `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
-    `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : "आवासीय"} भूखण्ड)${corner ? " + कॉर्नर 10%" : ""}${boundary ? " + बाउंड्री वॉल/नींव 10%" : ""}${corner || boundary ? ` = ₹${inr(r.rate)}` : ""}`,
+    `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : use === "ind" ? "औद्योगिक" : "आवासीय"} भूखण्ड)${roadPct ? ` + सड़क प्रीमियम ${roadPct}%` : ""}${corner ? " + कॉर्नर 10%" : ""}${boundary ? " + बाउंड्री वॉल/नींव 10%" : ""}${corner || boundary || roadPct ? ` = ₹${inr(Math.round(r.rate))}` : ""}`,
     `क्षेत्रफल: ${area.value} ${area.unit === "sqft" ? "वर्गफुट" : "वर्गमीटर"}${area.unit === "sqft" ? ` = ${+sqm.toFixed(2)} वर्गमीटर` : ""}`,
     `गाइडलाइन मूल्य: ₹${inr(value)}`,
   ];
@@ -308,7 +370,7 @@ export function guideAnswer(
   lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
   lines.push(
     "",
-    `मान्यता: सड़क प्रीमियम 0%${corner ? "" : "; कॉर्नर नहीं"}${boundary ? "" : "; बाउंड्री वॉल / नींव नहीं"}।`,
+    `मान्यता: सड़क प्रीमियम ${roadPct}%${corner ? "" : "; कॉर्नर नहीं"}${boundary ? "" : "; बाउंड्री वॉल / नींव नहीं"}।`,
     GUIDE_DISCLAIMER,
     'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
   );
@@ -349,21 +411,35 @@ const breakdownLine = (l: BreakdownLine): string => {
  * the rest at 1.5× the irrigated rate). One seller and one buyer, road premium 0.
  */
 export function agriAnswer(
-  input: { entry: GuidelineEntry; area: AgriArea; diverted: Diverted; irrigated: boolean; amount: number | null },
+  input: {
+    entry: GuidelineEntry;
+    area: AgriArea;
+    diverted: Diverted;
+    irrigated: boolean;
+    amount: number | null;
+    parties?: { sellers: number; buyers: number } | null;
+    roadPct?: number | null;
+  },
   fees: WaOfficeFees,
 ): { text: string; value: number } | null {
   const { entry, area, diverted, irrigated, amount } = input;
   const zone = detectZoneType(entry);
   if (!zone) return null;
+  const sellers = input.parties?.sellers ?? 1;
+  const buyers = input.parties?.buyers ?? 1;
+  const roadPct = input.roadPct ?? 0;
   const sqm = area.unit === "sqm" ? area.value : agriAreaToSqm(area.value, area.unit);
-  const r = diverted === "no" ? agriValue({ entry, areaSqm: sqm, irrigated, zone }) : divertedValue({ entry, areaSqm: sqm, use: diverted, zone });
+  const r =
+    diverted === "no"
+      ? agriValue({ entry, areaSqm: sqm, irrigated, zone, roadPct, sellers, buyers })
+      : divertedValue({ entry, areaSqm: sqm, use: diverted, zone, roadPct, sellers, buyers });
   const value = Math.round(r.total);
   const d = dutyLines(entry, r.total, amount, fees);
   const sameRate = (entry.agri_irr || 0) === (entry.agri_unirr || 0);
   const kind =
     diverted === "no"
       ? `खेती की ज़मीन (${sameRate ? "इस पंक्ति में सिंचित / असिंचित की दर एक ही है" : irrigated ? "सिंचित" : "असिंचित"})`
-      : `डायवर्टेड ज़मीन (${diverted === "com" ? "व्यावसायिक" : "आवासीय"})`;
+      : `डायवर्टेड ज़मीन (${diverted === "com" ? "व्यावसायिक" : diverted === "ind" ? "औद्योगिक" : "आवासीय"})`;
   const lines = [
     `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
@@ -374,7 +450,7 @@ export function agriAnswer(
     `गाइडलाइन मूल्य: ₹${inr(value)}`,
     ...d.lines,
     "",
-    `मान्यता: विक्रेता 1 और क्रेता 1 (अलग-अलग खाते वाले ज़्यादा विक्रेता / परिवार से बाहर के ज़्यादा क्रेता हों तो गणना बदलेगी); सड़क प्रीमियम 0%।`,
+    `मान्यता: विक्रेता ${sellers} और क्रेता ${buyers}${input.parties ? "" : " (अलग-अलग खाते वाले ज़्यादा विक्रेता / परिवार से बाहर के ज़्यादा क्रेता हों तो गणना बदलेगी)"}; सड़क प्रीमियम ${roadPct}%।`,
     GUIDE_DISCLAIMER,
     'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
   ];
@@ -388,8 +464,60 @@ function agriNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[]): Gu
   if (!g.diverted) return { state: { ...g, step: "DIVERTED" }, replies: [GUIDE_ASK_DIVERTED] };
   const sameRate = (entry.agri_irr || 0) === (entry.agri_unirr || 0);
   if (g.diverted === "no" && g.irrigated == null && !sameRate) return { state: { ...g, step: "IRRIGATED" }, replies: [GUIDE_ASK_IRRIGATED] };
-  const a = agriAnswer({ entry, area: g.agriArea, diverted: g.diverted, irrigated: g.irrigated ?? true, amount: g.amount }, fees);
+  // Sellers / buyers change the plot-rate part only when the land is bigger than it.
+  const zone = detectZoneType(entry);
+  const sqm = g.agriArea.unit === "sqm" ? g.agriArea.value : agriAreaToSqm(g.agriArea.value, g.agriArea.unit);
+  if (!g.parties && zone && zoneThreshold(zone) > 0 && sqm > zoneThreshold(zone)) return { state: { ...g, step: "PARTIES" }, replies: [GUIDE_ASK_PARTIES] };
+  const a = agriAnswer({ entry, area: g.agriArea, diverted: g.diverted, irrigated: g.irrigated ?? true, amount: g.amount, parties: g.parties, roadPct: g.roadPct }, fees);
   if (!a) return { state: null, replies: [`इस पंक्ति का क्षेत्र (नगर निगम / ग्रामीण) तालिका से तय नहीं हो पाया, इसलिए अनुमान नहीं दिया जा रहा। ${GUIDE_PDF_HINT}`], outcome: "unsupported-type" };
+  return { state: null, replies: [a.text], outcome: "answered" };
+}
+
+/**
+ * A flat by the office calculator's flatValue: residential at the multi-storey
+ * rate (else the RCC building rate), less 5 / 10 / 15% on the 1st / 2nd / 3rd+
+ * floor without a lift; commercial (office / shop in a complex) at the
+ * commercial multi-storey rate on the ground floor.
+ */
+export function flatAnswer(
+  input: { entry: GuidelineEntry; area: { value: number; unit: "sqft" | "sqm" }; commercial: boolean; floor: number; lift: boolean; amount: number | null },
+  fees: WaOfficeFees,
+): { text: string; value: number } | null {
+  const { entry, area, commercial, floor, lift, amount } = input;
+  const sqm = plotAreaToSqm(area.value, area.unit);
+  const r = flatValue({ entry, areaSqm: sqm, commercial, floorIdx: floor, lift });
+  if (!r.baseRate) return null;
+  const value = Math.round(r.value);
+  const d = dutyLines(entry, r.value, amount, fees);
+  const floorHi = floor === 0 ? "भूतल" : floor >= 3 ? "तीसरी या ऊपर की मंज़िल" : `${floor} मंज़िल`;
+  const lines = [
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
+    `प्रकार: फ़्लैट (${commercial ? "व्यावसायिक" : "आवासीय"}), ${floorHi}${commercial ? "" : lift ? ", लिफ्ट है" : ", लिफ्ट नहीं"}`,
+    `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर${r.floorFactor !== 1 ? ` × ${r.floorFactor} (मंज़िल) = ₹${inr(Math.round(r.rate))}` : ""}`,
+    `क्षेत्रफल: ${area.value} ${area.unit === "sqft" ? "वर्गफुट" : "वर्गमीटर"}${area.unit === "sqft" ? ` = ${+sqm.toFixed(2)} वर्गमीटर` : ""}`,
+    `गाइडलाइन मूल्य: ₹${inr(value)}`,
+    ...d.lines,
+    "",
+    GUIDE_DISCLAIMER,
+    'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
+  ];
+  return { text: lines.join("\n"), value };
+}
+
+/** Flat: area, residential / commercial, floor, lift (residential above the ground floor). */
+function flatNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[]): GuideTurn {
+  const entry = data.find((e) => e.sno === g.sno)!;
+  if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_FLAT_AREA] };
+  if (g.flatCom == null) return { state: { ...g, step: "FLAT_USE" }, replies: [GUIDE_ASK_FLAT_USE] };
+  if (g.floor == null) return { state: { ...g, step: "FLOOR" }, replies: [GUIDE_ASK_FLOOR] };
+  // The calculator's commercial floor factors are not in the bot: only the ground floor is worked out.
+  if (g.flatCom && g.floor > 0) {
+    return { state: null, replies: [`ऊपर की मंज़िल वाले ऑफिस / दुकान की गाइडलाइन मंज़िल के हिसाब से अलग होती है — हमारा स्टाफ बताएगा। ${GUIDE_PDF_HINT}`], outcome: "unsupported-type" };
+  }
+  if (!g.flatCom && g.floor > 0 && g.lift == null) return { state: { ...g, step: "LIFT" }, replies: [GUIDE_ASK_LIFT] };
+  const a = flatAnswer({ entry, area: g.area, commercial: !!g.flatCom, floor: g.floor, lift: !!g.lift, amount: g.amount }, fees);
+  if (!a) return { state: null, replies: [`इस पंक्ति में ${g.flatCom ? "व्यावसायिक" : "आवासीय"} फ़्लैट की दर नहीं है, इसलिए अनुमान नहीं दिया जा रहा। ${GUIDE_PDF_HINT}`], outcome: "not-found" };
   return { state: null, replies: [a.text], outcome: "answered" };
 }
 
@@ -415,12 +543,13 @@ export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
     agriArea: g.agriArea ?? f.agriArea,
     diverted: g.diverted ?? f.diverted,
     irrigated: g.irrigated ?? f.irrigated,
+    roadPct: g.roadPct ?? f.roadPct,
   };
 }
 
 /** The next question, or the answer when everything is known. */
 export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[] = GUIDELINE_DATA): GuideTurn {
-  if (g.type && g.type !== "plotRes" && g.type !== "plotCom" && g.type !== "agri") {
+  if (g.type === "house" || g.type === "shop") {
     return { state: null, replies: [unsupportedTypeText(g.type)], outcome: "unsupported-type" };
   }
   if (!g.sno) {
@@ -433,11 +562,12 @@ export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntr
   }
   if (!g.type) return { state: { ...g, step: "TYPE" }, replies: [GUIDE_ASK_TYPE] };
   if (g.type === "agri") return agriNext(g, fees, data);
+  if (g.type === "flat") return flatNext(g, fees, data);
   if (!g.area) return { state: { ...g, step: "AREA" }, replies: [GUIDE_ASK_AREA] };
   if (g.corner == null) return { state: { ...g, step: "CORNER" }, replies: [GUIDE_ASK_CORNER] };
   if (g.boundary == null) return { state: { ...g, step: "BOUNDARY" }, replies: [GUIDE_ASK_BOUNDARY] };
   const entry = data.find((e) => e.sno === g.sno)!;
-  const a = guideAnswer({ entry, type: g.type as "plotRes" | "plotCom", area: g.area, corner: g.corner, boundary: g.boundary, amount: g.amount }, fees);
+  const a = guideAnswer({ entry, type: g.type as "plotRes" | "plotCom" | "plotInd", area: g.area, corner: g.corner, boundary: g.boundary, amount: g.amount, roadPct: g.roadPct }, fees);
   return { state: null, replies: [a.text], outcome: "answered" };
 }
 
@@ -479,7 +609,7 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       break;
     }
     case "AREA": {
-      if (!f.area) unclear = /^\d+(\.\d+)?$/.test(bare(text)) ? "इकाई भी लिखें — वर्गफुट या वर्गमीटर (जैसे: 2770 वर्गफुट)।" : GUIDE_ASK_AREA;
+      if (!f.area) unclear = /^\d+(\.\d+)?$/.test(bare(text)) ? "इकाई भी लिखें — वर्गफुट या वर्गमीटर (जैसे: 2770 वर्गफुट)।" : g.type === "flat" ? GUIDE_ASK_FLAT_AREA : GUIDE_ASK_AREA;
       next = { ...g, area: f.area };
       break;
     }
@@ -510,6 +640,30 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       const d = readDiverted(text);
       if (d == null) unclear = GUIDE_ASK_DIVERTED;
       next = { ...g, diverted: d };
+      break;
+    }
+    case "PARTIES": {
+      const p = readParties(text);
+      if (!p) unclear = GUIDE_ASK_PARTIES;
+      next = { ...g, parties: p };
+      break;
+    }
+    case "FLAT_USE": {
+      const c = readFlatUse(text);
+      if (c == null) unclear = GUIDE_ASK_FLAT_USE;
+      next = { ...g, flatCom: c };
+      break;
+    }
+    case "FLOOR": {
+      const fl = readFloor(text);
+      if (fl == null) unclear = GUIDE_ASK_FLOOR;
+      next = { ...g, floor: fl };
+      break;
+    }
+    case "LIFT": {
+      const l = yesNo(text);
+      if (l == null) unclear = GUIDE_ASK_LIFT;
+      next = { ...g, lift: l };
       break;
     }
     case "IRRIGATED": {
