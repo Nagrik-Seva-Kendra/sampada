@@ -42,7 +42,7 @@ const ID_DOC = /आधार|aadhar|aadhaar|adhar|aadhar card|पैन|\bpan\b|
 const ID_ASK = /ज़रूरी|जरूरी|zaroori|jaruri|zaruri|chahiye|चाहिए|nahi hai|नहीं है|nhi hai|lagega|लगेगा|लगेंगे|lagenge|required|need|mandatory|बिना|bina|without|kiska|किसका|किसके/i;
 const PAYMENT = /payment|पेमेंट|भुगतान|bhugtan|cheque|चेक से|चैक|\bcash\b|कैश|नकद|nakad|\bupi\b|यूपीआई|online pay|पैसे कैसे|paise kaise|कैसे जमा|kaise jama|डीडी|\bdd\b|draft se pay/i;
 const SLOT = /स्लॉट|slot|appointment|अपॉइंटमेंट|ऑनलाइन रजिस्ट्री|online registry|online registri|संपदा|sampada|e-?registry|ई-रजिस्ट्री/i;
-const CANCEL_DONE = /(रजिस्ट्री|registry|registri|बैनामा|bainama).*(रद्द|radd|cancel|निरस्त|nirast|वापस|wapas|vapas)|(रद्द|radd|cancel|निरस्त|nirast|वापस|wapas|vapas).*(रजिस्ट्री|registry|registri|बैनामा|bainama)/i;
+const CANCEL_DONE = /धोखा|dhokha|dhoka|fraud|फ्रॉड|(रजिस्ट्री|registry|registri|बैनामा|bainama).*(रद्द|radd|cancel|निरस्त|nirast|वापस|wapas|vapas)|(रद्द|radd|cancel|निरस्त|nirast|वापस|wapas|vapas).*(रजिस्ट्री|registry|registri|बैनामा|bainama)/i;
 const QUESTION_HINT = /\?|क्या|\bkya|\bkyaa|सकत|sakt|होगा|hoga|होगी|hogi|कैसे|kaise|\bkese|\bcan\b|\bis\b/i;
 /** "guideline kya hoti hai": explained, then the guideline questions start. */
 export const isGuideMeaning = (text: string): boolean => GUIDE_MEANING.test(clean(text));
@@ -54,6 +54,78 @@ const OWNER_WORD = /seller|सेलर|विक्रेता|बेचने
 const DIED = /\bmar (gay|gaye|gai|chuk)|मर (गय|गए|गई|चुक)|मृत्यु|mrityu|death|देहांत|dehant|dehaant|निधन|nidhan|expire|guzar|गुज़र|गुजर|स्वर्गवास|swargwas|nahi rahe|नहीं रहे|died|passed away|\bdead\b/i;
 const PROPERTY_WORD = /registry|registri|रजिस्ट्री|property|प्रॉपर्टी|संपत्ति|sampatti|zameen|jameen|ज़मीन|जमीन|makan|मकान|plot|प्लॉट|ghar|घर|naam|नाम|बेच|bech/i;
 const KHASRA_ASK = /कहाँ|कहां|kahan|kaha\b|kaise|कैसे|milega|मिलेगा|milegi|मिलेगी|nikal|निकल|where|how/i;
+
+const SELL = /बेच|bech|sell|sale|बिक|bik|registry|registri|रजिस्ट्री|transfer|ट्रांसफर|नाम कर|naam kar/i;
+const GIFT_DUTY = "खून के रिश्ते (blood relation) में दान पर गाइडलाइन मूल्य का 7.6% स्टाम्प ड्यूटी लगती है; दूसरे किसी को दान करने पर रजिस्ट्री (विक्रय पत्र) के बराबर शुल्क लगता है।";
+/** Notes for other documents, added to "हम ... भी बनाते हैं". */
+const DOC_NOTES: Record<string, string> = {
+  "दान पत्र": `दान पत्र का रजिस्टर्ड होना और 2 गवाह ज़रूरी हैं; दान लेने वाला देने वाले के जीवनकाल में ही उसे स्वीकार करे (TPA धारा 122–123)।\n${GIFT_DUTY}`,
+  वसीयत: "वसीयत का रजिस्ट्रेशन ज़रूरी नहीं, पर करवाना बेहतर है। 2 गवाह ज़रूरी हैं। वसीयत कभी भी बदली जा सकती है।",
+  किरायानामा: "1 साल से ज़्यादा का किरायानामा रजिस्टर्ड होना ज़रूरी है (TPA धारा 107)।",
+  "परिवार में संपत्ति नाम करना (दान पत्र / हक़ त्याग / विक्रय पत्र)": GIFT_DUTY,
+};
+
+/** Owner-approved legal answers (7 Oct 2026), checked in this order. */
+const LEGAL: { topic: string; test: (s: string) => boolean; text: string; alert?: string }[] = [
+  {
+    topic: "nri",
+    test: (s) => /\bnri\b|एनआरआई|विदेश|videsh|abroad|foreign|bahar rehta|बाहर रहत|america|अमेरिका|dubai|दुबई|canada|कनाडा/i.test(s),
+    text: "विक्रेता या क्रेता विदेश में हो तो वहाँ से मुख्तारनामा (POA) भारतीय दूतावास में सत्यापित करवाएँ और भारत आने के 3 महीने के अंदर उस पर स्टाम्प लगवाएँ। फिर उसी मुख्तारनामे से रजिस्ट्री होगी।",
+    alert: "विदेश में रहने वाले पक्षकार (NRI) की रजिस्ट्री के बारे में पूछ रहे हैं",
+  },
+  {
+    topic: "minor",
+    test: (s) => /नाबालिग|nabalig|naabalig|minor|अवयस्क|बच्चे के नाम|bachche ke naam|bacche ke naam/i.test(s),
+    text: "नाबालिग (minor) की संपत्ति बेचने के लिए ज़िला न्यायालय की अनुमति ज़रूरी है (हिंदू अवयस्कता एवं संरक्षकता अधिनियम, धारा 8)।",
+    alert: "नाबालिग की संपत्ति के बारे में पूछ रहे हैं",
+  },
+  {
+    topic: "loan",
+    test: (s) => /loan|लोन|ऋण|बंधक|bandhak|mortgage|गिरवी|girvi|girwi/i.test(s) && /बेच|bech|sell|sale|बिक|bik|transfer|ट्रांसफर/i.test(s),
+    text: "लोन वाली संपत्ति बेचने से पहले बैंक से लोन चुकता करवाकर NOC और मूल कागज़ वापस लें, और बंधक रखी संपत्ति को बंधक मुक्त (बंधक मुक्ति विलेख) भी करवाएँ। तब रजिस्ट्री होगी।",
+    alert: "लोन / बंधक वाली संपत्ति बेचने के बारे में पूछ रहे हैं",
+  },
+  {
+    topic: "gpa-sale",
+    test: (s) => /gpa|जीपीए|मुख्तारनामा|mukhtarnama|mukhtiyarnama|power of attorney|\bpoa\b/i.test(s) && /खरीद|kharid|bought|purchase|मालिक|malik|हक|\bhak\b|haq|ownership|से ली|se li/i.test(s),
+    text: "सिर्फ़ मुख्तारनामे (GPA) से ख़रीदने पर मालिकाना हक़ नहीं मिलता (सुप्रीम कोर्ट, सूरज लैम्प्स केस)। मालिक बनने के लिए रजिस्टर्ड विक्रय पत्र ज़रूरी है।",
+  },
+  {
+    topic: "agreement-only",
+    test: (s) =>
+      /बयाना|bayana|biyana|byana|advance|इकरारनामा|ikrarnama|agreement|अनुबंध|anubandh/i.test(s) &&
+      /मालिक|malik|हक|\bhak\b|haq|ownership|मेरी हो|meri ho|मेरा हो|mera ho|काफ़ी|काफी|kafi|enough|owner/i.test(s),
+    text: "नहीं, बयाना या इकरारनामे से मालिकाना हक़ नहीं मिलता (TPA धारा 54)। हक़ रजिस्टर्ड विक्रय पत्र से ही मिलता है।",
+  },
+  {
+    topic: "joint",
+    test: (s) => /संयुक्त|sanyukt|joint|पुश्तैनी|pushtaini|पैतृक|paitrik|ancestral|हिस्सेदार|hissedar|co-?owner|सह-?स्वामी|दो लोगों के नाम|do logon ke naam|सबके नाम|sabke naam/i.test(s) && SELL.test(s),
+    text: "संयुक्त या पुश्तैनी संपत्ति बेचने के लिए सभी सह-स्वामियों / वारिसों के हस्ताक्षर या सहमति चाहिए। कोई नहीं आ सकता तो उसका मुख्तारनामा (POA) लगेगा।",
+  },
+  {
+    topic: "lease-plot",
+    test: (s) => /gda|जीडीए|लीज|lease|प्राधिकरण|pradhikaran|authority|हाउसिंग बोर्ड|housing board/i.test(s) && /बेच|bech|sell|sale|बिक|bik|transfer|ट्रांसफर|नाम कर|naam kar/i.test(s),
+    text: "GDA / लीज़ वाला प्लॉट बेचने से पहले प्राधिकरण से ट्रांसफ़र की अनुमति या NOC लेनी होगी। हमारा स्टाफ इसमें मदद करेगा।",
+    alert: "GDA / लीज़ वाले प्लॉट के ट्रांसफ़र के बारे में पूछ रहे हैं",
+  },
+  {
+    topic: "agri-land",
+    test: (s) =>
+      /डायवर्सन|डायवर्जन|व्यपवर्तन|diversion|diversan|divarsan/i.test(s) ||
+      (/खेती|kheti|कृषि|krishi|agricultur|farm|खेत|\bkhet\b/i.test(s) && /ज़मीन|जमीन|zameen|jameen|zamin|jamin|land|भूमि|bhumi|खरीद|kharid|buy/i.test(s)),
+    text: "खेती की ज़मीन कोई भी ख़रीद सकता है। उपयोग के अनुसार (मकान, दुकान आदि) उसका डायवर्सन भी करवाया जा सकता है।",
+  },
+  {
+    topic: "name-mismatch",
+    test: (s) => /spelling|स्पेलिंग|नाम अलग|naam alag|नाम गलत|नाम ग़लत|naam galat|नाम में गलती|naam me galti|naam mein galti|different name|alag alag naam|अलग अलग नाम/i.test(s),
+    text: "कागज़ों में नाम की स्पेलिंग अलग हो तो शपथ पत्र (affidavit) से काम चल जाता है। हमारा स्टाफ बताएगा कि कौन सा शपथ पत्र लगेगा।",
+  },
+  {
+    topic: "possession",
+    test: (s) => /कब्ज़ा|कब्जा|kabza|kabja|kabjaa|possession/i.test(s),
+    text: "कब्ज़ा विक्रय पत्र में लिखी शर्त के अनुसार मिलता है — आम तौर पर रजिस्ट्री के दिन।",
+  },
+];
 
 const otherDoc = (s: string): string | null => {
   for (const [re, name] of OTHER_DOCS) if (re.test(s)) return name;
@@ -76,12 +148,14 @@ export function faqAnswer(text: string): FaqAnswer | null {
       alert: "विक्रेता के देहांत के बाद नामांतरण / रजिस्ट्री के लिए पूछ रहे हैं",
     };
   }
+  for (const l of LEGAL) if (l.test(s)) return { topic: l.topic, text: l.text, ...(l.alert ? { alert: l.alert } : {}) };
   const doc = otherDoc(s);
   if (doc) {
     return {
       topic: "other-doc",
       text:
         `जी हाँ, हम ${doc} भी बनाते हैं। 📝\n` +
+        (DOC_NOTES[doc] ? `${DOC_NOTES[doc]}\n` : "") +
         "संपत्ति के कागज़ (पुरानी रजिस्ट्री) और पक्षकारों के आधार की फ़ोटो यहीं भेज दें — हमारा स्टाफ आपसे बात करके सही तरीका और खर्च बताएगा।\n" +
         "कार्यालय फ़ोन: 78984 75648",
       alert: `${doc} के लिए पूछ रहे हैं`,
@@ -128,7 +202,7 @@ export function faqAnswer(text: string): FaqAnswer | null {
     return {
       topic: "registry-cancel",
       text:
-        "हो चुकी रजिस्ट्री में गलती का सुधार संशोधन विलेख (correction deed) से होता है; रजिस्ट्री रद्द करने के लिए निरस्तीकरण विलेख या कोर्ट का रास्ता होता है — यह मामले पर निर्भर है।\n" +
+        "हो चुकी रजिस्ट्री सिर्फ़ दीवानी न्यायालय से रद्द होती है (विनिर्दिष्ट अनुतोष अधिनियम, धारा 31)। दोनों पक्ष राज़ी हों तो निरस्तीकरण विलेख बन सकता है; केवल गलती सुधारनी हो तो संशोधन विलेख (correction deed) बनता है।\n" +
         "हमारा स्टाफ आपसे बात करके बताएगा। कार्यालय फ़ोन: 78984 75648",
       alert: "हो चुकी रजिस्ट्री रद्द / सुधार के बारे में पूछ रहे हैं",
     };
