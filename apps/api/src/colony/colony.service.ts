@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { ClsService } from "nestjs-cls";
 import type { Prisma } from "@prisma/client";
 import {
@@ -23,6 +23,8 @@ import type { StaffUser } from "../auth/jwt-staff.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
+import { TENANT_KEY } from "../tenant/tenant-context.js";
+import { ColonyPaperExtractor, mapPaper, matchPartner } from "./colony-paper.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
 import { normalizePhone } from "../tasks/tasks.service.js";
 import { decrypt, encrypt, mask } from "../whatsapp/pii-crypto.js";
@@ -64,6 +66,7 @@ export class ColonyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
+    @Optional() private readonly paper?: ColonyPaperExtractor,
   ) {}
 
   private manager(): TenantContext {
@@ -371,6 +374,14 @@ export class ColonyService {
     const instalments = s.instalments as Instalment[];
     const errors = (await this.checksFor({ ...s, buyers, instalments }, p)).filter((c) => c.level === "error");
     if (errors.length) throw new BadRequestException(errors.map((e) => e.message).join(" "));
+    const row = await this.makeDeed(p, s, { id: user.id, name: user.name, role: user.role });
+    return this.saleItem(row, p);
+  }
+
+  /** The deed from the colony text (tenant context must be set: DeedTemplate is tenant-scoped). */
+  private async makeDeed(p: any, s: any, creator: { id: string; name: string; role: string }) {
+    const buyers = s.buyers as BuyerStored[];
+    const instalments = s.instalments as Instalment[];
     const plot = (await this.prisma.colonyPlot.findFirst({ where: { id: s.plotId } }))!;
     const partner = ((p.partners as ColonyPartner[]) ?? []).find((x) => x.key === s.partnerKey)!;
     const content = fillTemplate(p.template, {
@@ -392,16 +403,16 @@ export class ColonyService {
         title: deedTitle(p.name, plot.block, plot.plotNo, buyers[0]?.name ?? ""),
         content,
         status: "active",
-        createdById: user.id,
-        createdByName: user.name,
-        createdByRole: user.role,
+        createdById: creator.id,
+        createdByName: creator.name,
+        createdByRole: creator.role,
         createdAt: new Date(),
       }),
     });
     const row = await this.prisma.colonySale.update({ where: { id: s.id }, data: { status: "DEED_CREATED", deedId } });
     await this.prisma.colonyPlot.update({ where: { id: plot.id }, data: { status: "SOLD" } });
     this.log.log(`sale #${s.number}: deed created`);
-    return this.saleItem(row, p);
+    return row;
   }
 
   /**
@@ -613,6 +624,114 @@ export class ColonyService {
     return [`${p.name} — कंपनी मोड:\n• यूनिट देखें: "TF-16"\n• कुल स्थिति: "स्थिति"\n• बिक्री: ऑफिस वेब पर दर्ज होगी।`];
   }
 
+  // ---------- company paper (WhatsApp photo / PDF) ----------
+  /** The colony projects this number sends for (company numbers). */
+  private async companyProjects(phone: string) {
+    if (!this.orgId) return [];
+    const all = await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } });
+    return all.filter((x) => ((x.companyNumbers as string[]) ?? []).includes(phone));
+  }
+
+  async isCompanyNumber(phone: string): Promise<boolean> {
+    return (await this.companyProjects(phone)).length > 0;
+  }
+
+  /**
+   * A sale paper from a company number: read it, enter the sale and -- when
+   * nothing is missing and the project is live -- make the deed at once. A
+   * paper sent again for the same plot replaces its draft. null for anyone
+   * else. Logs carry sale numbers and masked numbers only.
+   */
+  async handleCompanyFile(
+    phone: string,
+    file: { buf: Buffer; mime: string },
+    caption: string,
+  ): Promise<{ replies: string[]; ownerAlert: string | null } | null> {
+    const projects = await this.companyProjects(phone);
+    if (!projects.length) return null;
+    if (!this.paper || !process.env.ANTHROPIC_API_KEY) return { replies: ["कागज़ पढ़ने की सुविधा अभी बंद है — बिक्री ऑफिस वेब पर दर्ज होगी।"], ownerAlert: null };
+    const raw = await this.paper.extract(file.buf, file.mime);
+    if (!raw) return { replies: ["कागज़ पढ़ा नहीं जा सका। साफ़ फ़ोटो (पूरा पन्ना, सीधा) या PDF दोबारा भेजें।"], ownerAlert: null };
+    const sale = mapPaper(raw);
+    const remembered = this.lastProject.get(phone);
+    const p =
+      pickProject(projects, `${caption} ${sale.project ?? ""}`) ??
+      (projects.length === 1 ? projects[0]! : remembered && remembered.until > Date.now() ? projects.find((x) => x.id === remembered.id) : undefined);
+    if (!p) return { replies: [`कागज़ किस प्रोजेक्ट का है? फ़ोटो के साथ नाम लिखकर दोबारा भेजें:\n${projects.map((x) => `• ${x.name}`).join("\n")}`], ownerAlert: null };
+    this.lastProject.set(phone, { id: p.id, until: Date.now() + 30 * 60_000 });
+    if (!sale.plot) return { replies: [`${p.name}: कागज़ में प्लाट नंबर नहीं मिला। प्लाट नंबर साफ़ लिखकर दोबारा भेजें।`], ownerAlert: null };
+
+    const plot =
+      p.kind === "SHOP"
+        ? await this.prisma.colonyPlot.findFirst({ where: { projectId: p.id, plotNo: sale.plot.block ? `${sale.plot.block}-${sale.plot.plotNo}` : sale.plot.plotNo } })
+        : await this.prisma.colonyPlot.findFirst({ where: { projectId: p.id, block: sale.plot.block, plotNo: sale.plot.plotNo } });
+    const label = plotLabel(sale.plot.block, sale.plot.plotNo);
+    if (!plot) return { replies: [`${p.name}: ${label} प्लाट मास्टर में नहीं है। सही प्लाट नंबर लिखकर दोबारा भेजें।`], ownerAlert: null };
+    // The same plot's draft from an earlier paper is replaced; anything else on it blocks.
+    const existing = await this.prisma.colonySale.findFirst({ where: { plotId: plot.id, status: { not: "CANCELLED" } } });
+    if (plot.status === "SOLD" || (existing && (existing.status !== "DRAFT" || existing.source !== "whatsapp"))) {
+      return { replies: [`${p.name} ${label} पहले से दर्ज / बिका हुआ है — दोबारा बिक्री नहीं हो सकती। गलती हो तो ऑफिस से बात करें।`], ownerAlert: null };
+    }
+
+    const partner = matchPartner((p.partners as ColonyPartner[]) ?? [], sale.partner);
+    const missing = [...sale.missing, ...(partner ? [] : ["भागीदार (कंपनी की ओर से कौन हस्ताक्षर करेगा)"])];
+    const buyers = this.storeBuyers(sale.buyers);
+    const data = {
+      partnerKey: partner?.key ?? "",
+      buyers: buyers as any,
+      consideration: sale.consideration ?? 0,
+      instalments: sale.instalments as any,
+    };
+    const row = existing
+      ? await this.prisma.colonySale.update({ where: { id: existing.id }, data })
+      : await this.prisma.colonySale.create({
+          data: { organizationId: p.organizationId, projectId: p.id, number: await this.nextNumber(p.id), plotId: plot.id, source: "whatsapp", ...data },
+        });
+    await this.prisma.colonyPlot.update({ where: { id: plot.id }, data: { status: "DRAFTED" } });
+    this.log.log(`sale #${row.number} from a company paper (${maskPhone(phone)}) missing=${missing.length}`);
+
+    const who = sale.buyers.map((b) => b.name).filter(Boolean).join(", ") || "—";
+    const head = `${p.name} — बिक्री #${row.number}: ${label}, क्रेता ${who}, राशि ₹${(sale.consideration ?? 0).toLocaleString("en-IN")}`;
+    if (missing.length) {
+      return {
+        replies: [`📝 ${head} — ड्राफ्ट दर्ज।\nडीड के लिए यह बाकी है:\n${missing.map((m) => `• ${m}`).join("\n")}\n\nपूरा कागज़ दोबारा भेजें (यही बिक्री अपडेट होगी), या ऑफिस वेब पर भरेगा।`],
+        ownerAlert: null,
+      };
+    }
+    const checks = await this.checksFor({ ...row, buyers, instalments: sale.instalments, partnerKey: partner!.key }, p);
+    const errors = checks.filter((c) => c.level === "error");
+    if (errors.length || !p.live) {
+      const why = !p.live ? ["प्रोजेक्ट अभी लाइव नहीं है (मालिक लाइव करेंगे)"] : errors.map((e) => e.message);
+      return { replies: [`📝 ${head} — ड्राफ्ट दर्ज, डीड अभी नहीं बनी:\n${why.map((m) => `• ${m}`).join("\n")}`], ownerAlert: null };
+    }
+    const creator = await this.deedCreator(p.organizationId);
+    if (!creator) return { replies: [`📝 ${head} — ड्राफ्ट दर्ज। डीड ऑफिस वेब से बनेगी।`], ownerAlert: null };
+    const made = await this.cls.run(async () => {
+      this.cls.set(TENANT_KEY, creator.tenant);
+      return this.makeDeed(p, { ...row, buyers, instalments: sale.instalments, partnerKey: partner!.key }, creator.user);
+    });
+    const warnings = checks.filter((c) => c.level === "warning" && c.code !== "notLive").map((c) => `⚠️ ${c.message}`);
+    this.log.log(`sale #${made.number}: deed from a company paper`);
+    return {
+      replies: [`✅ ${head}\nडीड बन गई — ऑफिस जाँचकर रजिस्ट्री की तैयारी करेगा।${warnings.length ? `\n\n${warnings.join("\n")}` : ""}`],
+      ownerAlert: `📄 ${p.name}: कंपनी के कागज़ से डीड बनी — बिक्री #${made.number}, ${label}। ऐप में "कॉलोनी डीड" में देखें।${warnings.length ? ` (${warnings.length} चेतावनी)` : ""}`,
+    };
+  }
+
+  /** Deeds made from WhatsApp are saved in the organization owner's name (DeedTemplate needs a tenant and a creator). */
+  private async deedCreator(organizationId: string) {
+    const m = await this.prisma.membership.findFirst({
+      where: { organizationId, role: "OWNER", status: "ACTIVE" },
+      include: { user: { select: { id: true, fname: true, lname: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!m) return null;
+    return {
+      tenant: { userId: m.userId, organizationId, membershipId: m.id, role: m.role } as TenantContext,
+      user: { id: m.userId, name: `WhatsApp कंपनी (${`${m.user.fname} ${m.user.lname}`.trim()})`, role: "ADMIN" },
+    };
+  }
+
   // ---------- company mode (WhatsApp) ----------
   /** Messages from a project's company numbers: plot status, counts, or a sale draft. null for anyone else. */
   async handleCompany(phone: string, text: string): Promise<string[] | null> {
@@ -676,7 +795,9 @@ export class ColonyService {
       const st = plot.status === "AVAILABLE" ? "उपलब्ध" : plot.status === "DRAFTED" ? "बिक्री दर्ज (डीड बाकी)" : "बिक चुका";
       return [`${p.name} ${plotLabel(plot.block, plot.plotNo)}: ${st}\n${plotBlock(plot)}\n${boundaryBlock(plot)}`];
     }
-    return [`${p.name} — कंपनी मोड:\n• प्लाट देखें: "E-47"\n• कुल स्थिति: "स्थिति"\n• बिक्री दर्ज: पहली पंक्ति "बिक्री E-47", फिर क्रेता:, पता:, मोबाइल:, राशि:, भागीदार:`];
+    return [
+      `${p.name} — कंपनी मोड:\n• पूरी बिक्री: क्रेता, आधार, प्लाट, राशि, किश्तें और भागीदार वाला कागज़ (फ़ोटो / PDF) भेजें — डीड अपने आप बनेगी\n• प्लाट देखें: "E-47"\n• कुल स्थिति: "स्थिति"\n• बिक्री दर्ज (लिखकर): पहली पंक्ति "बिक्री E-47", फिर क्रेता:, पता:, मोबाइल:, राशि:, भागीदार:`,
+    ];
   }
 }
 

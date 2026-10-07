@@ -170,6 +170,23 @@ export class WhatsappService {
       this.log.log(`message ${msg.id} from staff ${maskPhone(from)} type=${msg.type} route=staff replies=${staffReply.length}`);
       return;
     }
+    // A colony company's sale paper (photo / PDF): read it, enter the sale, make the deed.
+    if ((msg.type === "document" || msg.type === "image") && this.colony && (await this.colony.isCompanyNumber(from))) {
+      const media = msg[msg.type]; // { id, mime_type, filename?, caption? }
+      const file = await this.downloadMedia(media.id, media.filename);
+      try {
+        const r = await this.colony.handleCompanyFile(from, { buf: file.buf, mime: file.mime }, String(media.caption ?? ""));
+        if (r) {
+          await this.send(from, r.replies);
+          if (r.ownerAlert) await this.outbox.alertOwners(r.ownerAlert).catch(() => undefined);
+          this.log.log(`message ${msg.id} from ${maskPhone(from)} type=${msg.type} route=company-paper replies=${r.replies.length}`);
+          return;
+        }
+      } finally {
+        // The paper carries Aadhaar / PAN: what was needed is in the sale (encrypted); the file is not kept.
+        await deleteMedia(file.key).catch(() => this.log.warn("company paper not deleted"));
+      }
+    }
     // A colony project's company people (company mode): plot status, counts, sale drafts.
     if (msg.type === "text" && this.colony) {
       const company = await this.colony.handleCompany(from, String(msg.text?.body ?? ""));
