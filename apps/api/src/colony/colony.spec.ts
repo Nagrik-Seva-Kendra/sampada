@@ -270,7 +270,7 @@ describe("ColonyService", () => {
       (s as any).log = { log: (m: string) => logs.push(m), warn: () => undefined, error: () => undefined };
       expect(await s.isCompanyNumber("919111111111")).toBe(true);
       expect(await s.isCompanyNumber("919000000000")).toBe(false);
-      const r = await s.handleCompanyFile("919111111111", FILE, "");
+      const r = await s.handleCompanyFile("919111111111", [FILE], "");
       expect(r!.replies[0]).toContain("✅ FLORA CITY — बिक्री #1: ब्लॉक E - प्लाट 47, क्रेता श्याम सुंदर, राशि ₹15,00,000");
       expect(r!.replies[0]).toContain("डीड बन गई");
       expect(r!.ownerAlert).toContain("कंपनी के कागज़ से डीड बनी — बिक्री #1, ब्लॉक E - प्लाट 47");
@@ -289,32 +289,58 @@ describe("ColonyService", () => {
       expect(prisma.t.colonySale[0].buyers[0].aadhaar).toMatch(/^enc:/);
       expect(logs.join("\n")).not.toMatch(/234567890123|श्याम|9876543210|9111111111/);
       // The same paper again: the plot is sold.
-      expect((await s.handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("पहले से दर्ज / बिका");
+      expect((await s.handleCompanyFile("919111111111", [FILE], ""))!.replies[0]).toContain("पहले से दर्ज / बिका");
     });
 
     it("something missing → draft with the list; the full paper sent again updates the same sale and makes the deed", async () => {
       const p = await project();
       await svc().setLive(p.id, true);
-      const half = await withPaper({ ...PAPER, buyers: [{ ...PAPER.buyers[0], aadhaar: null }], instalments: [] }).handleCompanyFile("919111111111", FILE, "");
+      const half = await withPaper({ ...PAPER, buyers: [{ ...PAPER.buyers[0], aadhaar: null }], instalments: [] }).handleCompanyFile("919111111111", [FILE], "");
       expect(half!.replies[0]).toContain("ड्राफ्ट दर्ज");
       expect(half!.replies[0]).toContain("• क्रेता का आधार");
       expect(half!.replies[0]).toContain("• भुगतान की किश्तें");
       expect(half!.ownerAlert).toBeNull();
       expect(prisma.t.colonyPlot.find((x: any) => x.plotNo === "47").status).toBe("DRAFTED");
-      const full = await withPaper(PAPER).handleCompanyFile("919111111111", FILE, "");
+      const full = await withPaper(PAPER).handleCompanyFile("919111111111", [FILE], "");
       expect(full!.replies[0]).toContain("बिक्री #1");
       expect(full!.replies[0]).toContain("डीड बन गई");
       expect(prisma.t.colonySale).toHaveLength(1);
     });
 
+    it("pages sent apart: the payment page fills in the details page's draft, never wipes it", async () => {
+      const p = await project();
+      await svc().setLive(p.id, true);
+      const s1 = await withPaper({ ...PAPER, instalments: [], consideration: null }).handleCompanyFile("919111111111", [FILE], "");
+      expect(s1!.replies[0]).toContain("ड्राफ्ट दर्ज");
+      const s2 = await withPaper({ plot: PAPER.plot, buyers: [], consideration: 1_500_000, instalments: PAPER.instalments, partner: null }).handleCompanyFile("919111111111", [FILE], "");
+      expect(s2!.replies[0]).toContain("डीड बन गई");
+      expect(s2!.replies[0]).toContain("क्रेता श्याम सुंदर");
+      expect(prisma.t.deedTemplate[0].content).toContain("श्याम सुंदर");
+    });
+
+    it("the owner's 'कंपनी मोड': any project, 30 minutes, ended by 'ओनर मोड'", async () => {
+      const p = await project();
+      await svc().setLive(p.id, true);
+      const s = withPaper(PAPER);
+      const OWNER = "919999900000";
+      expect(await s.isCompanyNumber(OWNER)).toBe(false);
+      expect(s.startOwnerCompanyMode(OWNER)[0]).toContain("कंपनी मोड 30 मिनट");
+      expect(await s.isCompanyNumber(OWNER)).toBe(true);
+      expect((await s.handleCompanyFile(OWNER, [FILE, FILE], ""))!.replies[0]).toContain("डीड बन गई");
+      expect(s.inOwnerCompanyMode(OWNER, Date.now() + 31 * 60_000)).toBe(false);
+      s.startOwnerCompanyMode(OWNER);
+      expect(s.endOwnerCompanyMode(OWNER)).toBe(true);
+      expect(await s.handleCompanyFile(OWNER, [FILE], "")).toBeNull();
+    });
+
     it("not live → draft only; unknown plot / unreadable paper / other numbers explained", async () => {
       await project();
-      const r = await withPaper(PAPER).handleCompanyFile("919111111111", FILE, "");
+      const r = await withPaper(PAPER).handleCompanyFile("919111111111", [FILE], "");
       expect(r!.replies[0]).toContain("प्रोजेक्ट अभी लाइव नहीं है");
       expect(prisma.t.deedTemplate).toHaveLength(0);
-      expect((await withPaper({ ...PAPER, plot: { block: "Z", plotNo: "9" } }).handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("ब्लॉक Z - प्लाट 9 प्लाट मास्टर में नहीं");
-      expect((await withPaper(null).handleCompanyFile("919111111111", FILE, ""))!.replies[0]).toContain("कागज़ पढ़ा नहीं जा सका");
-      expect(await withPaper(PAPER).handleCompanyFile("919000000000", FILE, "")).toBeNull();
+      expect((await withPaper({ ...PAPER, plot: { block: "Z", plotNo: "9" } }).handleCompanyFile("919111111111", [FILE], ""))!.replies[0]).toContain("ब्लॉक Z - प्लाट 9 प्लाट मास्टर में नहीं");
+      expect((await withPaper(null).handleCompanyFile("919111111111", [FILE], ""))!.replies[0]).toContain("कागज़ पढ़ा नहीं जा सका");
+      expect(await withPaper(PAPER).handleCompanyFile("919000000000", [FILE], "")).toBeNull();
     });
   });
 

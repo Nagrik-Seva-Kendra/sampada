@@ -24,7 +24,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { tenantCreateData } from "../prisma/tenant-scope.extension.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
 import { TENANT_KEY } from "../tenant/tenant-context.js";
-import { ColonyPaperExtractor, mapPaper, matchPartner } from "./colony-paper.js";
+import { ColonyPaperExtractor, mapPaper, matchPartner, saleGaps } from "./colony-paper.js";
 import type { TenantContext } from "../tenant/tenant-context.js";
 import { normalizePhone } from "../tasks/tasks.service.js";
 import { decrypt, encrypt, mask } from "../whatsapp/pii-crypto.js";
@@ -629,7 +629,29 @@ export class ColonyService {
   private async companyProjects(phone: string) {
     if (!this.orgId) return [];
     const all = await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } });
+    // The owner in "कंपनी मोड" sends for any project, like a company number.
+    if (this.inOwnerCompanyMode(phone)) return all;
     return all.filter((x) => ((x.companyNumbers as string[]) ?? []).includes(phone));
+  }
+
+  /** The owner's "कंपनी मोड" (30 minutes): their papers / texts go the company way. In memory: a restart ends it. */
+  private readonly ownerCompanyMode = new Map<string, number>();
+  startOwnerCompanyMode(phone: string, now = Date.now()): string[] {
+    this.ownerCompanyMode.set(phone, now + 30 * 60_000);
+    return [
+      "🏢 कंपनी मोड 30 मिनट के लिए चालू। अब आपकी भेजी बिक्री की फ़ोटो / PDF कंपनी के कागज़ की तरह पढ़ी जाएगी और डीड अपने आप बनेगी।\n" +
+        "• सारे पन्ने (डिटेल, भुगतान, नक्शा) एक साथ भेजें\n• प्लाट देखें: \"E-47\" • कुल स्थिति: \"स्थिति\"\n" +
+        'वापस आने के लिए "ओनर मोड" लिखें।',
+    ];
+  }
+  endOwnerCompanyMode(phone: string): boolean {
+    return this.ownerCompanyMode.delete(phone);
+  }
+  inOwnerCompanyMode(phone: string, now = Date.now()): boolean {
+    const until = this.ownerCompanyMode.get(phone);
+    if (until && until > now) return true;
+    if (until) this.ownerCompanyMode.delete(phone);
+    return false;
   }
 
   async isCompanyNumber(phone: string): Promise<boolean> {
@@ -644,13 +666,13 @@ export class ColonyService {
    */
   async handleCompanyFile(
     phone: string,
-    file: { buf: Buffer; mime: string },
+    files: { buf: Buffer; mime: string }[],
     caption: string,
   ): Promise<{ replies: string[]; ownerAlert: string | null } | null> {
     const projects = await this.companyProjects(phone);
     if (!projects.length) return null;
     if (!this.paper || !process.env.ANTHROPIC_API_KEY) return { replies: ["कागज़ पढ़ने की सुविधा अभी बंद है — बिक्री ऑफिस वेब पर दर्ज होगी।"], ownerAlert: null };
-    const raw = await this.paper.extract(file.buf, file.mime);
+    const raw = await this.paper.extract(files);
     if (!raw) return { replies: ["कागज़ पढ़ा नहीं जा सका। साफ़ फ़ोटो (पूरा पन्ना, सीधा) या PDF दोबारा भेजें।"], ownerAlert: null };
     const sale = mapPaper(raw);
     const remembered = this.lastProject.get(phone);
@@ -673,14 +695,25 @@ export class ColonyService {
       return { replies: [`${p.name} ${label} पहले से दर्ज / बिका हुआ है — दोबारा बिक्री नहीं हो सकती। गलती हो तो ऑफिस से बात करें।`], ownerAlert: null };
     }
 
-    const partner = matchPartner((p.partners as ColonyPartner[]) ?? [], sale.partner);
-    const missing = [...sale.missing, ...(partner ? [] : ["भागीदार (कंपनी की ओर से कौन हस्ताक्षर करेगा)"])];
-    const buyers = this.storeBuyers(sale.buyers);
+    // A later paper of the same plot (say only the payment page) fills in; it never wipes what came before.
+    const partners = (p.partners as ColonyPartner[]) ?? [];
+    const partner = matchPartner(partners, sale.partner) ?? partners.find((x) => x.key === existing?.partnerKey) ?? null;
+    const named = sale.buyers.filter((b) => b.name.length >= 2);
+    const buyers: BuyerStored[] = named.length ? this.storeBuyers(named) : ((existing?.buyers as BuyerStored[] | undefined) ?? []);
+    const consideration = sale.consideration ?? (existing?.consideration || null);
+    const instalments = sale.instalments.length ? sale.instalments : ((existing?.instalments as Instalment[] | undefined) ?? []);
+    // Unreadable Aadhaar / PAN / payment lines on this paper, then what the merged sale still lacks.
+    const unclear = sale.missing.filter((m) => /साफ़ नहीं|भुगतान की एक किश्त/.test(m));
+    const missing = [
+      ...unclear,
+      ...saleGaps({ buyers: buyers.map((b) => ({ name: b.name, guardian: b.guardian, hasAadhaar: !!b.aadhaar })), consideration, instalments }),
+      ...(partner ? [] : ["भागीदार (कंपनी की ओर से कौन हस्ताक्षर करेगा)"]),
+    ].filter((m, i, a) => a.indexOf(m) === i);
     const data = {
       partnerKey: partner?.key ?? "",
       buyers: buyers as any,
-      consideration: sale.consideration ?? 0,
-      instalments: sale.instalments as any,
+      consideration: consideration ?? 0,
+      instalments: instalments as any,
     };
     const row = existing
       ? await this.prisma.colonySale.update({ where: { id: existing.id }, data })
@@ -690,15 +723,15 @@ export class ColonyService {
     await this.prisma.colonyPlot.update({ where: { id: plot.id }, data: { status: "DRAFTED" } });
     this.log.log(`sale #${row.number} from a company paper (${maskPhone(phone)}) missing=${missing.length}`);
 
-    const who = sale.buyers.map((b) => b.name).filter(Boolean).join(", ") || "—";
-    const head = `${p.name} — बिक्री #${row.number}: ${label}, क्रेता ${who}, राशि ₹${(sale.consideration ?? 0).toLocaleString("en-IN")}`;
+    const who = buyers.map((b) => b.name).filter(Boolean).join(", ") || "—";
+    const head = `${p.name} — बिक्री #${row.number}: ${label}, क्रेता ${who}, राशि ₹${(consideration ?? 0).toLocaleString("en-IN")}`;
     if (missing.length) {
       return {
         replies: [`📝 ${head} — ड्राफ्ट दर्ज।\nडीड के लिए यह बाकी है:\n${missing.map((m) => `• ${m}`).join("\n")}\n\nपूरा कागज़ दोबारा भेजें (यही बिक्री अपडेट होगी), या ऑफिस वेब पर भरेगा।`],
         ownerAlert: null,
       };
     }
-    const checks = await this.checksFor({ ...row, buyers, instalments: sale.instalments, partnerKey: partner!.key }, p);
+    const checks = await this.checksFor({ ...row, buyers, instalments, partnerKey: partner!.key }, p);
     const errors = checks.filter((c) => c.level === "error");
     if (errors.length || !p.live) {
       const why = !p.live ? ["प्रोजेक्ट अभी लाइव नहीं है (मालिक लाइव करेंगे)"] : errors.map((e) => e.message);
@@ -708,7 +741,7 @@ export class ColonyService {
     if (!creator) return { replies: [`📝 ${head} — ड्राफ्ट दर्ज। डीड ऑफिस वेब से बनेगी।`], ownerAlert: null };
     const made = await this.cls.run(async () => {
       this.cls.set(TENANT_KEY, creator.tenant);
-      return this.makeDeed(p, { ...row, buyers, instalments: sale.instalments, partnerKey: partner!.key }, creator.user);
+      return this.makeDeed(p, { ...row, buyers, instalments, partnerKey: partner!.key }, creator.user);
     });
     const warnings = checks.filter((c) => c.level === "warning" && c.code !== "notLive").map((c) => `⚠️ ${c.message}`);
     this.log.log(`sale #${made.number}: deed from a company paper`);

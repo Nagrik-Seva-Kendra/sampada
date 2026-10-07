@@ -7,7 +7,7 @@
 import { type ColonyBuyer, type Instalment, PaymentMode } from "@sampada/shared";
 import { Injectable, Logger } from "@nestjs/common";
 
-export const PAPER_SYSTEM = `You read a property-sale information paper from a colony developer in Madhya Pradesh (India), handwritten or typed, in Hindi or English.
+export const PAPER_SYSTEM = `You read a property-sale information paper from a colony developer in Madhya Pradesh (India), handwritten or typed, in Hindi or English. It may be several pages / photos (details, payment table, plot map): read them all together as ONE sale.
 Return ONLY one JSON object (no prose, no markdown):
 {"project": string|null,
  "plot": {"block": string|null, "plotNo": string|null},
@@ -77,6 +77,29 @@ export function isoDate(v: unknown): string | null {
   }
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null;
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** What the deed still needs, on the sale as it now stands (this paper merged with an earlier one of the same plot). */
+export function saleGaps(s: {
+  buyers: { name: string; guardian: string; hasAadhaar: boolean }[];
+  consideration: number | null;
+  instalments: Instalment[];
+}): string[] {
+  const out: string[] = [];
+  if (!s.buyers.length) out.push("क्रेता का नाम");
+  s.buyers.forEach((b, i) => {
+    const n = s.buyers.length > 1 ? ` ${i + 1}` : "";
+    if (b.name.trim().length < 2) out.push(`क्रेता${n} का नाम`);
+    if (!b.guardian.trim()) out.push(`क्रेता${n} के पिता / पति का नाम`);
+    if (!b.hasAadhaar) out.push(`क्रेता${n} का आधार`);
+  });
+  if (!s.consideration) out.push("कुल राशि (प्रतिफल)");
+  if (!s.instalments.length) out.push("भुगतान की किश्तें (तारीख, राशि, माध्यम)");
+  const total = s.instalments.reduce((a, x) => a + x.amount, 0);
+  if (s.consideration && s.instalments.length && total !== s.consideration) {
+    out.push(`किश्तों का जोड़ ₹${total.toLocaleString("en-IN")} कुल राशि ₹${s.consideration.toLocaleString("en-IN")} के बराबर नहीं`);
+  }
+  return out;
 }
 
 /** The model's answer → a sale the deed can use, and what is still missing. */
@@ -152,16 +175,21 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export class ColonyPaperExtractor {
   private readonly log = new Logger("ColonyPaper");
 
-  async extract(buf: Buffer, mime: string): Promise<PaperRaw | null> {
+  /** All pages / photos of one paper in one request. */
+  async extract(files: { buf: Buffer; mime: string }[]): Promise<PaperRaw | null> {
     if (!process.env.ANTHROPIC_API_KEY) return null;
-    const data = buf.toString("base64");
-    const block =
-      mime === "application/pdf"
-        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
-        : IMAGE_TYPES.includes(mime)
-          ? { type: "image", source: { type: "base64", media_type: mime, data } }
-          : null;
-    if (!block) return null;
+    const blocks = files
+      .slice(0, 10)
+      .map(({ buf, mime }) => {
+        const data = buf.toString("base64");
+        return mime === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
+          : IMAGE_TYPES.includes(mime)
+            ? { type: "image", source: { type: "base64", media_type: mime, data } }
+            : null;
+      })
+      .filter(Boolean);
+    if (!blocks.length) return null;
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -169,7 +197,7 @@ export class ColonyPaperExtractor {
         model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
         max_tokens: 3000,
         system: PAPER_SYSTEM,
-        messages: [{ role: "user", content: [block, { type: "text", text: "Extract the JSON." }] }],
+        messages: [{ role: "user", content: [...blocks, { type: "text", text: "Extract the JSON." }] }],
       }),
     }).catch(() => null);
     if (!res?.ok) {
