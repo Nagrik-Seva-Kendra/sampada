@@ -499,6 +499,17 @@ export class AttendanceService {
     return lines.join("\n");
   }
 
+  /**
+   * Today's missing IN / OUT by name -- the same grid and rules as todayReport
+   * (the owner's "हाज़िरी किसने नहीं लगाई"): absent = no IN, came without OUT.
+   */
+  async todayMissing(organizationId: string, now = new Date()): Promise<{ off: boolean; noIn: string[]; noOut: string[] }> {
+    const day = istDay(now);
+    const rows = (await this.grid(organizationId, [day], undefined, now)).map((s) => s.days[0]!);
+    const off = !rows.length || rows.every((r) => r.status === "off" || r.status === "holiday");
+    return { off, noIn: rows.filter((r) => r.status === "absent").map((r) => r.name), noOut: rows.filter((r) => r.inAt && !r.outAt).map((r) => r.name) };
+  }
+
   /** Staff who came but did not press "जा रहा हूँ". */
   async eveningReport(organizationId: string, now = new Date()): Promise<string | null> {
     const day = istDay(now);

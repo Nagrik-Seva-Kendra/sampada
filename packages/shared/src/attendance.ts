@@ -26,6 +26,8 @@ export const AttendanceSettingsInput = z
     staffReminders: z.boolean(),
     /** Staff who never get that reminder. */
     reminderSkipUserIds: z.array(z.string().min(1).max(64)).max(200),
+    /** The owner's 8:30 PM WhatsApp summary (requests + attendance). */
+    ownerDailySummary: z.boolean(),
   })
   .strict();
 export type AttendanceSettings = z.infer<typeof AttendanceSettingsInput>;
@@ -44,6 +46,7 @@ export const DEFAULT_ATTENDANCE_SETTINGS: AttendanceSettings = {
   reportsEnabled: true,
   staffReminders: true,
   reminderSkipUserIds: [],
+  ownerDailySummary: true,
 };
 
 export const HolidayInput = z.object({ date: ymd, name: z.string().trim().min(1).max(100) }).strict();

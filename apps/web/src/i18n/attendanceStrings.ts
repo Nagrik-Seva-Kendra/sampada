@@ -111,6 +111,10 @@ export const attendanceStrings = {
     en: "WhatsApp reminder to staff who have not marked IN (morning report time) / OUT (evening report time)",
     hi: "जिन स्टाफ ने IN (सुबह की रिपोर्ट के समय) / OUT (शाम की रिपोर्ट के समय) नहीं लगाया, उन्हें WhatsApp reminder",
   },
+  atOwnerDailySummary: {
+    en: "Daily 8:30 PM summary to the owner on WhatsApp (requests + who has not marked IN / OUT)",
+    hi: "मालिक को रोज़ शाम 8:30 बजे WhatsApp पर सारांश (अनुरोध + किसने IN / OUT नहीं लगाया)",
+  },
   atReminderSkip: { en: "Do not send the reminder to:", hi: "इन्हें reminder न भेजें:" },
   atHolidays: { en: "Holidays (owner's list)", hi: "अवकाश (मालिक की सूची)" },
   atHolidayName: { en: "Name", hi: "नाम" },
