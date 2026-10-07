@@ -351,13 +351,15 @@ export class OwnerAssistantService {
     const staff = await this.staff().catch(() => []);
     const read = await this.extractor.extract(text, now, staff.map((s) => s.name));
     const who = resolveAssignee(read?.assigneeName ?? null, staff);
-    if (!who) return ['किसके काम रद्द करने हैं? स्टाफ का नाम साफ़ लिखें, जैसे: "मुस्कान मिश्रा के सारे काम रद्द करो"। एक काम के लिए: "3 रद्द"।'];
-    const open = (await this.tasks.openTasks(this.orgId)).filter((t) => t.assigneeId === who.userId);
-    if (!open.length) return [`${who.name} को सौंपा कोई खुला काम नहीं है।`];
+    // No name but "सब / सारे / पुराना": every open task (still listed and asked first).
+    const everyone = !who && /सब|sab|सारे|सारी|saare|sare|पुरान|purana|purane|purani|all|old/i.test(text);
+    if (!who && !everyone) return ['किसके काम रद्द करने हैं? स्टाफ का नाम साफ़ लिखें, जैसे: "मुस्कान मिश्रा के सारे काम रद्द करो"। एक काम के लिए: "3 रद्द"।'];
+    const open = (await this.tasks.openTasks(this.orgId)).filter((t) => everyone || t.assigneeId === who!.userId);
+    if (!open.length) return [everyone ? "कोई खुला काम नहीं है।" : `${who!.name} को सौंपा कोई खुला काम नहीं है।`];
     await this.setState(phone, { mode: "bulk-cancel", ids: open.map((t) => t.id), numbers: open.map((t) => t.number), at: now.toISOString() });
     this.log.log(`owner bulk cancel: asked for ${open.length} task(s)`);
     const list = open.slice(0, 20).map((t) => `#${t.number} ${t.title.slice(0, 60)}`);
-    return [[`${who.name} के ${open.length} खुले काम:`, ...list, ...(open.length > 20 ? [`…और ${open.length - 20}`] : []), `ये सब रद्द करूँ? "हाँ" / "नहीं"`].join("\n")];
+    return [[`${everyone ? "सारे" : `${who!.name} के`} ${open.length} खुले काम:`, ...list, ...(open.length > 20 ? [`…और ${open.length - 20}`] : []), `ये सब रद्द करूँ? "हाँ" / "नहीं"`].join("\n")];
   }
 
   /** Keeps the file with a saved task; what was read fills its empty fields. */

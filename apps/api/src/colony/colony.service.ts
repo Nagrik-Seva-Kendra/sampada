@@ -29,6 +29,7 @@ import type { TenantContext } from "../tenant/tenant-context.js";
 import { normalizePhone } from "../tasks/tasks.service.js";
 import { decrypt, encrypt, mask } from "../whatsapp/pii-crypto.js";
 import { maskPhone } from "../whatsapp/webhook-diagnostics.js";
+import { soundKey } from "../whatsapp/name-sound.js";
 import {
   boundaryBlock,
   buyerBlock,
@@ -634,6 +635,26 @@ export class ColonyService {
     return all.filter((x) => ((x.companyNumbers as string[]) ?? []).includes(phone));
   }
 
+  /**
+   * The owner writes about a colony deed ("फ्लोर की डिड बनानी है", "Flora city deed"):
+   * the project it names, by sound ("फ्लोर" = "Flora"), or null.
+   */
+  async ownerDeedProject(text: string): Promise<string | null> {
+    // Making a deed, not a registry date / a task about it.
+    if (!this.orgId || !/(डीड|डिड|deed|did)/i.test(text) || !/(बना|bana|बनवा|banwa)/i.test(text)) return null;
+    const all = await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } });
+    const said = new Set(text.split(/[^\p{L}\p{M}\d]+/u).filter((w) => w.length >= 3).map((w) => soundKey(w)));
+    const generic = /^(ct|st|klny|kln|ngr|bjns|krtyrd|rsdnsy|rsdns)$/;
+    const hits = all.filter((p) =>
+      ColonyService.names(p)
+        .flatMap((n) => n.split(/\s+/))
+        .filter((w) => w.length >= 4)
+        .map((w) => soundKey(w))
+        .some((k) => k.length >= 3 && !generic.test(k) && said.has(k)),
+    );
+    return hits.length === 1 ? hits[0]!.name : null;
+  }
+
   /** The owner's "कंपनी मोड" (30 minutes): their papers / texts go the company way. In memory: a restart ends it. */
   private readonly ownerCompanyMode = new Map<string, number>();
   startOwnerCompanyMode(phone: string, now = Date.now()): string[] {
@@ -689,10 +710,19 @@ export class ColonyService {
         : await this.prisma.colonyPlot.findFirst({ where: { projectId: p.id, block: sale.plot.block, plotNo: sale.plot.plotNo } });
     const label = plotLabel(sale.plot.block, sale.plot.plotNo);
     if (!plot) return { replies: [`${p.name}: ${label} प्लाट मास्टर में नहीं है। सही प्लाट नंबर लिखकर दोबारा भेजें।`], ownerAlert: null };
-    // The same plot's draft from an earlier paper is replaced; anything else on it blocks.
-    const existing = await this.prisma.colonySale.findFirst({ where: { plotId: plot.id, status: { not: "CANCELLED" } } });
-    if (plot.status === "SOLD" || (existing && (existing.status !== "DRAFT" || existing.source !== "whatsapp"))) {
-      return { replies: [`${p.name} ${label} पहले से दर्ज / बिका हुआ है — दोबारा बिक्री नहीं हो सकती। गलती हो तो ऑफिस से बात करें।`], ownerAlert: null };
+    // A draft of this plot (from a paper, the web or Excel) is filled in; a made deed or an old sold record blocks.
+    const existing = await this.prisma.colonySale.findFirst({ where: { plotId: plot.id, status: { not: "CANCELLED" } }, orderBy: { number: "desc" } });
+    if (existing?.status === "DEED_CREATED") {
+      return {
+        replies: [
+          `${p.name} ${label}: बिक्री #${existing.number} की डीड पहले ही बन चुकी है (ऐप में "कॉलोनी डीड" → बिक्री #${existing.number})।\n` +
+            `वह गलत / टेस्ट थी तो ऑफिस वेब पर बिक्री #${existing.number} "रद्द" करें (मालिक / एडमिन), फिर यह कागज़ दोबारा भेजें।`,
+        ],
+        ownerAlert: null,
+      };
+    }
+    if (!existing && plot.status === "SOLD") {
+      return { replies: [`${p.name} ${label} पुरानी डीड से "बिका" दर्ज है — दोबारा बिक्री नहीं हो सकती। गलत दर्ज हो तो ऑफिस वेब पर प्लाट की स्थिति ठीक करें।`], ownerAlert: null };
     }
 
     // A later paper of the same plot (say only the payment page) fills in; it never wipes what came before.
@@ -721,13 +751,49 @@ export class ColonyService {
           data: { organizationId: p.organizationId, projectId: p.id, number: await this.nextNumber(p.id), plotId: plot.id, source: "whatsapp", ...data },
         });
     await this.prisma.colonyPlot.update({ where: { id: plot.id }, data: { status: "DRAFTED" } });
+    this.lastSale.set(phone, row.id);
     this.log.log(`sale #${row.number} from a company paper (${maskPhone(phone)}) missing=${missing.length}`);
+    return this.finishSale(p, row, label, unclear);
+  }
 
+  /** The last sale this number sent a paper for (for "डीड बना दो" / "सब भेज दिया"). */
+  private readonly lastSale = new Map<string, string>();
+
+  /**
+   * "डीड बना दो" from a company number / the owner in कंपनी मोड: the last
+   * paper's sale is checked again and its deed made when nothing is missing.
+   * null when there is no such sale (the caller answers with the help).
+   */
+  async companyFinish(phone: string): Promise<{ replies: string[]; ownerAlert: string | null } | null> {
+    const id = this.lastSale.get(phone);
+    if (!id || !(await this.isCompanyNumber(phone))) return null;
+    const row = await this.prisma.colonySale.findFirst({ where: { id } });
+    if (!row) return null;
+    const p = await this.prisma.colonyProject.findFirst({ where: { id: row.projectId } });
+    const plot = await this.prisma.colonyPlot.findFirst({ where: { id: row.plotId } });
+    if (!p || !plot) return null;
+    const label = plotLabel(plot.block, plot.plotNo);
+    if (row.status === "DEED_CREATED") return { replies: [`${p.name} ${label}: बिक्री #${row.number} की डीड बन चुकी है ✅`], ownerAlert: null };
+    if (row.status !== "DRAFT") return null;
+    return this.finishSale(p, row, label, []);
+  }
+
+  /** What the saved sale still lacks, or its deed (live project, checks pass). */
+  private async finishSale(p: any, row: any, label: string, unclear: string[]): Promise<{ replies: string[]; ownerAlert: string | null }> {
+    const buyers = (row.buyers as BuyerStored[]) ?? [];
+    const instalments = (row.instalments as Instalment[]) ?? [];
+    const consideration = row.consideration || null;
+    const partner = ((p.partners as ColonyPartner[]) ?? []).find((x) => x.key === row.partnerKey) ?? null;
+    const missing = [
+      ...unclear,
+      ...saleGaps({ buyers: buyers.map((b) => ({ name: b.name, guardian: b.guardian, hasAadhaar: !!b.aadhaar })), consideration, instalments }),
+      ...(partner ? [] : ["भागीदार (कंपनी की ओर से कौन हस्ताक्षर करेगा)"]),
+    ].filter((m, i, a) => a.indexOf(m) === i);
     const who = buyers.map((b) => b.name).filter(Boolean).join(", ") || "—";
     const head = `${p.name} — बिक्री #${row.number}: ${label}, क्रेता ${who}, राशि ₹${(consideration ?? 0).toLocaleString("en-IN")}`;
     if (missing.length) {
       return {
-        replies: [`📝 ${head} — ड्राफ्ट दर्ज।\nडीड के लिए यह बाकी है:\n${missing.map((m) => `• ${m}`).join("\n")}\n\nपूरा कागज़ दोबारा भेजें (यही बिक्री अपडेट होगी), या ऑफिस वेब पर भरेगा।`],
+        replies: [`📝 ${head} — ड्राफ्ट दर्ज।\nडीड के लिए यह बाकी है:\n${missing.map((m) => `• ${m}`).join("\n")}\n\nबाकी वाला पन्ना / पूरा कागज़ भेजें (यही बिक्री अपडेट होगी), या ऑफिस वेब पर भरेगा।`],
         ownerAlert: null,
       };
     }
@@ -769,9 +835,8 @@ export class ColonyService {
   /** Messages from a project's company numbers: plot status, counts, or a sale draft. null for anyone else. */
   async handleCompany(phone: string, text: string): Promise<string[] | null> {
     if (!this.orgId) return null;
-    const projects = (await this.prisma.colonyProject.findMany({ where: { organizationId: this.orgId } })).filter((x) =>
-      ((x.companyNumbers as string[]) ?? []).includes(phone),
-    );
+    // Company numbers, and the owner in "कंपनी मोड".
+    const projects = await this.companyProjects(phone);
     if (!projects.length) return null;
     // One number may send for several projects: the project's name / alias in the message picks it,
     // else the one this number last wrote about (30 minutes), else ask.

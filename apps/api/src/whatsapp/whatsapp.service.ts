@@ -26,6 +26,9 @@ import {
 } from "./webhook-diagnostics.js";
 
 /** A voice note that could not be understood: never "please type" -- many customers cannot. */
+/** "सब भेज दिया", "डीड बना दो", "हो गया": the sender is done sending pages. */
+const FINISH_WORDS = /(डीड|डिड|deed|did)\s*(बना|bana|banao|बनाओ|बनादो)|बना\s*दो|bana\s*do|banado|सब\s*भेज|sab\s*bhej|भेज\s*दिया|bhej\s*diya|bhej\s*diye|^(हो\s*गया|ho\s*gaya|done|बस|bas)[\s!.।]*$/i;
+
 export const VOICE_NOT_HEARD = "🎙️ आपकी आवाज़ साफ़ समझ नहीं आई। कृपया दोबारा धीरे बोलकर भेजें, या 4 लिखें — हमारा स्टाफ आपसे बात करेगा। कार्यालय फ़ोन: 78984 75648";
 
 @Injectable()
@@ -150,18 +153,27 @@ export class WhatsappService {
         this.log.log(`message ${msg.id} from owner route=company-mode-on`);
         return;
       }
+      // "फ्लोर की डिड बनानी है": a colony project's deed -- company mode at once, the paper is awaited.
+      if (!companyMode && !testing && this.colony && msg.type === "text") {
+        const project = await this.colony.ownerDeedProject(body);
+        if (project) {
+          const on = this.colony.startOwnerCompanyMode(from);
+          await this.send(from, [`🏢 ${project} की डीड — कागज़ के सारे पन्ने (डिटेल, भुगतान, नक्शा) भेजें, डीड अपने आप बनेगी।\n${on[0]!.split("\n").slice(-1)[0]}`]);
+          this.log.log(`message ${msg.id} from owner route=company-mode-on (deed words)`);
+          return;
+        }
+      }
       if (companyMode && this.colony) {
         if (msg.type === "document" || msg.type === "image") {
           await this.queuePaper(from, msg);
           return;
         }
         if (msg.type === "text") {
-          const company = await this.colony.handleCompany(from, body);
-          if (company) {
-            await this.send(from, company);
-            this.log.log(`message ${msg.id} from owner route=company replies=${company.length}`);
-            return;
-          }
+          // In कंपनी मोड a text is never a task: "डीड बना दो" reads / finishes the paper, else the company help.
+          const replies = (await this.companyText(from, body)) ?? ['🏢 कंपनी मोड चालू है। बिक्री का कागज़ (फ़ोटो / PDF) भेजें, या "ओनर मोड" लिखें।'];
+          await this.send(from, replies);
+          this.log.log(`message ${msg.id} from owner route=company replies=${replies.length}`);
+          return;
         }
       }
       // A PDF / photo from the owner belongs to a task, never to the customer draft flow.
@@ -199,7 +211,7 @@ export class WhatsappService {
     }
     // A colony project's company people (company mode): plot status, counts, sale drafts.
     if (msg.type === "text" && this.colony) {
-      const company = await this.colony.handleCompany(from, String(msg.text?.body ?? ""));
+      const company = await this.companyText(from, String(msg.text?.body ?? ""));
       if (company) {
         await this.send(from, company);
         this.log.log(`message ${msg.id} from ${maskPhone(from)} route=company replies=${company.length}`);
@@ -275,6 +287,28 @@ export class WhatsappService {
   private paperWaitMs(): number {
     const n = Number(process.env.WA_PAPER_WAIT_MS ?? 15_000);
     return Number.isFinite(n) && n >= 0 ? n : 15_000;
+  }
+
+  /**
+   * A company number's (or the owner's in कंपनी मोड) text: "सब भेज दिया" / "डीड बना दो" reads the
+   * waiting pages now, or finishes the last paper's sale; anything else is company mode (plot, status).
+   */
+  private async companyText(from: string, body: string): Promise<string[] | null> {
+    if (!this.colony) return null;
+    if (FINISH_WORDS.test(body.trim())) {
+      const waiting = this.papers.get(from);
+      if (waiting?.files.length) {
+        clearTimeout(waiting.timer);
+        await this.readPaper(from);
+        return [];
+      }
+      const r = await this.colony.companyFinish(from);
+      if (r) {
+        if (r.ownerAlert) await this.outbox.alertOwners(r.ownerAlert).catch(() => undefined);
+        return r.replies;
+      }
+    }
+    return this.colony.handleCompany(from, body);
   }
 
   private async queuePaper(from: string, msg: any): Promise<void> {

@@ -161,7 +161,8 @@ export function isTaskListQuery(text: string): boolean {
 export function isBulkCancel(text: string): boolean {
   const s = norm(text);
   if (/^#?\d{1,4}\s/.test(s)) return false;
-  return REMOVE_WORDS.test(s) && TASK_WORDS.test(s) && MANY_WORDS.test(s);
+  // "पुराना सब डिलीट कर दो": all the old tasks (asked before anything is removed).
+  return REMOVE_WORDS.test(s) && MANY_WORDS.test(s) && (TASK_WORDS.test(s) || /पुरान|purana|purane|purani|old/i.test(s));
 }
 
 // ---------- the work named in the owner's own words ----------
