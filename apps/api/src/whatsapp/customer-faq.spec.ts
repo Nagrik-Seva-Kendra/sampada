@@ -47,6 +47,23 @@ describe("everyday questions, in every kind of writing", () => {
     ["papa ki death ho gayi, makan bechna hai", "seller-died"],
     ["malik guzar gaye plot kaise bikega", "seller-died"],
     ["The seller passed away, what now?", "seller-died"],
+    ["seller NRI hai dubai me rehta hai registry kaise hogi", "nri"],
+    ["विदेश में रहने वाले भाई की रजिस्ट्री", "nri"],
+    ["nabalig bachche ki property bechni hai", "minor"],
+    ["loan wala makan bech sakte hai kya", "loan"],
+    ["बंधक वाली जमीन बेचनी है", "loan"],
+    ["GPA se kharida plot mera hai kya", "gpa-sale"],
+    ["bayana de diya to kya main malik ho gaya", "agreement-only"],
+    ["ikrarnama ho gaya, kya ab property meri ho gayi?", "agreement-only"],
+    ["पुश्तैनी जमीन बेचनी है", "joint"],
+    ["joint property sell karni hai", "joint"],
+    ["GDA ka plot bechna hai", "lease-plot"],
+    ["lease wala plot transfer kaise hoga", "lease-plot"],
+    ["kheti ki zameen kaun kharid sakta hai", "agri-land"],
+    ["diversion kaise hoga", "agri-land"],
+    ["aadhar aur registry me naam ki spelling alag hai", "name-mismatch"],
+    ["kabza kab milega", "possession"],
+    ["registry me dhokha hua kya karu", "registry-cancel"],
   ])("%s → %s", (text, topic) => {
     expect(faqAnswer(text)?.topic).toBe(topic);
   });
@@ -69,6 +86,25 @@ describe("everyday questions, in every kind of writing", () => {
     expect(faqAnswer("deadline kab hai")?.topic).not.toBe("seller-died");
   });
 
+  it("the owner's corrections are said as given", () => {
+    expect(faqAnswer("loan wala makan bechna hai")!.text).toContain("बंधक मुक्त");
+    const gift = faqAnswer("dan patra banwana hai")!.text;
+    expect(gift).toContain("गाइडलाइन मूल्य का 7.6% स्टाम्प ड्यूटी");
+    expect(gift).toContain("रजिस्ट्री (विक्रय पत्र) के बराबर");
+    expect(gift).toContain("2 गवाह");
+    expect(faqAnswer("bhai ke naam property transfer karni hai")!.text).toContain("7.6%");
+    expect(faqAnswer("kheti ki zameen kaun kharid sakta hai")!.text).toContain("कोई भी ख़रीद सकता है");
+    expect(faqAnswer("vasiyat banwani hai")!.text).toContain("रजिस्ट्रेशन ज़रूरी नहीं");
+    expect(faqAnswer("kirayanama banwana hai")!.text).toContain("1 साल से ज़्यादा");
+    expect(faqAnswer("kya registry cancel ho sakti hai")!.text).toContain("दीवानी न्यायालय");
+  });
+
+  it("asking to make a mortgage or a registry is not a legal question", () => {
+    for (const t of ["bandhak banwana hai", "registry karwani hai", "makan bechna hai", "GDA patta", "khet"]) {
+      expect(["loan", "joint", "lease-plot", "agri-land"]).not.toContain(faqAnswer(t)?.topic);
+    }
+  });
+
   it("the woman / rate answers use the estimate's own figures", () => {
     const w = faqAnswer("mahila ke naam chhoot")!.text;
     expect(w).toContain("1%");
@@ -84,6 +120,8 @@ describe("everyday questions, in every kind of writing", () => {
     expect(looksLikeQuestion("hello")).toBe(false);
     expect(looksLikeQuestion("ganga vihar")).toBe(false);
     for (const t of ["kitne baje aau", "kya sunday ko khula hai", "kal khula rahega kya"]) expect(isOfficeInfo(t)).toBe(true);
+    // "do" inside a word ("padosi") is not "address do".
+    expect(isOfficeInfo("padosi ne rasta band kar diya")).toBe(false);
   });
 });
 
@@ -121,21 +159,21 @@ describe("conversations", () => {
   it("a question the bot cannot answer goes to the owner (numbers masked), once per 5 minutes; the customer is told", async () => {
     const w = world();
     const t0 = new Date("2026-10-06T06:00:00Z");
-    const r = await w.say("NRI buyer kaise sign karega, aadhar 1234 5678 9012", t0);
+    const r = await w.say("padosi ne rasta band kar diya ab kya karu, aadhar 1234 5678 9012", t0);
     expect(r).toMatchObject({ replies: [QUESTION_FORWARDED], route: "question-forwarded", force: true });
     const alert = String((w.outbox.alertOwners.mock.calls as unknown[][])[0]![0]);
     expect(alert).toContain("+91 90000 08888");
     expect(alert).toContain("[NUMBER]");
     expect(alert).not.toContain("5678");
-    await w.say("NRI kaise sign karega?", new Date(t0.getTime() + 60_000));
+    await w.say("padosi se jhagda hai kya karu?", new Date(t0.getTime() + 60_000));
     expect(w.outbox.alertOwners).toHaveBeenCalledTimes(1);
-    await w.say("NRI kaise sign karega?", new Date(t0.getTime() + 6 * 60_000));
+    await w.say("padosi se jhagda hai kya karu?", new Date(t0.getTime() + 6 * 60_000));
     expect(w.outbox.alertOwners).toHaveBeenCalledTimes(2);
   });
 
   it("a question about a registry is sent on too, with the draft how-to", async () => {
     const w = world();
-    const r = await w.say("kya NRI ki registry ho sakti hai");
+    const r = await w.say("kya registry raat me ho sakti hai");
     expect(r.route).toBe("draft-question");
     expect(r.replies[0]).toContain("स्टाफ को भेज दिया");
     expect(w.outbox.alertOwners).toHaveBeenCalledTimes(1);

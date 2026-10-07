@@ -29,7 +29,7 @@ const WHERE_WORD = /पता|address|एड्रेस|location|लोके�
 /** "ऑफिस कब खुलता है", "address bhejo", "आपका ऑफिस कहाँ है": office hours / address. */
 export function isOfficeInfo(text: string): boolean {
   const s = clean(text);
-  if (WHERE_WORD.test(s) && (OFFICE_WORD.test(s) || /^(address|पता|location|लोकेशन)/i.test(s) || /(bhejo|भेजो|batao|बताओ|do|दो)/i.test(s))) return true;
+  if (WHERE_WORD.test(s) && (OFFICE_WORD.test(s) || /^(address|पता|location|लोकेशन)/i.test(s) || /(bhejo|भेजो|batao|बताओ|\bdo\b|दो)/i.test(s))) return true;
   if (OFFICE_WORD.test(s) && WHEN_WORD.test(s)) return true;
   // "kitne baje aau", "kya sunday ko khula hai", "kal khula rahega": the office is meant.
   return (
