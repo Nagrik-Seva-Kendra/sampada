@@ -65,6 +65,8 @@ export interface TaskList {
   data: TaskItem[];
   /** OWNER/ADMIN: may see all, assign. */
   canManage: boolean;
+  /** OWNER only: may delete a task for good. */
+  canDelete?: boolean;
 }
 
 export const TaskCreateInput = z

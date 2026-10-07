@@ -33,6 +33,15 @@ export function useCreateTask() {
   });
 }
 
+export function useDeleteTask() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, string>({
+    mutationFn: (id) => api.delete(`tasks/${id}`, { headers: authHeaders(token) }).json<{ ok: true }>(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
 export function useUpdateTask() {
   const token = useAuthStore((s) => s.token);
   const qc = useQueryClient();

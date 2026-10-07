@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { TaskCreateInput, TaskStatus, TaskUpdateInput } from "@sampada/shared";
 import { JwtStaffGuard } from "../auth/jwt-staff.guard.js";
@@ -36,5 +36,11 @@ export class TasksController {
   @Patch(":id")
   update(@Param("id") id: string, @Body() body: unknown) {
     return this.service.updateWeb(id, TaskUpdateInput.parse(body));
+  }
+
+  /** OWNER only (checked in the service). */
+  @Delete(":id")
+  remove(@Param("id") id: string) {
+    return this.service.deleteWeb(id);
   }
 }

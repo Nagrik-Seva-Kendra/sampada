@@ -11,7 +11,7 @@ import {
 } from "@sampada/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { requireTenantContext } from "../tenant/current-tenant.js";
-import { readMedia } from "../whatsapp/wa-media.js";
+import { deleteMedia, readMedia } from "../whatsapp/wa-media.js";
 import { applyFill, type TaskFileFill } from "./task-rules.js";
 
 export const isTaskManager = (role: string) => role === "OWNER" || role === "ADMIN";
@@ -106,7 +106,7 @@ export class TasksService {
       take: 500,
     });
     const names = await this.userNames(rows.map((r) => r.assigneeId));
-    return { data: rows.map((r) => toTaskItem(r, r.assigneeId ? (names.get(r.assigneeId) ?? null) : null)), canManage };
+    return { data: rows.map((r) => toTaskItem(r, r.assigneeId ? (names.get(r.assigneeId) ?? null) : null)), canManage, canDelete: t.role === "OWNER" };
   }
 
   async createWeb(input: TaskCreateInput): Promise<TaskItem> {
@@ -148,6 +148,18 @@ export class TasksService {
       },
     });
     return this.item(updated);
+  }
+
+  /** OWNER only: the task is removed for good, with its file. */
+  async deleteWeb(id: string): Promise<{ ok: true }> {
+    const t = requireTenantContext(this.cls);
+    if (t.role !== "OWNER") throw new ForbiddenException("काम केवल मालिक हटा सकते हैं।");
+    const row = await this.prisma.task.findFirst({ where: { id, organizationId: t.organizationId } });
+    if (!row) throw new NotFoundException("काम नहीं मिला।");
+    await this.prisma.task.delete({ where: { id: row.id } });
+    if (row.documentKey) await deleteMedia(row.documentKey).catch(() => this.log.warn(`task #${row.number}: file not deleted`));
+    this.log.log(`task #${row.number} deleted by the owner`);
+    return { ok: true };
   }
 
   // ---------- org-explicit (WhatsApp assistant, jobs) ----------

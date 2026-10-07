@@ -7,7 +7,7 @@ import { apiErrorMessage } from "../../lib/api";
 import { useWaAssignees } from "../whatsapp/useWhatsappRequests";
 import { useWaT } from "../whatsapp/waI18n";
 import { formatDate } from "../whatsapp/waLabels";
-import { useCreateTask, useTaskDocumentOpener, useTasks, useUpdateTask } from "./useTasks";
+import { useCreateTask, useDeleteTask, useTaskDocumentOpener, useTasks, useUpdateTask } from "./useTasks";
 import "../whatsapp/waRequests.css";
 
 type Tab = "today" | "overdue" | "upcoming" | "nodate" | "done";
@@ -62,6 +62,7 @@ export function TasksPage() {
   const [editing, setEditing] = useState<TaskItem | "new" | null>(null);
   const query = useTasks(assignee);
   const canManage = query.data?.canManage ?? false;
+  const canDelete = query.data?.canDelete ?? false;
   const staff = useWaAssignees(canManage);
   const update = useUpdateTask();
   const now = new Date();
@@ -165,7 +166,7 @@ export function TasksPage() {
         ))}
       </div>
       {editing && (
-        <TaskDialog task={editing === "new" ? null : editing} canManage={canManage} staff={staff.data ?? []} onClose={() => setEditing(null)} />
+        <TaskDialog task={editing === "new" ? null : editing} canManage={canManage} canDelete={canDelete} staff={staff.data ?? []} onClose={() => setEditing(null)} />
       )}
     </section>
   );
@@ -174,17 +175,20 @@ export function TasksPage() {
 function TaskDialog({
   task,
   canManage,
+  canDelete,
   staff,
   onClose,
 }: {
   task: TaskItem | null;
   canManage: boolean;
+  canDelete: boolean;
   staff: { id: string; name: string }[];
   onClose: () => void;
 }) {
   const { t } = useWaT();
   const create = useCreateTask();
   const update = useUpdateTask();
+  const remove = useDeleteTask();
   const [f, setF] = useState({
     title: task?.title ?? "",
     partyName: task?.partyName ?? "",
@@ -196,7 +200,17 @@ function TaskDialog({
     assigneeId: task?.assigneeId ?? "",
   });
   const [error, setError] = useState<string | null>(null);
-  const busy = create.isPending || update.isPending;
+  const busy = create.isPending || update.isPending || remove.isPending;
+  async function onDelete() {
+    if (!task || !window.confirm(t("tkDeleteConfirm").replace("{n}", String(task.number)))) return;
+    setError(null);
+    try {
+      await remove.mutateAsync(task.id);
+      onClose();
+    } catch (err) {
+      setError(await apiErrorMessage(err, t("tkDeleteError")));
+    }
+  }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -288,6 +302,11 @@ function TaskDialog({
           <button type="submit" className="btn-calc modal-submit" disabled={busy || !f.title.trim()}>
             {busy ? t("tkSaving") : t("tkSave")}
           </button>
+          {task && canDelete && (
+            <button type="button" className="modal-submit modal-delete" disabled={busy} onClick={onDelete}>
+              🗑️ {t("tkDelete")}
+            </button>
+          )}
         </form>
       </div>
     </div>
