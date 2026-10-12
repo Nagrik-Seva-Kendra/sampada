@@ -84,7 +84,7 @@ function world(opts: { ownerInWindow?: string[]; settings?: any } = {}) {
     },
     waContact: {
       findUnique: async ({ where }: any) =>
-        (opts.ownerInWindow ?? []).includes(where.phone) ? { phone: where.phone, lastInboundAt: new Date(AT_2030.getTime() - 3600_000) } : null,
+        (opts.ownerInWindow ?? []).includes(where.phone) ? { phone: where.phone, lastInboundAt: new Date(Date.now() - 3600_000) /* inWindow reads the real clock */ } : null,
     },
   };
   const posts: { to: string; type: string; body: any }[] = [];

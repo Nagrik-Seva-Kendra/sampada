@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AiDraftAvailability, AiDraftRunItem, AiDraftSettings, AiEvalItem, AiLearningView, AiPropertyTypeT } from "@sampada/shared";
+import type { AiArchiveDeedItem, AiDraftAvailability, AiDraftRunItem, AiDraftSettings, AiEvalItem, AiLearningView, AiPropertyTypeT } from "@sampada/shared";
 import { api } from "../../lib/api";
 import { authHeaders, useAuthStore } from "../../stores/authStore";
 
@@ -96,5 +96,30 @@ export function useAiDecideRule() {
   return useMutation<AiLearningView, Error, { id: string; approve: boolean }>({
     mutationFn: ({ id, approve }) => api.put(`ai-draft/learning/${id}`, { headers: authHeaders(token), json: { approve } }).json<AiLearningView>(),
     onSuccess: (d) => qc.setQueryData(["ai-draft", "learning"], d),
+  });
+}
+
+/** The archive's usable sale deeds of one type ("none" = no clear type); null = closed. */
+export function useAiArchive(propertyType: AiPropertyTypeT | "none" | null) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["ai-draft", "archive", propertyType],
+    enabled: !!token && !!propertyType,
+    retry: false,
+    queryFn: () => api.get("ai-draft/archive", { headers: authHeaders(token), searchParams: { propertyType: propertyType! } }).json<AiArchiveDeedItem[]>(),
+  });
+}
+
+/** OWNER: a deed's type by hand (null = back to the rules). */
+export function useAiSetDeedType() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation<AiArchiveDeedItem, Error, { deedId: string; propertyType: AiPropertyTypeT | null }>({
+    mutationFn: ({ deedId, propertyType }) =>
+      api.put(`ai-draft/archive/${deedId}`, { headers: authHeaders(token), json: { propertyType } }).json<AiArchiveDeedItem>(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-draft", "archive"] });
+      qc.invalidateQueries({ queryKey: ["ai-draft", "settings"] });
+    },
   });
 }

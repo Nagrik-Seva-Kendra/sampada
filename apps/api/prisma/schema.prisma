@@ -981,6 +981,10 @@ model DeedArchiveIndex {
   tehsil         String?
   district       String?
   starred        Boolean  @default(false)
+  /// Set by the owner on the AI draft page (plot | building | agricultural | flat); wins over the rules.
+  manualType     String?
+  /// PROPERTY_RULES_VERSION the type was read with: an older one is read again once.
+  rulesVersion   Int      @default(1)
   indexedAt      DateTime
 
   @@index([organizationId, deedType, propertyType])

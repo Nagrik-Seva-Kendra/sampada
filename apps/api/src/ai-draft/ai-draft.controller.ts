@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
-import { AiDraftToggleInput, AiEvalStartInput, AiRuleDecisionInput, AiStarInput } from "@sampada/shared";
+import { AiArchiveListQuery, AiDeedTypeInput, AiDraftToggleInput, AiEvalStartInput, AiRuleDecisionInput, AiStarInput } from "@sampada/shared";
 import { JwtStaffGuard, type StaffUser } from "../auth/jwt-staff.guard.js";
 import { AiDraftService } from "./ai-draft.service.js";
 
@@ -25,6 +25,16 @@ export class AiDraftController {
   star(@Body() body: unknown) {
     const i = AiStarInput.parse(body);
     return this.service.star(i.deedId, i.starred);
+  }
+
+  @Get("archive")
+  archive(@Query() q: unknown) {
+    return this.service.archiveList(AiArchiveListQuery.parse(q).propertyType);
+  }
+
+  @Put("archive/:deedId")
+  setDeedType(@Param("deedId") deedId: string, @Body() body: unknown) {
+    return this.service.setDeedType(deedId, AiDeedTypeInput.parse(body).propertyType);
   }
 
   @Get("evals")

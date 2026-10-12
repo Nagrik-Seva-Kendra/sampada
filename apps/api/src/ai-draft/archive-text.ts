@@ -27,18 +27,56 @@ export function aiPropertyTypeOf(extractType: string | null | undefined): AiProp
   }
 }
 
+/** Bump when the rules below change: every archive deed is read again once (manual types stay). */
+export const PROPERTY_RULES_VERSION = 2;
+
+const FLAT_RE = /फ्लैट|फ़्लैट|flat\s*(no|नं|क्रमांक)|अपार्टमेंट|apartment|फ्लोर पर स्थित/i;
+/** Diverted colony land ("कृषि भूमि ... आवासीय प्रयोजन हेतु व्यपवर्तित"): its कृषि words are history, not this property. */
+const DIVERTED_RE = /डायवर्सन|डायवर्ट|व्यपवर्तन|व्यपवर्तित|diversion|diverted/i;
+const AGRI_STRONG_RE = /कृषि\s*भूमि|कृषि\s*योग्य|सिंचित|असिंचित|खेती/;
+/** A permission or a future right ("मकान बना सकेगा", "निर्माण की अनुमति") is not a building on the property. */
+// Only the clause around the verb (up to a comma), so "निर्मित मकान, जिसका नामांतरण करा सकेगा" keeps its मकान.
+const FUTURE_CLAUSE_RE = /[^।\n,;]{0,80}(सकेगा|सकेगी|सकेंगे|सकता|सकती|सकते|अनुमति|स्वीकृति|करेगा|करेगी|करेंगे|बनाएगा|बनाएँगे)[^।\n,;]*/g;
+const BUILDING_RE =
+  /मकान|भवन|निर्मित(?!\s*(कॉलोनी|कालोनी|colony))|निर्माण\s*सहित|दुकान|कमरे|कमरा|आर\.?\s*सी\.?\s*सी|आर\.?\s*बी\.?\s*सी|मंजिल|मंज़िल|टीनशेड|टिनशेड/i;
+const PLOT_RE = /प्ला(ट|ॅट)|प्लॉट|भूखण्ड|भूखंड/;
+/** A colony-sized area ("1200 वर्गफुट", "111.48 वर्गमीटर"): a plot, even inside "सर्वे क्रमांक ... हेक्टेयर में से". */
+const SMALL_AREA_RE = /वर्ग\s*फ(ु|ी)ट|वर्ग\s*मीटर|स्क्वायर|sq\.?\s*(ft|feet|m)/i;
+const HECTARE_RE = /हेक्टेयर|हैक्टेयर|hectare/i;
+
+/** The title says it plainly ("भवन/मकान री सेल ...", "प्लाट नं. 47 ...", "कृषि भूमि ..."). */
+export function propertyTypeFromTitle(title: string): AiPropertyType | null {
+  const t = title ?? "";
+  if (FLAT_RE.test(t) || /\bflat\b/i.test(t)) return "flat";
+  if (/भवन|मकान|बिल्डिंग|building|house|दुकान|shop/i.test(t)) return "building";
+  if (/कृषि|खेत|agricultur/i.test(t)) return "agricultural";
+  if (/प्ला(ट|ॅट)|प्लॉट|भूखण्ड|भूखंड|\bplot\b/i.test(t)) return "plot";
+  return null;
+}
+
 /**
- * Property type of an archive deed from its words. Flat is separate from
- * building; agricultural wins over plot ("सर्वे क्रमांक ... कृषि भूमि").
- * null when the text gives no clear signal (such deeds are never used).
+ * Property type of an archive deed (rules v2): the title first; then the text
+ * without the boundaries -- flat; agricultural only on real farm words (कृषि
+ * भूमि / सिंचित / असिंचित / खेती, not of diverted colony land); a building on
+ * the property (not a permission to build); a plot ("प्लाट क्रमांक ... वर्गफुट");
+ * "सर्वे क्रमांक" never counts and हेक्टेयर only when nothing else is said.
+ * null when the deed gives no clear signal (never used for AI drafts).
  */
-export function classifyPropertyType(content: string): AiPropertyType | null {
+export function classifyPropertyType(content: string, title = ""): AiPropertyType | null {
+  const byTitle = propertyTypeFromTitle(title);
+  if (byTitle) return byTitle;
   // Boundaries name the neighbours' houses / roads: not this property.
   const s = withoutBoundaries(content);
-  if (/फ्लैट|फ़्लैट|flat\s*no|अपार्टमेंट|apartment|फ्लोर पर स्थित/i.test(s)) return "flat";
-  if (/कृषि\s*भूमि|सर्वे\s*(क्रमांक|नं)|खसरा\s*(क्रमांक|नं)[^।\n]{0,80}हेक्टेयर|हेक्टेयर|सिंचित|असिंचित/.test(s)) return "agricultural";
-  if (/मकान|भवन|निर्मित|निर्माण\s*सहित|दुकान|कमरे|पक्का\s*मकान|आर\.?\s*सी\.?\s*सी/.test(s)) return "building";
-  if (/प्ला(ट|ॅट)\s*(क्रमांक|नं)|भूखण्ड|भूखंड|प्लाट/.test(s)) return "plot";
+  if (FLAT_RE.test(s)) return "flat";
+  if (AGRI_STRONG_RE.test(s) && !DIVERTED_RE.test(s)) return "agricultural";
+  // Not this property: the boundaries written in a sentence, the parties' addresses ("निवासी मकान नं. 12").
+  const own = s
+    .replace(/(चतुःसीमा|चतुर्सीमा|चौहद्दी|चतु:सीमा)[^।]{0,400}/g, " ")
+    .replace(/(निवासी|निवासरत|पता|address)[^।\n,]{0,120}/gi, " ");
+  // Nor a permission / future right ("मकान बना सकेगा") -- for the building test only.
+  if (BUILDING_RE.test(own.replace(FUTURE_CLAUSE_RE, " "))) return "building";
+  if (PLOT_RE.test(own) || SMALL_AREA_RE.test(own)) return "plot";
+  if (HECTARE_RE.test(s)) return "agricultural";
   return null;
 }
 

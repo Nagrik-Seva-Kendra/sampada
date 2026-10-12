@@ -289,6 +289,36 @@ describe("AiDraftService", () => {
     expect(calls.every((c) => !c.user.includes("रामलाल") && c.user.includes("परीक्षण क्रेता"))).toBe(true);
   });
 
+  it("counts per type, re-reads old-rule rows once, keeps the owner's hand-set type", async () => {
+    const s = svc();
+    // Read with the old rules: a colony plot filed as agricultural, rulesVersion 1.
+    await s.ensureIndex(ORG, "sale-deed");
+    const row = prisma.t.deedArchiveIndex.find((r: any) => r.deedId === "old-0");
+    Object.assign(row, { propertyType: "agricultural", rulesVersion: 1 });
+    await prisma.deedTemplate.create({ data: { id: "house-1", type: "sale-deed", title: "भवन/मकान री सेल", content: "सर्वे क्रमांक 5 रकबा 1 हेक्टेयर", status: "active", starterSourceId: null, updatedAt: new Date() } });
+    await prisma.deedTemplate.create({ data: { id: "vague-1", type: "sale-deed", title: "विक्रय पत्र", content: "कोई विवरण नहीं", status: "active", starterSourceId: null, updatedAt: new Date() } });
+    await prisma.deedTemplate.create({ data: { id: "starter-1", type: "sale-deed", title: "प्लाट", content: OLD_DEED, status: "active", starterSourceId: "x", updatedAt: new Date() } });
+    const d = await s.settings();
+    expect(row.propertyType).toBe("plot"); // re-read with the new rules
+    expect(row.rulesVersion).toBeGreaterThan(1);
+    expect(d.counts).toEqual({ plot: 12, building: 1, agricultural: 1, flat: 0, none: 1 }); // the starter copy is not counted
+
+    // The owner moves a deed by hand; a later rules change does not undo it.
+    await expect(svc("ADMIN").setDeedType("old-1", "building")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(await s.setDeedType("old-1", "building")).toMatchObject({ propertyType: "building", manual: true });
+    const moved = prisma.t.deedArchiveIndex.find((r: any) => r.deedId === "old-1");
+    moved.rulesVersion = 1;
+    expect((await s.settings()).counts).toMatchObject({ plot: 11, building: 2 });
+    expect(moved.propertyType).toBe("building");
+    expect((await svc("ADMIN").archiveList("building")).map((x) => [x.deedId, x.manual])).toEqual(expect.arrayContaining([["old-1", true], ["house-1", false]]));
+    expect((await s.archiveList("none")).map((x) => x.deedId)).toEqual(["vague-1"]);
+    await expect(svc("EMPLOYEE", "u-emp").archiveList("plot")).rejects.toBeInstanceOf(ForbiddenException);
+    // Back to the rules.
+    expect(await s.setDeedType("old-1", null)).toMatchObject({ propertyType: "plot", manual: false });
+    expect((await s.settings()).counts.plot).toBe(12);
+    await expect(s.setDeedType("missing", "plot")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it("ideal deed: id, edit / share link (with ?query, #hash) or title; ambiguous title asks for the link", async () => {
     const star = async (ref: string) => (await svc().star(ref, true)).starred.map((x: any) => x.deedId);
     expect(await star("old-3")).toContain("old-3");
