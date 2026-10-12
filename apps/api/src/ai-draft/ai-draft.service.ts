@@ -4,6 +4,7 @@ import { ClsService } from "nestjs-cls";
 import type { Prisma } from "@prisma/client";
 import { formatParty, formatPartyBlock, formatPropertyBlock } from "@sampada/shared";
 import type {
+  AiArchiveDeedItem,
   AiLearnedRuleItem,
   AiLearningView,
   AiDraftAvailability,
@@ -27,6 +28,7 @@ import {
   type Candidate,
   classifyPropertyType,
   leakCount,
+  PROPERTY_RULES_VERSION,
   maskArchive,
   pickExamples,
   type PlaceText,
@@ -49,6 +51,8 @@ import {
   validateDraft,
 } from "./draft-rules.js";
 
+const aiPropertyTypeOrNull = (v: string | null | undefined): AiPropertyType | null =>
+  v && (AI_PROPERTY_TYPES as string[]).includes(v) ? (v as AiPropertyType) : null;
 const isManager = (role: string) => role === "OWNER" || role === "ADMIN";
 const DEFAULT_THRESHOLD = 0.95;
 const EVAL_SIZE = 50;
@@ -130,6 +134,7 @@ export class AiDraftService {
       starred: stars.map((s) => ({ deedId: s.deedId, title: titles.find((x) => x.id === s.deedId)?.title ?? "—", propertyType: s.propertyType })),
       model: AI_DRAFT_MODEL(),
       canManage: t.role === "OWNER",
+      counts: await this.counts(t.organizationId),
     };
   }
 
@@ -183,41 +188,91 @@ export class AiDraftService {
   }
 
   // ---------- archive index ----------
-  private async indexOne(organizationId: string, d: { id: string; type: string; content: string }) {
+  /** Re-reads one deed: rules v{PROPERTY_RULES_VERSION} on title + text; a type the owner set by hand stays. */
+  private async indexOne(organizationId: string, d: { id: string; type: string; title?: string; content: string }) {
     const place = placeOf(d.content);
-    const data = { organizationId, deedType: d.type, propertyType: classifyPropertyType(d.content), ...place, indexedAt: new Date() };
+    const prev = await this.prisma.deedArchiveIndex.findUnique({ where: { deedId: d.id }, select: { manualType: true } });
+    const manual = aiPropertyTypeOrNull(prev?.manualType);
+    const propertyType = manual ?? classifyPropertyType(d.content, d.title ?? "");
+    const data = { organizationId, deedType: d.type, propertyType, ...place, rulesVersion: PROPERTY_RULES_VERSION, indexedAt: new Date() };
     await this.prisma.deedArchiveIndex.upsert({ where: { deedId: d.id }, create: { deedId: d.id, ...data }, update: data });
   }
 
-  /** Indexes this org's deeds of `type` that are new or changed since they were last read. */
+  /** Indexes this org's deeds of `type` that are new, changed, or read with older rules. */
   async ensureIndex(organizationId: string, type: DeedType): Promise<void> {
     const deeds = await this.prisma.deedTemplate.findMany({ where: { type, status: "active" }, select: { id: true, updatedAt: true } });
-    const idx = await this.prisma.deedArchiveIndex.findMany({ where: { organizationId, deedType: type }, select: { deedId: true, indexedAt: true } });
-    const at = new Map(idx.map((i) => [i.deedId, i.indexedAt]));
-    const stale = deeds.filter((d) => !at.has(d.id) || at.get(d.id)! < d.updatedAt).map((d) => d.id);
+    const idx = await this.prisma.deedArchiveIndex.findMany({
+      where: { organizationId, deedType: type },
+      select: { deedId: true, indexedAt: true, rulesVersion: true },
+    });
+    const at = new Map(idx.map((i) => [i.deedId, i]));
+    const stale = deeds
+      .filter((d) => {
+        const i = at.get(d.id);
+        return !i || i.indexedAt < d.updatedAt || (i.rulesVersion ?? 1) < PROPERTY_RULES_VERSION;
+      })
+      .map((d) => d.id);
     for (let i = 0; i < stale.length; i += 100) {
-      const rows = await this.prisma.deedTemplate.findMany({ where: { id: { in: stale.slice(i, i + 100) } }, select: { id: true, type: true, content: true } });
+      const rows = await this.prisma.deedTemplate.findMany({
+        where: { id: { in: stale.slice(i, i + 100) } },
+        select: { id: true, type: true, title: true, content: true },
+      });
       for (const r of rows) await this.indexOne(organizationId, r);
     }
     if (stale.length) this.log.log(`archive index: ${stale.length} ${type} deed(s) read`);
   }
 
-  /** Same deed type + property type only; hand-made deeds (no unreviewed AI drafts, no starter copies). */
-  private async candidates(organizationId: string, type: DeedType, pt: AiPropertyType, excludeId?: string): Promise<Candidate[]> {
+  /** The archive deeds an eval / draft may use (same filter as candidates), with their index rows. */
+  private async usable(organizationId: string, type: DeedType) {
     await this.ensureIndex(organizationId, type);
-    const idx = await this.prisma.deedArchiveIndex.findMany({ where: { organizationId, deedType: type, propertyType: pt } });
+    const idx = await this.prisma.deedArchiveIndex.findMany({ where: { organizationId, deedType: type } });
     if (!idx.length) return [];
     const deeds = await this.prisma.deedTemplate.findMany({
       where: { id: { in: idx.map((i) => i.deedId) }, status: "active", starterSourceId: null, NOT: { aiDraftStatus: "REVIEW_PENDING" } },
       select: { id: true, title: true, updatedAt: true },
     });
     const meta = new Map(deeds.map((d) => [d.id, d]));
-    return idx
-      .filter((i) => meta.has(i.deedId) && i.deedId !== excludeId)
-      .map((i) => ({
+    return idx.filter((i) => meta.has(i.deedId)).map((i) => ({ i, d: meta.get(i.deedId)! }));
+  }
+
+  /** Usable sale deeds per property type ("none" = no clear type). */
+  private async counts(organizationId: string): Promise<AiDraftSettings["counts"]> {
+    const counts: AiDraftSettings["counts"] = { plot: 0, building: 0, agricultural: 0, flat: 0, none: 0 };
+    for (const { i } of await this.usable(organizationId, "sale-deed")) counts[aiPropertyTypeOrNull(i.propertyType) ?? "none"]++;
+    return counts;
+  }
+
+  /** OWNER/ADMIN: the usable sale deeds of one type (or "none"), newest first, at most 200. */
+  async archiveList(pt: AiPropertyTypeT | "none"): Promise<AiArchiveDeedItem[]> {
+    const t = requireTenantContext(this.cls);
+    if (!isManager(t.role)) throw new ForbiddenException("केवल मालिक या एडमिन।");
+    return (await this.usable(t.organizationId, "sale-deed"))
+      .filter(({ i }) => (aiPropertyTypeOrNull(i.propertyType) ?? "none") === pt)
+      .sort((a, b) => b.d.updatedAt.getTime() - a.d.updatedAt.getTime())
+      .slice(0, 200)
+      .map(({ i, d }) => ({ deedId: d.id, title: d.title, propertyType: aiPropertyTypeOrNull(i.propertyType), manual: !!i.manualType }));
+  }
+
+  /** OWNER: set a deed's property type by hand (null = back to the rules). Kept across re-reads. */
+  async setDeedType(deedId: string, pt: AiPropertyTypeT | null): Promise<AiArchiveDeedItem> {
+    const t = this.owner();
+    const deed = await this.prisma.deedTemplate.findFirst({ where: { id: deedId }, select: { id: true, type: true, title: true, content: true } });
+    if (!deed) throw new NotFoundException("डीड नहीं मिली।");
+    await this.indexOne(t.organizationId, deed);
+    const propertyType = pt ?? classifyPropertyType(deed.content, deed.title);
+    await this.prisma.deedArchiveIndex.update({ where: { deedId }, data: { manualType: pt, propertyType } });
+    this.log.log(`archive deed type set by owner (${pt ?? "rules"})`);
+    return { deedId, title: deed.title, propertyType, manual: pt != null };
+  }
+
+  /** Same deed type + property type only; hand-made deeds (no unreviewed AI drafts, no starter copies). */
+  private async candidates(organizationId: string, type: DeedType, pt: AiPropertyType, excludeId?: string): Promise<Candidate[]> {
+    return (await this.usable(organizationId, type))
+      .filter(({ i }) => i.propertyType === pt && i.deedId !== excludeId)
+      .map(({ i, d }) => ({
         deedId: i.deedId,
-        title: meta.get(i.deedId)!.title,
-        updatedAt: meta.get(i.deedId)!.updatedAt,
+        title: d.title,
+        updatedAt: d.updatedAt,
         starred: i.starred,
         colony: i.colony,
         village: i.village,

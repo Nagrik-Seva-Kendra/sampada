@@ -17,7 +17,21 @@ export interface AiDraftSettings {
   starred: { deedId: string; title: string; propertyType: string | null }[];
   model: string;
   canManage: boolean;
+  /** Usable sale deeds in the archive per type; "none" = the rules found no clear type. Eval needs 10. */
+  counts: Record<AiPropertyTypeT | "none", number>;
 }
+
+/** One archive deed and its type; manual = the owner set it by hand. */
+export interface AiArchiveDeedItem {
+  deedId: string;
+  title: string;
+  propertyType: AiPropertyTypeT | null;
+  manual: boolean;
+}
+
+export const AiArchiveListQuery = z.object({ propertyType: z.union([AiPropertyType, z.literal("none")]) });
+/** propertyType null = back to the automatic rules. */
+export const AiDeedTypeInput = z.object({ propertyType: AiPropertyType.nullable() }).strict();
 
 export const AiDraftToggleInput = z.object({ propertyType: AiPropertyType, enabled: z.boolean() }).strict();
 /** deedId: the deed's id, any app link to it (edit / share link, with ?query), or its title. */

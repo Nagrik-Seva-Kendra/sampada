@@ -5,9 +5,11 @@ import type { StringKey } from "../../i18n/strings";
 import { apiErrorMessage } from "../../lib/api";
 import { useWaT } from "../whatsapp/waI18n";
 import { formatDate } from "../whatsapp/waLabels";
-import { useAiDecideRule, useAiEvals, useAiLearning, useAiSettings, useAiSettingsActions } from "./useAiDraft";
+import { useAiArchive, useAiDecideRule, useAiEvals, useAiLearning, useAiSetDeedType, useAiSettings, useAiSettingsActions } from "./useAiDraft";
 
 const TYPES: AiPropertyTypeT[] = ["plot", "building", "agricultural", "flat"];
+/** An eval needs at least this many deeds of the type (EVAL_MIN on the server). */
+const EVAL_MIN = 10;
 
 /** OWNER/ADMIN view; OWNER changes: per-type on/off (only after a passing eval), evals, ideal deeds. */
 export function AiSettingsPage() {
@@ -47,6 +49,11 @@ export function AiSettingsPage() {
   const owner = d.canManage;
   const pct = (x: number) => Math.round(x * 100);
   const evalRunning = (evals.data ?? []).some((e) => e.status === "RUNNING");
+  const countPill = (n: number) => (
+    <span className={`status-pill ${n >= EVAL_MIN ? "good" : "warn"}`} title={n < EVAL_MIN ? t("aiCountLow", { min: EVAL_MIN }) : undefined}>
+      {t("aiCount", { n })}
+    </span>
+  );
 
   return (
     <section className="page">
@@ -75,12 +82,18 @@ export function AiSettingsPage() {
               <div key={pt} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
                 <b style={{ minWidth: 150 }}>{t(`aiPt_${pt}` as StringKey)}</b>
                 <span className={`status-pill ${d.enabled[pt] ? "good" : "neutral"}`}>{d.enabled[pt] ? t("aiOn") : t("aiOff")}</span>
+                {countPill(d.counts[pt])}
                 <span className="doc-sub" style={{ marginTop: 0, flex: "1 1 220px" }}>
                   {ev ? t("aiLastEval", { score: pct(ev.score), total: ev.total, at: formatDate(ev.finishedAt, lang) }) : t("aiNoEval")}
                 </span>
                 {owner && (
                   <>
-                    <button type="button" className="doc-btn" disabled={evalRunning || a.startEval.isPending} onClick={() => run(a.startEval.mutateAsync({ propertyType: pt }))}>
+                    <button
+                      type="button"
+                      className="doc-btn"
+                      disabled={evalRunning || a.startEval.isPending || d.counts[pt] < EVAL_MIN}
+                      title={d.counts[pt] < EVAL_MIN ? t("aiCountLow", { min: EVAL_MIN }) : undefined}
+                      onClick={() => run(a.startEval.mutateAsync({ propertyType: pt }))}>
                       {t("aiRunEval")}
                     </button>
                     <button
@@ -97,8 +110,17 @@ export function AiSettingsPage() {
               </div>
             );
           })}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
+            <b style={{ minWidth: 150 }}>{t("aiPt_none")}</b>
+            <span className="status-pill neutral">{t("aiCount", { n: d.counts.none })}</span>
+            <span className="doc-sub" style={{ marginTop: 0, flex: "1 1 220px" }}>
+              {t("aiNoneNote")}
+            </span>
+          </div>
           {owner && <p className="doc-sub">{t("aiEvalCostNote")}</p>}
         </div>
+
+        <ArchivePanel owner={owner} counts={d.counts} />
 
         <div className="dr-form" style={{ marginBottom: 14 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>{t("aiEvals")}</div>
@@ -168,6 +190,68 @@ export function AiSettingsPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The archive's sale deeds by type; the owner fixes a wrong type by hand (it stays when the rules change). */
+function ArchivePanel({ owner, counts }: { owner: boolean; counts: Record<AiPropertyTypeT | "none", number> }) {
+  const { t } = useWaT();
+  const [pt, setPt] = useState<AiPropertyTypeT | "none" | null>(null);
+  const list = useAiArchive(pt);
+  const setType = useAiSetDeedType();
+  const [error, setError] = useState<string | null>(null);
+  const change = async (deedId: string, v: string) => {
+    setError(null);
+    try {
+      await setType.mutateAsync({ deedId, propertyType: v === "auto" ? null : (v as AiPropertyTypeT) });
+    } catch (err) {
+      setError(await apiErrorMessage(err, t("aiError")));
+    }
+  };
+  const label = (k: AiPropertyTypeT | "none") => t(`aiPt_${k}` as StringKey);
+  return (
+    <div className="dr-form" style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>🗂 {t("aiArchiveTitle")}</div>
+      <p className="doc-sub" style={{ marginTop: 0 }}>
+        {t("aiArchiveIntro")}
+      </p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {[...TYPES, "none" as const].map((k) => (
+          <button key={k} type="button" className={pt === k ? "btn-calc" : "doc-btn"} onClick={() => setPt(pt === k ? null : k)} aria-pressed={pt === k}>
+            {label(k)} ({counts[k]})
+          </button>
+        ))}
+      </div>
+      {error && <p className="modal-error">{error}</p>}
+      {pt && list.isLoading && <Skeleton className="h-5 w-full" />}
+      {pt && list.data && !list.data.length && <p className="doc-sub">{t("aiArchiveEmpty")}</p>}
+      {pt &&
+        (list.data ?? []).map((x) => (
+          <div key={x.deedId} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid var(--border, #e5e5e5)" }}>
+            <span style={{ flex: "1 1 260px" }}>
+              {x.title} {x.manual && <span className="doc-sub">· {t("aiArchiveManual")}</span>}
+            </span>
+            {owner ? (
+              <select
+                className="dr-action-select"
+                aria-label={t("aiArchiveChange")}
+                disabled={setType.isPending}
+                value={x.manual && x.propertyType ? x.propertyType : "auto"}
+                onChange={(e) => change(x.deedId, e.target.value)}
+              >
+                <option value="auto">{x.manual ? t("aiArchiveByRules") : t("aiArchiveAuto", { type: label(x.propertyType ?? "none") })}</option>
+                {TYPES.map((k) => (
+                  <option key={k} value={k}>
+                    {label(k)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="doc-sub">{label(x.propertyType ?? "none")}</span>
+            )}
+          </div>
+        ))}
+    </div>
   );
 }
 
