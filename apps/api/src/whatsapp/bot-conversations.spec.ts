@@ -16,6 +16,11 @@ import { punchKindOf, StaffModeService } from "./staff-mode.service.js";
 import { MENU_TEXT } from "./wa-smart.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
+// These conversations check the exact reply text; tap menus (buttons / list) are tested in wa-choices.spec.ts.
+beforeEach(() => {
+  vi.stubEnv("WA_TAP_CHOICES", "off");
+});
+
 const P = "919000005648";
 beforeEach(() => {
   vi.stubEnv("WA_DEFAULT_ORG_ID", "org-1");

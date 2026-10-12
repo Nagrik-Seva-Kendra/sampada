@@ -14,6 +14,7 @@ import { OwnerAssistantService } from "./owner-assistant.service.js";
 import { StaffModeService } from "./staff-mode.service.js";
 import { ColonyService } from "../colony/colony.service.js";
 import { WaOutboxService } from "./wa-outbox.service.js";
+import { choicesOf, interactivePayload, tappedText } from "./wa-choices.js";
 import {
   checkSignature,
   graphBase as graph,
@@ -127,6 +128,9 @@ export class WhatsappService {
 
   private async handleMessage(msg: any, from: string, name: string): Promise<void> {
     await this.markRead(msg.id);
+    // A tapped option is the number the customer would have typed: every flow reads it as text.
+    const tapped = msg.type === "interactive" ? tappedText(msg.interactive) : null;
+    if (tapped) msg = { ...msg, type: "text", text: { body: tapped } };
     // Opens the 24h window in which the office may send free-form text (status updates ...).
     await this.outbox.touchContact(from).catch((e) => this.log.warn(`window update failed: ${e?.code ?? e?.name ?? "error"}`));
     // The owner's numbers: a to-do assistant, unless testing the customer flow ("ग्राहक मोड").
@@ -384,7 +388,18 @@ export class WhatsappService {
   }
 
   private async send(to: string, replies: string[]): Promise<void> {
-    for (const r of replies.filter(Boolean)) await this.sendText(to, r);
+    const tap = this.tapChoices();
+    for (const r of replies.filter(Boolean)) {
+      const choice = tap ? choicesOf(r) : null;
+      const payload = choice ? interactivePayload(choice) : null;
+      if (payload && (await this.post(to, payload, "choices").catch(() => false))) continue;
+      await this.sendText(to, r);
+    }
+  }
+
+  /** "नंबर लिखें" menus as buttons / a list (WA_TAP_CHOICES=off: plain text, as before). */
+  private tapChoices(): boolean {
+    return !/^(off|0|false|no)$/i.test(process.env.WA_TAP_CHOICES ?? "");
   }
 
   /** The window is open now: a draft PDF that could not go out earlier is sent after this reply. */
@@ -432,21 +447,28 @@ export class WhatsappService {
 
   // ---------- outgoing ----------
   async sendText(to: string, body: string): Promise<void> {
+    await this.post(to, { type: "text", text: { body } }, "reply");
+  }
+
+  /** One message to the Cloud API; false when Meta refused it (the caller may fall back to plain text). */
+  private async post(to: string, payload: Record<string, unknown>, what: "reply" | "choices"): Promise<boolean> {
     const res = await fetch(`${graph()}/${process.env.WA_PHONE_NUMBER_ID}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
+      body: JSON.stringify({ messaging_product: "whatsapp", to, ...payload }),
     });
     const json: any = await res.json().catch(() => null);
     if (!res.ok) {
       const err = metaErrorOf(json, res.status);
-      recordOutbound("reply", false, err);
-      this.log.error(`send failed to ${maskPhone(to)}: http=${res.status} code=${err.code ?? "-"} subcode=${err.subcode ?? "-"} msg="${err.message ?? "-"}"`);
-      return;
+      // A refused menu falls back to the same text; only the text counts as a failed reply.
+      if (what === "reply") recordOutbound("reply", false, err);
+      this.log.error(`send ${what === "choices" ? "(buttons) " : ""}failed to ${maskPhone(to)}: http=${res.status} code=${err.code ?? "-"} subcode=${err.subcode ?? "-"} msg="${err.message ?? "-"}"`);
+      return false;
     }
     recordOutbound("reply", true, null);
     const wamid = json?.messages?.[0]?.id ?? "-";
-    this.log.log(`sent reply to ${maskPhone(to)} wamid=${wamid}`);
+    this.log.log(`sent ${what === "choices" ? "choices" : "reply"} to ${maskPhone(to)} wamid=${wamid}`);
+    return true;
   }
 
   private async markRead(messageId: string): Promise<void> {
