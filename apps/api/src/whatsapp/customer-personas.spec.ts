@@ -9,6 +9,11 @@ import { CHECKLIST_RE } from "./satisfaction.js";
 import { COST_AMOUNT_ASK, COST_KIND_ASK, MENU_TEXT, parseMenuChoice, parseMoney, REGISTRY_WORD } from "./wa-smart.js";
 import { VOICE_NOT_HEARD, WhatsappService } from "./whatsapp.service.js";
 
+// These conversations check the exact reply text; tap menus (buttons / list) are tested in wa-choices.spec.ts.
+beforeEach(() => {
+  vi.stubEnv("WA_TAP_CHOICES", "off");
+});
+
 /** The bot as customers write: educated (English), less educated (Hinglish, spelling slips), barely literate (one word, voice). */
 const PHONE = "919000007777";
 
@@ -182,5 +187,77 @@ describe("customer voice notes", () => {
     const s = await service(async () => ({ ok: false, text: "" }));
     await s.voice();
     expect(s.sent).toEqual([VOICE_NOT_HEARD]);
+  });
+});
+
+describe("tap menus (buttons / list) through the webhook", () => {
+  async function service(refuseInteractive = false) {
+    vi.stubEnv("WA_TAP_CHOICES", "on");
+    vi.stubEnv("WA_DEBOUNCE_MS", "0");
+    vi.stubEnv("WA_ACCESS_TOKEN", "t");
+    vi.stubEnv("WA_PHONE_NUMBER_ID", "111");
+    const posts: any[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_u: string, init?: any) => {
+        const b = JSON.parse(init.body);
+        if (b.status === "read") return new Response("{}", { status: 200 });
+        posts.push(b);
+        if (refuseInteractive && b.type === "interactive") return new Response(JSON.stringify({ error: { code: 131009, message: "bad" } }), { status: 400 });
+        return new Response(JSON.stringify({ messages: [{ id: "w" }] }), { status: 200 });
+      }),
+    );
+    const w = world();
+    const wa = new WhatsappService(
+      { waInboundMessage: { create: vi.fn(async () => ({})) } } as any,
+      { hasActive: async () => false, handleText: async () => null } as any,
+      { touchContact: async () => undefined } as any,
+      { handleReply: async () => null, flushPending: async () => undefined } as any,
+      w.front,
+      { isOwner: () => false, handleStaff: async () => null, linkRequest: async () => undefined } as any,
+      { handle: async () => null, ownerText: async () => null, ownerButton: async () => null } as any,
+    );
+    let n = 0;
+    const inbound = (m: any) =>
+      wa.handlePayload({
+        object: "whatsapp_business_account",
+        entry: [{ changes: [{ value: { contacts: [{ profile: { name: "A" } }], messages: [{ id: `m${++n}`, from: PHONE, ...m }] } }] }],
+      });
+    return {
+      posts,
+      text: (body: string) => inbound({ type: "text", text: { body } }),
+      tap: (id: string, kind: "button_reply" | "list_reply") => inbound({ type: "interactive", interactive: { type: kind, [kind]: { id, title: "x" } } }),
+    };
+  }
+
+  it("hi → the menu as a list; tapping 2 then 1 goes the same way as typing 2 then 1", async () => {
+    const s = await service();
+    await s.text("hi");
+    const menu = s.posts.at(-1);
+    expect(menu.type).toBe("interactive");
+    expect(menu.interactive.type).toBe("list");
+    expect(menu.interactive.body.text).toContain("नीचे से चुनें या नंबर लिखें");
+    expect(menu.interactive.action.sections[0].rows.map((r: any) => r.id)).toEqual(["opt:1", "opt:2", "opt:3", "opt:4"]);
+
+    await s.tap("opt:2", "list_reply");
+    const kind = s.posts.at(-1);
+    expect(kind.type).toBe("interactive");
+    expect(kind.interactive.body.text).toContain("खर्च का अनुमान");
+
+    await s.tap("opt:1", kind.interactive.type === "button" ? "button_reply" : "list_reply");
+    expect(s.posts.at(-1)).toMatchObject({ type: "text", text: { body: COST_AMOUNT_ASK } });
+  });
+
+  it("Meta refuses the buttons → the same text goes, nothing lost", async () => {
+    const s = await service(true);
+    await s.text("hi");
+    expect(s.posts.at(-1)).toMatchObject({ type: "text", text: { body: MENU_TEXT } });
+  });
+
+  it("WA_TAP_CHOICES=off → plain text as before", async () => {
+    const s = await service();
+    vi.stubEnv("WA_TAP_CHOICES", "off");
+    await s.text("hi");
+    expect(s.posts.at(-1)).toMatchObject({ type: "text", text: { body: MENU_TEXT } });
   });
 });

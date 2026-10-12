@@ -7,6 +7,11 @@ import { GUIDE_ASK_BOUNDARY, GUIDE_ASK_CORNER, GUIDE_ASK_TYPE } from "./guidelin
 import { asksGuideline, COST_AMOUNT_ASK, COST_AMOUNT_UNCLEAR, COST_KIND_ASK, MENU_TEXT, parseMoney } from "./wa-smart.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
+// These conversations check the exact reply text; tap menus (buttons / list) are tested in wa-choices.spec.ts.
+beforeEach(() => {
+  vi.stubEnv("WA_TAP_CHOICES", "off");
+});
+
 const PHONE = "919000005648";
 const CUSTOMER_TEXT = "33,47,000/- pe hogi\nGanga vihar ward 60 ki rate k hisaab se 2770 sqft ka bata do guideline";
 let logged: string[] = [];

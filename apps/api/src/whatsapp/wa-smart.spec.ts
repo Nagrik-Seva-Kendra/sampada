@@ -8,6 +8,11 @@ import { mapIntent } from "./intent-classifier.service.js";
 import { isAbusive, isGibberish, isGreeting, MENU_TEXT, parseMenuChoice, redactForModel, registryCostText } from "./wa-smart.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
+// These conversations check the exact reply text; tap menus (buttons / list) are tested in wa-choices.spec.ts.
+beforeEach(() => {
+  vi.stubEnv("WA_TAP_CHOICES", "off");
+});
+
 const PHONE = "919755725648";
 let logged: string[] = [];
 beforeEach(() => {
