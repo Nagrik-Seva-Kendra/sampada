@@ -227,6 +227,8 @@ describe("tap menus (buttons / list) through the webhook", () => {
       posts,
       text: (body: string) => inbound({ type: "text", text: { body } }),
       tap: (id: string, kind: "button_reply" | "list_reply") => inbound({ type: "interactive", interactive: { type: kind, [kind]: { id, title: "x" } } }),
+      status: (id: string, status: string) =>
+        wa.handlePayload({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { statuses: [{ id, status, recipient_id: PHONE, errors: [{ code: 131000, title: "x" }] }] } }] }] }),
     };
   }
 
@@ -252,6 +254,20 @@ describe("tap menus (buttons / list) through the webhook", () => {
     const s = await service(true);
     await s.text("hi");
     expect(s.posts.at(-1)).toMatchObject({ type: "text", text: { body: MENU_TEXT } });
+  });
+
+  it("Meta accepts the buttons but reports them failed later → the same text goes once", async () => {
+    const s = await service();
+    await s.text("hi");
+    expect(s.posts.at(-1).type).toBe("interactive");
+    await s.status("w", "delivered");
+    expect(s.posts).toHaveLength(1);
+    await s.status("w", "failed");
+    expect(s.posts.at(-1)).toMatchObject({ type: "text", to: PHONE, text: { body: MENU_TEXT } });
+    await s.status("w", "failed"); // a repeated status sends nothing more
+    expect(s.posts).toHaveLength(2);
+    await s.status("other-wamid", "failed"); // not a menu: only logged
+    expect(s.posts).toHaveLength(2);
   });
 
   it("WA_TAP_CHOICES=off → plain text as before", async () => {

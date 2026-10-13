@@ -88,6 +88,7 @@ export class WhatsappService {
       for (const change of entry.changes ?? []) {
         const value = change.value;
         const contact = value?.contacts?.[0];
+        for (const st of value?.statuses ?? []) await this.onStatus(st);
         for (const msg of value?.messages ?? []) {
           // One number's messages run one after another, each to its own reply: Meta sends every
           // message as its own webhook, and without this a quick "रद्द" + "Hello" both read the
@@ -392,9 +393,35 @@ export class WhatsappService {
     for (const r of replies.filter(Boolean)) {
       const choice = tap ? choicesOf(r) : null;
       const payload = choice ? interactivePayload(choice) : null;
-      if (payload && (await this.post(to, payload, "choices").catch(() => false))) continue;
+      const wamid = payload ? await this.post(to, payload, "choices").catch(() => null) : null;
+      if (wamid) {
+        this.rememberChoice(wamid, to, r);
+        continue;
+      }
       await this.sendText(to, r);
     }
+  }
+
+  /**
+   * Menus sent as buttons, by wamid, for 15 minutes: Meta can accept one (200) and fail it later
+   * (a "failed" status) -- then the same text goes, so the customer is never left without a reply.
+   */
+  private readonly sentChoices = new Map<string, { to: string; text: string; at: number }>();
+  private rememberChoice(wamid: string, to: string, text: string): void {
+    const now = Date.now();
+    for (const [k, v] of this.sentChoices) if (now - v.at > 15 * 60_000) this.sentChoices.delete(k);
+    if (this.sentChoices.size < 2000) this.sentChoices.set(wamid, { to, text, at: now });
+  }
+
+  /** A delivery status from Meta: a failed menu → its text; other failures are logged (codes only). */
+  async onStatus(st: any): Promise<void> {
+    if (st?.status !== "failed") return;
+    const err = st.errors?.[0] ?? {};
+    const sent = this.sentChoices.get(String(st.id ?? ""));
+    this.log.error(`delivery failed${sent ? " (buttons)" : ""}: code=${err.code ?? "-"} title="${err.title ?? "-"}"`);
+    if (!sent) return;
+    this.sentChoices.delete(String(st.id));
+    await this.sendText(sent.to, sent.text).catch(() => undefined);
   }
 
   /** "नंबर लिखें" menus as buttons / a list (WA_TAP_CHOICES=off: plain text, as before). */
@@ -450,8 +477,8 @@ export class WhatsappService {
     await this.post(to, { type: "text", text: { body } }, "reply");
   }
 
-  /** One message to the Cloud API; false when Meta refused it (the caller may fall back to plain text). */
-  private async post(to: string, payload: Record<string, unknown>, what: "reply" | "choices"): Promise<boolean> {
+  /** One message to the Cloud API; its wamid, or null when Meta refused it (the caller may fall back to plain text). */
+  private async post(to: string, payload: Record<string, unknown>, what: "reply" | "choices"): Promise<string | null> {
     const res = await fetch(`${graph()}/${process.env.WA_PHONE_NUMBER_ID}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}`, "Content-Type": "application/json" },
@@ -463,12 +490,12 @@ export class WhatsappService {
       // A refused menu falls back to the same text; only the text counts as a failed reply.
       if (what === "reply") recordOutbound("reply", false, err);
       this.log.error(`send ${what === "choices" ? "(buttons) " : ""}failed to ${maskPhone(to)}: http=${res.status} code=${err.code ?? "-"} subcode=${err.subcode ?? "-"} msg="${err.message ?? "-"}"`);
-      return false;
+      return null;
     }
     recordOutbound("reply", true, null);
-    const wamid = json?.messages?.[0]?.id ?? "-";
+    const wamid = String(json?.messages?.[0]?.id ?? "-");
     this.log.log(`sent ${what === "choices" ? "choices" : "reply"} to ${maskPhone(to)} wamid=${wamid}`);
-    return true;
+    return wamid;
   }
 
   private async markRead(messageId: string): Promise<void> {
