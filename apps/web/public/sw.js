@@ -3,7 +3,12 @@
  * - Page navigations: network-first, falling back to the cached shell offline.
  * - API calls and anything cross-origin are never touched or cached (customer data stays out of the cache).
  */
-const VERSION = "nsk-v1";
+// The placeholder in VERSION below is replaced with a fresh value on every
+// build (see scripts/stamp-sw.mjs). This is load-bearing: a browser only
+// re-installs a service worker when the script's BYTES change, so a
+// hardcoded version string here means deploys never evict old cached
+// assets/pages until a user manually clears site data.
+const VERSION = "nsk-__BUILD_ID__";
 const SHELL = "/index.html";
 
 self.addEventListener("install", (event) => {
@@ -33,7 +38,7 @@ self.addEventListener("fetch", (event) => {
 
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
