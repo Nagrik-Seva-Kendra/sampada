@@ -40,8 +40,9 @@ const SNO_845 = GUIDELINE_DATA.find((e) => e.sno === 845)!;
 
 describe("guideline from the customer's words", () => {
   it("reads locality, ward, area; nothing it was not told", () => {
-    expect(guideFacts(TEXT)).toEqual({ name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null, boundary: null, agriArea: null, diverted: null, irrigated: null, roadPct: null });
+    expect(guideFacts(TEXT)).toEqual({ district: null, name: "Ganga vihar", ward: "60", type: null, area: { value: 2770, unit: "sqft" }, corner: null, boundary: null, agriArea: null, diverted: null, irrigated: null, roadPct: null });
     expect(guideFacts("गंगा विहार वार्ड नं. 60 में 257 वर्गमीटर का कॉर्नर प्लॉट")).toEqual({
+      district: null,
       name: "गंगा विहार",
       ward: "60",
       type: "plotRes",

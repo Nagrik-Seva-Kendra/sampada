@@ -32,7 +32,7 @@ afterEach(() => {
 describe("menu, greetings, gibberish, abuse", () => {
   it("menu is in Devanagari with the four options; numbers and words both work", () => {
     expect(MENU_TEXT).toContain("1. नई रजिस्ट्री / बंधक का ड्राफ्ट");
-    expect(MENU_TEXT).toContain("2. रजिस्ट्री खर्च जानना / गाइडलाइन पता करना");
+    expect(MENU_TEXT).toContain("2. रजिस्ट्री खर्च / गाइडलाइन (म.प्र. के सभी 52 ज़िले)");
     expect(MENU_TEXT).toContain("3. मेरा काम कहाँ पहुँचा (अनुरोध नंबर)");
     expect(MENU_TEXT).toContain("4. स्टाफ से बात");
     expect(parseMenuChoice("2")).toBe(2);

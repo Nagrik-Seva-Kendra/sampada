@@ -107,7 +107,7 @@ describe("customer", () => {
     expect(w.outbox.alertOwners).toHaveBeenCalledWith("📞 WhatsApp नंबर +91 90000 05648 नामांतरण के लिए बात करना चाहते हैं।");
     const g = (await w.say("guideline kya hai")).replies[0]!;
     expect(g).toContain("कलेक्टर दर");
-    expect(g).toContain("कॉलोनी / मोहल्ले का नाम");
+    expect(g).toContain("कॉलोनी / मोहल्ले / गाँव का नाम");
   });
 
   it("the deed words still start a draft; numbers still work", async () => {

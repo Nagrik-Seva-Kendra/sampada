@@ -26,18 +26,18 @@ import {
   flatValue,
   netRates,
   zoneThreshold,
-  GUIDELINE_DATA,
   type GuidelineEntry,
   plotAreaToSqm,
   plotValue,
   stampDuty,
 } from "./guideline/calculator.js";
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
+import { ALL_DISTRICTS, detectDistrict, districtByKey, districtRows } from "./guideline/districts.js";
 import { inr, normDigits } from "./intake-rules.js";
 
 export type GuideType = "plotRes" | "plotCom" | "plotInd" | "house" | "shop" | "flat" | "agri";
 export type GuideStep =
-  | "NAME" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY"
+  | "NAME" | "DISTRICT" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY"
   | "AGRI_AREA" | "DIVERTED" | "IRRIGATED" | "PARTIES"
   | "FLAT_USE" | "FLOOR" | "LIFT"
   | "BUILD_KIND" | "FLOORS" | "AGE";
@@ -50,6 +50,8 @@ export interface GuideState {
   mode: "guide";
   step: GuideStep;
   amount: number | null;
+  /** District key (guideline/districts.ts); none = Gwalior, the office's own district. */
+  district?: string | null;
   name?: string | null;
   ward?: string | null;
   options?: number[];
@@ -78,6 +80,7 @@ export interface GuideState {
 }
 
 export interface GuideFacts {
+  district: string | null;
   name: string | null;
   ward: string | null;
   type: GuideType | null;
@@ -170,7 +173,8 @@ export function localityOf(text: string): string | null {
 
 /** Everything the text says (null = not said). */
 export function guideFacts(text: string): GuideFacts {
-  const s = normDigits(text).replace(/(\d),(?=\d)/g, "$1");
+  const dist = detectDistrict(text);
+  const s = normDigits(dist ? dist.rest : text).replace(/(\d),(?=\d)/g, "$1");
   const ward = WARD_RE.exec(s)?.[1] ?? null;
   let area: GuideFacts["area"] = null;
   const a = AREA_RE.exec(s);
@@ -196,7 +200,7 @@ export function guideFacts(text: string): GuideFacts {
   const irrigated = UNIRRIGATED.test(s) ? false : IRRIGATED.test(s) ? true : null;
   const road = ROAD_PCT.exec(s);
   const roadPct = road && Number(road[1]) <= 100 ? Number(road[1]) : null;
-  return { name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area: type === "agri" ? null : area, corner, boundary, agriArea, diverted, irrigated, roadPct };
+  return { district: dist?.key ?? null, name: localityOf(s), ward: ward ? String(Number(ward)) : null, type, area: type === "agri" ? null : area, corner, boundary, agriArea, diverted, irrigated, roadPct };
 }
 
 // ---------- rows ----------
@@ -208,7 +212,7 @@ const wardOf = (e: { ward: string }) => (/^\d+$/.test(e.ward.trim()) ? String(Nu
  * "सिटी सेंटर" = "CITY CENTER", "gangavihar" = "GANGA VIHAR"); only the ward's
  * rows if one is given. Never picks one itself.
  */
-export function guideRows(name: string, ward: string | null, data: GuidelineEntry[] = GUIDELINE_DATA): GuidelineEntry[] {
+export function guideRows(name: string, ward: string | null, data: GuidelineEntry[] = districtRows(null)): GuidelineEntry[] {
   const all = words(normDigits(name).toUpperCase().replace(/\./g, ""));
   const tokens = all.filter((t) => t.length >= 3);
   // Initials ("DD नगर", "AB रोड") are compared as whole words.
@@ -233,11 +237,18 @@ const GENERIC = /^(ngr|vr|klny|kln|rd|mrg|prm|pr|nklv|ntklv|prk|sktr|vrd|grm|mhl
 
 const rowLabel = (e: GuidelineEntry) => {
   const name = e.hi.length > 90 ? `${e.hi.slice(0, 90)}…` : e.hi;
-  return `क्र. ${e.sno} — ${name}${wardOf(e) ? ` (वार्ड ${wardOf(e)})` : ""} — भूखण्ड ₹${inr(e.pr)}/वर्गमीटर`;
+  const where = [e.town, wardOf(e) ? `वार्ड ${wardOf(e)}` : null].filter(Boolean).join(", ");
+  return `क्र. ${e.sno} — ${name}${where ? ` (${where})` : ""} — भूखण्ड ₹${inr(e.pr)}/वर्गमीटर`;
 };
 
 // ---------- questions ----------
-export const GUIDE_ASK_NAME = "गाइडलाइन के लिए कॉलोनी / मोहल्ले का नाम और वार्ड नंबर लिखें (जैसे: गंगा विहार वार्ड 60)।";
+export const GUIDE_ASK_NAME =
+  "गाइडलाइन के लिए कॉलोनी / मोहल्ले / गाँव का नाम, वार्ड नंबर और ज़िला लिखें (जैसे: गंगा विहार वार्ड 60 ग्वालियर, या सिविल लाइन सागर)। मध्य प्रदेश के सभी 52 ज़िलों की गाइडलाइन उपलब्ध है।";
+export const GUIDE_ASK_DISTRICT = "संपत्ति किस ज़िले में है? ज़िले का नाम लिखें (जैसे: सागर, भिंड, इंदौर)।";
+/** Hindi district name of the conversation (none = Gwalior). */
+export const districtHi = (key: string | null | undefined) => districtByKey(key ?? "gwalior")?.hi ?? "ग्वालियर";
+/** The district a row belongs to, in Hindi (Gwalior's own rows carry none). */
+const entryDistrictHi = (e: GuidelineEntry) => (e.district ? (ALL_DISTRICTS.find((d) => d.en === e.district)?.hi ?? e.district) : "ग्वालियर");
 export const GUIDE_ASK_WARD = "इस नाम की कई पंक्तियाँ हैं। वार्ड नंबर लिखें (जैसे: वार्ड 60)।";
 export const GUIDE_ASK_TYPE =
   "संपत्ति किस प्रकार की है? नंबर लिखें:\n1. खाली प्लॉट (आवासीय)\n2. खाली प्लॉट (व्यावसायिक)\n3. मकान (निर्माण सहित)\n4. दुकान / ऑफिस / गोदाम (ज़मीन सहित भवन)\n5. फ़्लैट, या कॉम्प्लेक्स में दुकान / ऑफिस\n6. खेती की ज़मीन\n7. खाली प्लॉट (औद्योगिक)";
@@ -266,12 +277,13 @@ export const GUIDE_ASK_IRRIGATED = "ज़मीन सिंचित है �
 export const GUIDE_DISCLAIMER = "⚠️ यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।";
 
 export function pickText(rows: GuidelineEntry[]): string {
-  const head = rows.length === 1 ? "गाइडलाइन तालिका (2026-27) में यह पंक्ति मिली — सही है तो 1 लिखें:" : "गाइडलाइन तालिका (2026-27) में ये पंक्तियाँ मिलीं — आपकी संपत्ति वाली का नंबर लिखें:";
-  return [head, ...rows.map((e, i) => `${i + 1}. ${rowLabel(e)}`), "0. इनमें से कोई नहीं"].join("\n");
+  const where = rows[0] ? `${entryDistrictHi(rows[0])} ज़िले की ` : "";
+  const head = rows.length === 1 ? `${where}गाइडलाइन तालिका (2026-27) में यह पंक्ति मिली — सही है तो 1 लिखें:` : `${where}गाइडलाइन तालिका (2026-27) में ये पंक्तियाँ मिलीं — आपकी संपत्ति वाली का नंबर लिखें:`;
+  return [head, ...rows.map((e, i) => `${i + 1}. ${rowLabel(e)}`), "0. इनमें से कोई नहीं", "(संपत्ति किसी और ज़िले में हो तो ज़िले का नाम लिखें।)"].join("\n");
 }
 
-export const notFoundText = (name: string, ward: string | null) =>
-  `गाइडलाइन तालिका में "${name}"${ward ? ` (वार्ड ${ward})` : ""} की पंक्ति नहीं मिली, इसलिए गाइडलाइन मूल्य अंदाज़े से नहीं बताया जा रहा। ${GUIDE_PDF_HINT}`;
+export const notFoundText = (name: string, ward: string | null, district?: string | null) =>
+  `${districtHi(district)} ज़िले की गाइडलाइन तालिका में "${name}"${ward ? ` (वार्ड ${ward})` : ""} की पंक्ति नहीं मिली, इसलिए गाइडलाइन मूल्य अंदाज़े से नहीं बताया जा रहा। नाम की दूसरी स्पेलिंग या ज़िले का नाम लिखकर फिर पूछ सकते हैं। ${GUIDE_PDF_HINT}`;
 
 const TYPE_LABEL: Record<GuideType, string> = { plotRes: "आवासीय प्लॉट", plotCom: "व्यावसायिक प्लॉट", plotInd: "औद्योगिक प्लॉट", house: "मकान", shop: "दुकान / ऑफिस", flat: "फ़्लैट", agri: "खेती की ज़मीन" };
 export const unsupportedTypeText = (t: GuideType) =>
@@ -417,7 +429,7 @@ export function guideAnswer(
   const base = Math.max(amount ?? 0, value);
   const pct = (x: number) => `${+(x * 100).toFixed(1)}%`;
   const lines = [
-    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${entryDistrictHi(entry)} · ${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
     `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर (${use === "com" ? "व्यावसायिक" : use === "ind" ? "औद्योगिक" : "आवासीय"} भूखण्ड)${roadPct ? ` + सड़क प्रीमियम ${roadPct}%` : ""}${corner ? " + कॉर्नर 10%" : ""}${boundary ? " + बाउंड्री वॉल/नींव 10%" : ""}${corner || boundary || roadPct ? ` = ₹${inr(Math.round(r.rate))}` : ""}`,
     `क्षेत्रफल: ${area.value} ${area.unit === "sqft" ? "वर्गफुट" : "वर्गमीटर"}${area.unit === "sqft" ? ` = ${+sqm.toFixed(2)} वर्गमीटर` : ""}`,
@@ -509,7 +521,7 @@ export function agriAnswer(
       ? `खेती की ज़मीन (${sameRate ? "इस पंक्ति में सिंचित / असिंचित की दर एक ही है" : irrigated ? "सिंचित" : "असिंचित"})`
       : `डायवर्टेड ज़मीन (${diverted === "com" ? "व्यावसायिक" : diverted === "ind" ? "औद्योगिक" : "आवासीय"})`;
   const lines = [
-    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${entryDistrictHi(entry)} · ${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
     `प्रकार: ${kind}`,
     `रकबा: ${area.value} ${UNIT_HI[area.unit]}${area.unit === "sqm" ? "" : ` = ${+sqm.toFixed(2)} वर्गमीटर`}`,
@@ -561,7 +573,7 @@ export function flatAnswer(
   const d = dutyLines(entry, r.value, amount, fees);
   const floorHi = floor === -1 ? "मेज़ानाइन / लोअर-अपर ग्राउंड" : floor === 0 ? "भूतल" : floor >= 3 ? "तीसरी या ऊपर की मंज़िल" : `${floor} मंज़िल`;
   const lines = [
-    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${entryDistrictHi(entry)} · ${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
     `प्रकार: फ़्लैट (${commercial ? "व्यावसायिक" : "आवासीय"}), ${floorHi}${commercial ? "" : lift ? ", लिफ्ट है" : ", लिफ्ट नहीं"}`,
     `दर: ₹${inr(r.baseRate)} प्रति वर्गमीटर${r.floorFactor !== 1 ? ` × ${r.floorFactor} (मंज़िल) = ₹${inr(Math.round(r.rate))}` : ""}`,
@@ -596,7 +608,7 @@ export function buildingAnswer(
   const d = dutyLines(entry, r.total, amount, fees);
   const dp = depr(age);
   const lines = [
-    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${GUIDELINE_YEAR})`,
+    `📋 गाइडलाइन से रजिस्ट्री खर्च का अनुमान (${entryDistrictHi(entry)} · ${GUIDELINE_YEAR})`,
     `पंक्ति: ${rowLabel(entry).replace(/ — भूखण्ड.*$/, "")}`,
     `प्रकार: ${shop ? "व्यावसायिक भवन" : "मकान / डुप्लेक्स"} — ${KIND_HI[kind]}, ${age} साल पुराना${dp ? ` (अवक्षयण ${dp}%)` : ""}`,
     "गणना:",
@@ -654,6 +666,7 @@ export interface GuideTurn {
 export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
   return {
     ...g,
+    district: g.district ?? f.district,
     name: g.name ?? f.name,
     ward: g.ward ?? f.ward,
     type: g.type ?? f.type,
@@ -668,11 +681,16 @@ export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
 }
 
 /** The next question, or the answer when everything is known. */
-export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntry[] = GUIDELINE_DATA): GuideTurn {
+export function guideNext(g: GuideState, fees: WaOfficeFees, given?: GuidelineEntry[]): GuideTurn {
+  const data = given ?? districtRows(g.district);
   if (!g.sno) {
     if (!g.name) return { state: { ...g, step: "NAME" }, replies: [GUIDE_ASK_NAME] };
     const rows = guideRows(g.name, g.ward ?? null, data);
-    if (!rows.length) return { state: null, replies: [notFoundText(g.name, g.ward ?? null)], outcome: "not-found" };
+    if (!rows.length) {
+      // Not in Gwalior and no district said: ask which district before giving up.
+      if (!given && !g.district) return { state: { ...g, step: "DISTRICT" }, replies: [`"${g.name}" ग्वालियर ज़िले की गाइडलाइन में नहीं मिला। ${GUIDE_ASK_DISTRICT}`] };
+      return { state: null, replies: [notFoundText(g.name, g.ward ?? null, g.district)], outcome: "not-found" };
+    }
     if (!g.ward && rows.length > 9) return { state: { ...g, step: "WARD" }, replies: [GUIDE_ASK_WARD] };
     const shown = rows.slice(0, 9);
     return { state: { ...g, step: "PICK", options: shown.map((e) => e.sno) }, replies: [pickText(shown)] };
@@ -690,11 +708,21 @@ export function guideNext(g: GuideState, fees: WaOfficeFees, data: GuidelineEntr
 }
 
 /** The customer's answer to the current question; an unclear answer repeats the question with a hint. */
-export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data: GuidelineEntry[] = GUIDELINE_DATA): GuideTurn {
+export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, given?: GuidelineEntry[]): GuideTurn {
   const f = guideFacts(text);
+  // A district named while choosing the row (or before it): look again in that district.
+  if (!given && f.district && f.district !== (g.district ?? "gwalior") && (g.step === "NAME" || g.step === "WARD" || g.step === "PICK" || g.step === "DISTRICT")) {
+    return guideNext(mergeFacts({ ...g, district: f.district, step: "NAME", options: undefined, sno: null, ward: g.step === "DISTRICT" ? g.ward : null, name: f.name ?? g.name }, f), fees);
+  }
+  const data = given ?? districtRows(g.district);
   let next: GuideState = g;
   let unclear: string | null = null;
   switch (g.step) {
+    case "DISTRICT": {
+      if (!f.district) unclear = GUIDE_ASK_DISTRICT;
+      next = { ...g, district: f.district };
+      break;
+    }
     case "NAME": {
       const name = f.name ?? (words(normDigits(text)).filter(keep).join(" ") || null);
       if (!name) unclear = GUIDE_ASK_NAME;
@@ -809,7 +837,7 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, data
       break;
     }
   }
-  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "AGRI_AREA" || g.step === "FLOORS" ? unclear : `समझ नहीं आया। ${unclear}`] };
+  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "DISTRICT" || g.step === "AGRI_AREA" || g.step === "FLOORS" ? unclear : `समझ नहीं आया। ${unclear}`] };
   // Anything else the answer also says (e.g. the area together with the type).
-  return guideNext(mergeFacts(next, f), fees, data);
+  return guideNext(mergeFacts(next, f), fees, given);
 }

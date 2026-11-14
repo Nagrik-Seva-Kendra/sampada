@@ -31,6 +31,11 @@ export interface GuidelineEntry {
   agri_unirr: number; // per hectare
   subcl_res: number;
   subcl_com: number;
+  /** Other districts' rows (guideline/districts.ts) carry their area type, town and district; Gwalior's derive them. */
+  zone?: ZoneType;
+  urban?: boolean;
+  town?: string;
+  district?: string;
 }
 
 const toEntry = (r: GuidelineRow): GuidelineEntry => {
@@ -94,6 +99,7 @@ const NIGAM_TEHSILS = ["gird", "murar", "citycenter", "gwalior"];
 
 /** calculator detectZoneType(); null = undetermined. */
 export function detectZoneType(d: GuidelineEntry): ZoneType | null {
+  if (d.zone) return d.zone;
   const ward = String(d.ward ?? "").trim().toUpperCase();
   const teh = String(d.teh ?? "").trim().toLowerCase();
   if (ward === "PLANNING AREA") return "nagar";
@@ -104,6 +110,8 @@ export function detectZoneType(d: GuidelineEntry): ZoneType | null {
 
 /** calculator stamp-duty block: isNigam = numeric ward of up to 3 chars. */
 export function isNigamArea(d: GuidelineEntry): boolean {
+  // Other districts: any municipal ward (nagar nigam / palika / parishad) is urban.
+  if (d.urban !== undefined) return d.urban;
   if (!d.ward) return false;
   const wardNum = parseInt(d.ward, 10);
   return !isNaN(wardNum) && wardNum > 0 && d.ward.length <= 3;
