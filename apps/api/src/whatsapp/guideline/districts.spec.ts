@@ -2,6 +2,7 @@ import { DEFAULT_OFFICE_FEES } from "@sampada/shared";
 import { describe, expect, it } from "vitest";
 import { guideFacts, guideNext, guideReply, mergeFacts, type GuideState } from "../guideline-chat.js";
 import { stampDuty } from "./calculator.js";
+import { choicesOf, interactivePayload } from "../wa-choices.js";
 import { ALL_DISTRICTS, detectDistrict, districtRows } from "./districts.js";
 
 const fees = DEFAULT_OFFICE_FEES;
@@ -52,12 +53,43 @@ describe("the chat in another district", () => {
     expect(t.replies[0]).toContain("डिडी ग्रामीण मार्ग");
   });
 
-  it("not in Gwalior and no district said: asks the district, then looks there", () => {
+  it("not in Gwalior, found in one district only: goes there without asking", () => {
     const t = guideNext(start("Didi Grameen Marg ka guideline"), fees);
+    expect(t.state?.step).toBe("PICK");
+    expect(t.state?.district).toBe("bhind");
+    expect(t.replies[0]).toContain("भिंड ज़िले की");
+  });
+
+  it("not in Gwalior, found in several districts: a list of them to tap", () => {
+    const t = guideNext(start("netaji subhash ward ka guideline"), fees);
     expect(t.state?.step).toBe("DISTRICT");
-    const t2 = guideReply(t.state!, "भिंड", fees);
+    const opts = t.state!.districtOptions!;
+    expect(opts.length).toBeGreaterThan(1);
+    expect(opts.length).toBeLessThanOrEqual(9);
+    // shown as WhatsApp list rows (district + how many places), 0 = another district
+    const menu = choicesOf(t.replies[0]!)!;
+    expect(menu.choices.map((c) => c.id)).toEqual([...opts.map((_, i) => String(i + 1)), "0"]);
+    expect(menu.choices[0]!.label).toMatch(/\(\d+ जगह/);
+    expect(interactivePayload(menu)).toMatchObject({ interactive: { type: "list" } });
+    // tapping "2" (the list sends "2") looks in that district
+    const t2 = guideReply(t.state!, "2", fees);
+    expect(t2.state?.district).toBe(opts[1]);
     expect(t2.state?.step).toBe("PICK");
-    expect(t2.state?.district).toBe("bhind");
+  });
+
+  it("0 asks the district by name; a typed name works at the list too", () => {
+    const t = guideNext(start("netaji subhash ward ka guideline"), fees);
+    const t0 = guideReply(t.state!, "0", fees);
+    expect(t0.replies[0]).toContain("ज़िले का नाम लिखें");
+    const t1 = guideReply(t0.state!, "पन्ना", fees);
+    expect(t1.state?.district).toBe("panna");
+    expect(guideReply(t.state!, "narsinghpur", fees).state?.district).toBe("narsinghpur");
+  });
+
+  it("found nowhere in MP: said plainly", () => {
+    const t = guideNext(start("Xyzabc Puram ka guideline"), fees);
+    expect(t.state).toBeNull();
+    expect(t.replies[0]).toContain("मध्य प्रदेश के किसी भी ज़िले");
   });
 
   it("a district written while choosing the row looks again there", () => {

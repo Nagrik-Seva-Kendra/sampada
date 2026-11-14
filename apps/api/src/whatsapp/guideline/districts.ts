@@ -59,21 +59,59 @@ export function rowToEntry(r: (string | number)[], district: string): GuidelineE
 
 const cache = new Map<string, GuidelineEntry[]>();
 
-/** The district's rows (Gwalior: the office calculator's table). Empty when the file is missing. */
-export function districtRows(key: string | null | undefined): GuidelineEntry[] {
-  if (!key || key === "gwalior") return GUIDELINE_DATA;
-  const hit = cache.get(key);
-  if (hit) return hit;
+/** Reads a district's file (no cache): rows with no rate at all say nothing. */
+function readRows(key: string): GuidelineEntry[] {
   const info = BY_KEY.get(key);
   const dir = dataDir();
   if (!info || !dir) return [];
   const file = join(dir, `${key}.json.gz`);
   if (!existsSync(file)) return [];
   const raw = JSON.parse(gunzipSync(readFileSync(file)).toString("utf8")) as (string | number)[][];
-  // Rows with no rate at all say nothing.
-  const rows = raw.map((r) => rowToEntry(r, info.en)).filter((e) => e.sno > 0 && (e.pr > 0 || e.agri_irr > 0 || e.agri_unirr > 0));
-  cache.set(key, rows);
+  return raw.map((r) => rowToEntry(r, info.en)).filter((e) => e.sno > 0 && (e.pr > 0 || e.agri_irr > 0 || e.agri_unirr > 0));
+}
+
+/** The district's rows (Gwalior: the office calculator's table). Empty when the file is missing. */
+export function districtRows(key: string | null | undefined): GuidelineEntry[] {
+  if (!key || key === "gwalior") return GUIDELINE_DATA;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const rows = readRows(key);
+  if (rows.length) cache.set(key, rows);
   return rows;
+}
+
+/** Every district's place names (Hindi + English, upper case) and wards, for the search across districts. */
+let names: Map<string, { ward: string; text: string }[]> | null = null;
+function nameIndex(): Map<string, { ward: string; text: string }[]> {
+  if (names) return names;
+  const m = new Map<string, { ward: string; text: string }[]>();
+  for (const d of ALL_DISTRICTS) {
+    const rows = cache.get(d.key) ?? (d.key === "gwalior" ? GUIDELINE_DATA : readRows(d.key));
+    m.set(d.key, rows.map((e) => ({ ward: e.ward.trim(), text: `${e.hi} ${e.en}`.toUpperCase().replace(/\./g, "") })));
+  }
+  names = m;
+  return m;
+}
+
+/**
+ * In how many rows of each district every word of a locality appears (a quick
+ * test on the names only; the chosen district is then searched in full, by sound
+ * too). Most rows first, then by name.
+ */
+export function scanDistricts(words: string[], ward: string | null, exclude: string[] = []): { info: DistrictInfo; count: number }[] {
+  const ws = words.map((w) => w.toUpperCase().replace(/\./g, "")).filter((w) => w.length >= 3);
+  if (!ws.length) return [];
+  const out: { info: DistrictInfo; count: number }[] = [];
+  for (const [key, rows] of nameIndex()) {
+    if (exclude.includes(key)) continue;
+    let n = 0;
+    for (const r of rows) {
+      if (ward && (!/^\d+$/.test(r.ward) || String(Number(r.ward)) !== ward)) continue;
+      if (ws.every((w) => r.text.includes(w))) n++;
+    }
+    if (n > 0) out.push({ info: BY_KEY.get(key)!, count: n });
+  }
+  return out.sort((a, b) => b.count - a.count || a.info.en.localeCompare(b.info.en));
 }
 
 // ---------- naming the district in a message ----------
