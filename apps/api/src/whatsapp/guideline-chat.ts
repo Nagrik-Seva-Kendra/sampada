@@ -32,7 +32,7 @@ import {
   stampDuty,
 } from "./guideline/calculator.js";
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
-import { ALL_DISTRICTS, detectDistrict, districtByKey, districtRows } from "./guideline/districts.js";
+import { ALL_DISTRICTS, detectDistrict, districtByKey, districtRows, scanDistricts } from "./guideline/districts.js";
 import { inr, normDigits } from "./intake-rules.js";
 
 export type GuideType = "plotRes" | "plotCom" | "plotInd" | "house" | "shop" | "flat" | "agri";
@@ -52,6 +52,8 @@ export interface GuideState {
   amount: number | null;
   /** District key (guideline/districts.ts); none = Gwalior, the office's own district. */
   district?: string | null;
+  /** The districts offered to tap (step DISTRICT), in the listed order. */
+  districtOptions?: string[] | null;
   name?: string | null;
   ward?: string | null;
   options?: number[];
@@ -141,7 +143,7 @@ const STOP = new Set(
     "वर्गफुट वर्ग फुट फीट क्षेत्र एरिया मुझे mujhe hame hume please plz pls ji जी"
   ).split(" "),
 );
-const PLACE_WORD = /^(vihar|विहार|nagar|नगर|colony|कॉलोनी|कालोनी|puram|पुरम|enclave|इन्क्लेव|एन्क्लेव|एनक्लेव|park|पार्क|city|सिटी|kunj|कुंज|dham|धाम|bagh|बाग|ganj|गंज|pura|पुरा|road|रोड|marg|मार्ग|gram|ग्राम|gaon|गांव|गाँव|vihar\d*)$/i;
+const PLACE_WORD = /^(ward|वार्ड|mohalla|मोहल्ला|vihar|विहार|nagar|नगर|colony|कॉलोनी|कालोनी|puram|पुरम|enclave|इन्क्लेव|एन्क्लेव|एनक्लेव|park|पार्क|city|सिटी|kunj|कुंज|dham|धाम|bagh|बाग|ganj|गंज|pura|पुरा|road|रोड|marg|मार्ग|gram|ग्राम|gaon|गांव|गाँव|vihar\d*)$/i;
 
 const words = (s: string) => s.split(/[\s,;:!?।()"']+/).map((w) => w.replace(/^[.\-]+|[.\-]+$/g, "")).filter(Boolean);
 const keep = (w: string) => !STOP.has(w.toLowerCase()) && !/\d/.test(w);
@@ -245,6 +247,14 @@ const rowLabel = (e: GuidelineEntry) => {
 export const GUIDE_ASK_NAME =
   "गाइडलाइन के लिए कॉलोनी / मोहल्ले / गाँव का नाम, वार्ड नंबर और ज़िला लिखें (जैसे: गंगा विहार वार्ड 60 ग्वालियर, या सिविल लाइन सागर)। मध्य प्रदेश के सभी 52 ज़िलों की गाइडलाइन उपलब्ध है।";
 export const GUIDE_ASK_DISTRICT = "संपत्ति किस ज़िले में है? ज़िले का नाम लिखें (जैसे: सागर, भिंड, इंदौर)।";
+/** The districts the place was found in, to tap; 0 = another district (typed). */
+export function districtPickText(name: string, hits: { info: { hi: string }; count: number }[], more: number): string {
+  return [
+    `"${name}" ग्वालियर ज़िले में नहीं मिला, पर इन ज़िलों की गाइडलाइन में मिला। संपत्ति किस ज़िले में है? नंबर लिखें:`,
+    ...hits.map((h, i) => `${i + 1}. ${h.info.hi} (${h.count} ${h.count === 1 ? "जगह" : "जगहें"})`),
+    `0. कोई दूसरा ज़िला${more ? ` (${more} और ज़िलों में भी मिला)` : ""}`,
+  ].join("\n");
+}
 /** Hindi district name of the conversation (none = Gwalior). */
 export const districtHi = (key: string | null | undefined) => districtByKey(key ?? "gwalior")?.hi ?? "ग्वालियर";
 /** The district a row belongs to, in Hindi (Gwalior's own rows carry none). */
@@ -283,7 +293,7 @@ export function pickText(rows: GuidelineEntry[]): string {
 }
 
 export const notFoundText = (name: string, ward: string | null, district?: string | null) =>
-  `${districtHi(district)} ज़िले की गाइडलाइन तालिका में "${name}"${ward ? ` (वार्ड ${ward})` : ""} की पंक्ति नहीं मिली, इसलिए गाइडलाइन मूल्य अंदाज़े से नहीं बताया जा रहा। नाम की दूसरी स्पेलिंग या ज़िले का नाम लिखकर फिर पूछ सकते हैं। ${GUIDE_PDF_HINT}`;
+  `${district === "all" ? "मध्य प्रदेश के किसी भी ज़िले" : `${districtHi(district)} ज़िले`} की गाइडलाइन तालिका में "${name}"${ward ? ` (वार्ड ${ward})` : ""} की पंक्ति नहीं मिली, इसलिए गाइडलाइन मूल्य अंदाज़े से नहीं बताया जा रहा। नाम की दूसरी स्पेलिंग या ज़िले का नाम लिखकर फिर पूछ सकते हैं। ${GUIDE_PDF_HINT}`;
 
 const TYPE_LABEL: Record<GuideType, string> = { plotRes: "आवासीय प्लॉट", plotCom: "व्यावसायिक प्लॉट", plotInd: "औद्योगिक प्लॉट", house: "मकान", shop: "दुकान / ऑफिस", flat: "फ़्लैट", agri: "खेती की ज़मीन" };
 export const unsupportedTypeText = (t: GuideType) =>
@@ -687,8 +697,19 @@ export function guideNext(g: GuideState, fees: WaOfficeFees, given?: GuidelineEn
     if (!g.name) return { state: { ...g, step: "NAME" }, replies: [GUIDE_ASK_NAME] };
     const rows = guideRows(g.name, g.ward ?? null, data);
     if (!rows.length) {
-      // Not in Gwalior and no district said: ask which district before giving up.
-      if (!given && !g.district) return { state: { ...g, step: "DISTRICT" }, replies: [`"${g.name}" ग्वालियर ज़िले की गाइडलाइन में नहीं मिला। ${GUIDE_ASK_DISTRICT}`] };
+      // Not in Gwalior and no district said: the districts it is in, to tap (just one: that one).
+      if (!given && !g.district) {
+        const hits = scanDistricts(words(normDigits(g.name)), g.ward ?? null, ["gwalior"]);
+        if (hits.length === 1) return guideNext({ ...g, district: hits[0]!.info.key }, fees);
+        if (hits.length > 1) {
+          const shown = hits.slice(0, 9);
+          return {
+            state: { ...g, step: "DISTRICT", districtOptions: shown.map((h) => h.info.key) },
+            replies: [districtPickText(g.name, shown, hits.length - shown.length)],
+          };
+        }
+        return { state: null, replies: [notFoundText(g.name, g.ward ?? null, "all")], outcome: "not-found" };
+      }
       return { state: null, replies: [notFoundText(g.name, g.ward ?? null, g.district)], outcome: "not-found" };
     }
     if (!g.ward && rows.length > 9) return { state: { ...g, step: "WARD" }, replies: [GUIDE_ASK_WARD] };
@@ -719,8 +740,12 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, give
   let unclear: string | null = null;
   switch (g.step) {
     case "DISTRICT": {
-      if (!f.district) unclear = GUIDE_ASK_DISTRICT;
-      next = { ...g, district: f.district };
+      const opts = g.districtOptions ?? [];
+      const k = opts.length ? readPick(text, opts.length) : null;
+      if (k === "none") return { state: { ...g, districtOptions: null }, replies: [GUIDE_ASK_DISTRICT] };
+      const picked = typeof k === "number" ? opts[k]! : f.district;
+      if (!picked) unclear = opts.length ? `कृपया सूची में से नंबर या ज़िले का नाम लिखें। ${GUIDE_ASK_DISTRICT}` : GUIDE_ASK_DISTRICT;
+      next = { ...g, district: picked, districtOptions: null };
       break;
     }
     case "NAME": {

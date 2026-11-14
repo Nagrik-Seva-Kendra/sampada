@@ -113,10 +113,7 @@ describe("cost flow: the 7:09 PM conversation", () => {
     const w = world();
     await w.say("2");
     await w.say("1");
-    // Not in Gwalior's table and no district named: the district is asked first.
-    const q = await w.say("33,47,000 pe, Xyzabc Puram ward 7 ka guideline");
-    expect(q.replies[0]).toContain("किस ज़िले");
-    const r = await w.say("ग्वालियर");
+    const r = await w.say("33,47,000 pe, Xyzabc Puram ward 7 ka guideline");
     expect(r.replies[0]).toContain("33,47,000");
     expect(r.replies[1]).toContain("पंक्ति नहीं मिली");
     expect(r.replies[1]).toContain("PDF");
