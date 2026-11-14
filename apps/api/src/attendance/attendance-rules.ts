@@ -247,6 +247,10 @@ export function salaryLine(i: SalaryInput) {
 }
 
 // ---------- WhatsApp: leave application from staff ----------
+/** "kal nahi aa paunga", "Kl nhi aa पाउंगा", "नहीं आऊँगा", "absent rahunga": a leave in other words. */
+const NOT_COMING =
+  /(nahi|nahin|nhi|nai|नहीं|नही|ना)\s*(aa|a|आ)\s*(pa|पा|sak|सक)|(nahi|nahin|nhi|nai|नहीं|नही)\s*(aaunga|aaungi|aaoonga|aunga|aungi|आऊंगा|आऊँगा|आउंगा|आऊंगी|आऊँगी|आउंगी)|\babsent\b|एब्सेंट|\boff\s*(chahiye|chaiye|lena)|ऑफ़\s*चाहिए/;
+
 /**
  * "छुट्टी 12/10 से 13/10 बीमारी: बुखार", "kal chhutti aadha din", "leave 15/10 casual shaadi".
  * Returns null when it isn't a leave request.
@@ -254,7 +258,7 @@ export function salaryLine(i: SalaryInput) {
 export function parseLeaveText(text: string, today: string): { fromDate: string; toDate: string; halfDay: boolean; type: LeaveType; reason: string } | null {
   const s = text.replace(/[०-९]/g, (d) => String("०१२३४५६७८९".indexOf(d))).trim();
   const low = s.toLowerCase();
-  if (!/छुट्टी|छुटी|अवकाश|chhutti|chutti|chhuti|leave/.test(low)) return null;
+  if (!/छुट्टी|छुटी|अवकाश|chhutti|chutti|chhuti|leave/.test(low) && !NOT_COMING.test(low)) return null;
   const year = Number(today.slice(0, 4));
   const dates = [...s.matchAll(/\b(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?\b/g)].map((m) => {
     const y = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : year;
@@ -265,7 +269,7 @@ export function parseLeaveText(text: string, today: string): { fromDate: string;
   let from = dates[0] ?? null;
   if (!from) {
     if (/परसों|parson|parso/.test(low)) from = addDays(today, 2);
-    else if (/\bkal\b|कल|tomorrow/.test(low)) from = addDays(today, 1);
+    else if (/\b(kal|kl)\b|कल|tomorrow/.test(low)) from = addDays(today, 1);
     else if (/\baaj\b|आज|today/.test(low)) from = today;
   }
   if (!from) return null;
