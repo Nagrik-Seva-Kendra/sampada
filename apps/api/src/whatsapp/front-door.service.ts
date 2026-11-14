@@ -14,6 +14,8 @@ import { LEAD_ENDS, leadKindOf } from "./lead-nudge.js";
 import { DeedExtractorService } from "./deed-extractor.service.js";
 import type { IncomingFile } from "./draft-intake.service.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
+import { aiChatFor } from "./ai-chat.js";
+import { type AiToolbox, AiChatService } from "./ai-chat.service.js";
 import { ASK_AWAY, asksToAsk, faqAnswer, GUIDE_MEANING_TEXT, isGuideMeaning, looksLikeQuestion, QUESTION_FORWARDED } from "./customer-faq.js";
 import { CLOSED_TEXT, fullPhone, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
 import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
@@ -83,7 +85,8 @@ export type FrontRoute =
   | "closed"
   | "thanks"
   | "office-info"
-  | "mutation";
+  | "mutation"
+  | "ai-chat";
 export interface FrontReply {
   replies: string[];
   route: FrontRoute;
@@ -128,6 +131,7 @@ export class FrontDoorService {
     @Optional() private readonly copies?: ArchiveCopyService,
     @Optional() private readonly satisfaction?: SatisfactionService,
     @Optional() private readonly questions?: CustomerQuestionsService,
+    @Optional() private readonly ai?: AiChatService,
   ) {}
 
   private callNumber(): string | null {
@@ -249,6 +253,12 @@ export class FrontDoorService {
       if (state) await this.setContact(phone, { state: null });
       return { replies: [CLOSED_TEXT], route: "closed", force: true };
     }
+    // The assistant that talks like a person (WA_AI_CHAT): anything with no question open,
+    // except a bare menu number. If it has no answer, the usual flow below answers.
+    if (!state && this.ai && aiChatFor(phone) && !/^\s*\d{1,2}\s*[.)।]?\s*$/.test(normDigits(text))) {
+      const a = await this.ai.reply(phone, text, this.toolbox(phone, now));
+      if (a?.replies.length) return { replies: a.replies, route: a.route as FrontRoute, force: true };
+    }
     // "ok" / "thanks" / "👍" with nothing open: a short thanks.
     if (!state && isThanks(text)) return { replies: [THANKS_TEXT], route: "thanks" };
     // "ऑफिस कब खुलता है" / "address bhejo".
@@ -357,6 +367,33 @@ export class FrontDoorService {
       return { replies: [QUESTION_FORWARDED], route: "question-forwarded", force: true };
     }
     return { replies: [menuText(callOn)], route: isGreeting(text) ? "greeting" : "menu" };
+  }
+
+  /** The front door's own answers, as the assistant's tools (ai-chat.ts). */
+  private toolbox(phone: string, now: Date): AiToolbox {
+    return {
+      costEstimate: async (amount) => registryCostText({ amount, guideline: null }, await this.fees()),
+      faq: async (question) => {
+        const f = faqAnswer(question);
+        if (f?.alert) await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} ${f.alert}।`).catch(() => undefined);
+        return f?.text ?? (await this.questions?.learnedAnswer(question).catch(() => null)) ?? null;
+      },
+      forwardQuestion: (question) => this.forwardQuestion(phone, question, now),
+      startGuideline: async (said) => {
+        const g = await this.guideStart(phone, null, said);
+        return { replies: g.replies, route: g.route };
+      },
+      startDraft: async () => ({ replies: [DRAFT_HOWTO], route: "draft-howto" }),
+      myRequests: () => this.myRequests(phone),
+      officeInfo: async () => {
+        const s = await this.attendance.settings(this.orgId).catch(() => null);
+        return s ? officeInfoText(s, "78984 75648") : "कार्यालय फ़ोन: 78984 75648";
+      },
+      talkToStaff: async (reason) => {
+        await this.outbox.alertOwners(`📞 WhatsApp नंबर ${fullPhone(phone)} — ${reason}।`).catch(() => undefined);
+        return { replies: [STAFF_REPLY], route: "staff" };
+      },
+    };
   }
 
   /** To the owner: numbered and kept (answered with "जवाब N ..."), else a plain alert. */

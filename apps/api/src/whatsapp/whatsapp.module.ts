@@ -22,6 +22,7 @@ import { DeedExtractorService } from "./deed-extractor.service.js";
 import { DraftIntakeService } from "./draft-intake.service.js";
 import { DraftReviewService } from "./draft-review.service.js";
 import { FrontDoorService } from "./front-door.service.js";
+import { AiChatService } from "./ai-chat.service.js";
 import { IntentClassifierService } from "./intent-classifier.service.js";
 import { WaAdminController, WaAdminService } from "./wa-admin.controller.js";
 import { GuidelineLookupService } from "./guideline-lookup.service.js";
@@ -51,6 +52,7 @@ import { WhatsappService } from "./whatsapp.service.js";
     WaTemplatesService,
     DraftReviewService,
     FrontDoorService,
+    AiChatService,
     StaffModeService,
     RegistryJobsService,
     CallbackService,
