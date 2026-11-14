@@ -14,6 +14,7 @@ import {
   stampDuty,
 } from "./guideline/calculator.js";
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
+import { detectDistrict, districtRows } from "./guideline/districts.js";
 
 export interface GuidelineResult {
   year: string;
@@ -62,11 +63,11 @@ export function parseLocation(p: Pick<DeedProperty, "locality" | "village">): { 
  * (after spelling/punctuation normalisation). If the ward is known it must match too.
  * More than one distinct entry → null (staff decides). Never guesses.
  */
-export function matchEntry(p: Pick<DeedProperty, "locality" | "village">): GuidelineEntry | null {
+export function matchEntry(p: Pick<DeedProperty, "locality" | "village">, data: GuidelineEntry[] = GUIDELINE_DATA): GuidelineEntry | null {
   const { ward, names } = parseLocation(p);
   if (names.length === 0) return null;
   const keys = new Set(names.map(locationKey));
-  let hits = GUIDELINE_DATA.filter((e) => keys.has(locationKey(e.hi)) || (e.en && keys.has(locationKey(e.en))));
+  let hits = data.filter((e) => keys.has(locationKey(e.hi)) || (e.en && keys.has(locationKey(e.en))));
   if (ward) hits = hits.filter((e) => /^\d+$/.test(e.ward.trim()) && e.ward.trim().padStart(2, "0") === ward);
   const unique = [...new Map(hits.map((e) => [e.sno, e])).values()];
   return unique.length === 1 ? unique[0]! : null;
@@ -84,14 +85,14 @@ export function parseUnit(u: string | null): Unit | null {
   return null;
 }
 
-const DISTRICT_OK = (d: string | null) => {
-  if (!d) return true; // not stated → rely on the exact location match
-  const k = locationKey(d);
-  return k.includes("ग्वालियर") || k.includes("gwalior");
+/** The deed's district (not stated → Gwalior, the office's district); null = a name we do not know. */
+const deedDistrict = (d: string | null): string | null => {
+  if (!d || !d.trim()) return "gwalior";
+  return detectDistrict(d)?.key ?? null;
 };
 
 const ZONE_LABEL: Record<ZoneType, string> = {
-  nigam1: "नगर निगम ग्वालियर क्षेत्र",
+  nigam1: "नगर निगम क्षेत्र (महानगर)",
   nigam2: "अन्य नगर निगम क्षेत्र",
   nagar: "नगर निवेश/Planning Area",
   parishad: "नगर परिषद क्षेत्र",
@@ -117,8 +118,9 @@ export class GuidelineLookupService {
     p: DeedProperty,
     opts: { owners?: number; plot?: { hasBuilding?: boolean | null; corner?: boolean | null } } = {},
   ): Promise<GuidelineResult | null> {
-    if (!DISTRICT_OK(p.district)) return null;
-    const entry = matchEntry(p);
+    const district = deedDistrict(p.district);
+    if (!district) return null;
+    const entry = matchEntry(p, districtRows(district));
     if (!entry) return null;
     const unit = parseUnit(p.areaUnit);
     const area = Number(p.areaValue);
