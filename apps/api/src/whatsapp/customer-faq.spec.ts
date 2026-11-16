@@ -191,7 +191,7 @@ describe("conversations", () => {
   it("'dan patra' at the cost document question still answers it", async () => {
     const w = world();
     await w.say("2");
-    expect((await w.say("dan patra")).replies[0]).toContain("कार्यालय शुल्क");
+    expect((await w.say("dan patra")).replies[0]).toContain("Advocate fees");
   });
 
   it("'मुझे एक सवाल पूछना है' → ask away; 'hi' → menu", async () => {

@@ -18,7 +18,7 @@ import { aiChatFor } from "./ai-chat.js";
 import { type AiToolbox, AiChatService } from "./ai-chat.service.js";
 import { ASK_AWAY, asksToAsk, faqAnswer, GUIDE_MEANING_TEXT, isGuideMeaning, looksLikeQuestion, QUESTION_FORWARDED } from "./customer-faq.js";
 import { CLOSED_TEXT, fullPhone, isClose, isOfficeInfo, isThanks, officeInfoText, THANKS_TEXT } from "./chat-words.js";
-import { type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
+import { GUIDE_ASK_AMOUNT, type GuideState, type GuideTurn, guideFacts, guideNext, guideReply, mergeFacts } from "./guideline-chat.js";
 import { normDigits } from "./intake-rules.js";
 import { requestLink } from "./wa-alerts.js";
 import { deleteMedia } from "./wa-media.js";
@@ -294,7 +294,8 @@ export class FrontDoorService {
     if (state?.mode === "guide") {
       // Guideline questions: every bare number answers them ("4" = दुकान); a greeting or
       // words of another menu option leave.
-      const bareNo = /^\s*\d{1,2}\s*[.)।]?\s*$/.test(normDigits(text));
+      // ("1" while the registry amount is asked = "new draft", as the estimate says.)
+      const bareNo = /^\s*\d{1,2}\s*[.)।]?\s*$/.test(normDigits(text)) && !(state.step === "AMOUNT" && normDigits(text).trim() === "1");
       const leaves = !bareNo && (isGreeting(text) || (choice !== null && choice !== 2));
       if (!leaves) return this.guide(phone, state, text);
       await this.setContact(phone, { state: null });
@@ -616,8 +617,14 @@ export class FrontDoorService {
   private async guideTurn(phone: string, turn: GuideTurn, amount: number | null): Promise<FrontReply> {
     let replies = turn.replies;
     if (turn.state) await this.setContact(phone, { state: turn.state });
-    else if (turn.outcome === "answered") await this.setContact(phone, { state: null });
-    else {
+    else if (turn.outcome === "answered") {
+      // An estimate on the guideline value alone: also ask the registry amount, and answer again with it.
+      const fin = turn.answeredState;
+      if (fin && !fin.amount) {
+        await this.setContact(phone, { state: { ...fin, step: "AMOUNT", options: undefined } });
+        replies = [...replies, GUIDE_ASK_AMOUNT];
+      } else await this.setContact(phone, { state: null });
+    } else {
       await this.setContact(phone, { state: { mode: "cost", step: "AMOUNT", guideline: null, amount } });
       if (amount) replies = [registryCostText({ amount, guideline: null }, await this.fees()), ...replies];
     }

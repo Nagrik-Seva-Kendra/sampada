@@ -34,13 +34,15 @@ import {
 import { GUIDELINE_YEAR } from "./guideline/gwalior-2026-27.data.js";
 import { ALL_DISTRICTS, detectDistrict, districtByKey, districtRows, scanDistricts } from "./guideline/districts.js";
 import { inr, normDigits } from "./intake-rules.js";
+import { advocateFeeLines, parseMoney } from "./wa-smart.js";
 
 export type GuideType = "plotRes" | "plotCom" | "plotInd" | "house" | "shop" | "flat" | "agri";
 export type GuideStep =
   | "NAME" | "DISTRICT" | "WARD" | "PICK" | "TYPE" | "AREA" | "CORNER" | "BOUNDARY"
   | "AGRI_AREA" | "DIVERTED" | "IRRIGATED" | "PARTIES"
   | "FLAT_USE" | "FLOOR" | "LIFT"
-  | "BUILD_KIND" | "FLOORS" | "AGE";
+  | "BUILD_KIND" | "FLOORS" | "AGE"
+  | "AMOUNT";
 export type AgriUnit = "hect" | "acre" | "bigha_p" | "bigha_k" | "sqm";
 export type AgriArea = { value: number; unit: AgriUnit };
 /** Agricultural land: not diverted, or diverted for homes / shops (calculator isDiv + use). */
@@ -284,6 +286,8 @@ export const GUIDE_ASK_FLOORS =
 export const GUIDE_ASK_AGE = "निर्माण कितने साल पुराना है? साल लिखें (जैसे: 12) — नया हो तो 0।";
 export const GUIDE_ASK_LIFT = "क्या बिल्डिंग में लिफ्ट है? नंबर लिखें:\n1. हाँ\n2. नहीं";
 export const GUIDE_ASK_IRRIGATED = "ज़मीन सिंचित है या असिंचित? नंबर लिखें:\n1. सिंचित\n2. असिंचित";
+export const GUIDE_ASK_AMOUNT =
+  "रजिस्ट्री कितनी राशि पर हो रही है? राशि लिखें (जैसे 25 लाख) — स्टाम्प, पंजीयन और Advocate fees उसी के हिसाब से दोबारा निकाल दूँगी। राशि पता न हो तो \"नहीं\" लिखें।";
 export const GUIDE_DISCLAIMER = "⚠️ यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।";
 
 export function pickText(rows: GuidelineEntry[]): string {
@@ -453,7 +457,7 @@ export function guideAnswer(
     `पंजीयन शुल्क: पुरुष / संयुक्त क्रेता 3% = ₹${inr(st.male.registration)}, केवल महिला क्रेता 1% = ₹${inr(st.female.registration)}`,
   );
   const fee = officeFeeFor("registry", base, fees);
-  lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
+  lines.push(...advocateFeeLines(fee, base, amount));
   const warn = underValueWarning(amount, value);
   if (warn) lines.push("", warn);
   lines.push(
@@ -482,7 +486,7 @@ function dutyLines(entry: GuidelineEntry, valueRaw: number, amount: number | nul
     `पंजीयन शुल्क: पुरुष / संयुक्त क्रेता 3% = ₹${inr(st.male.registration)}, केवल महिला क्रेता 1% = ₹${inr(st.female.registration)}`,
   );
   const fee = officeFeeFor("registry", base, fees);
-  lines.push(fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, ₹${inr(base)} पर — जो ज़्यादा हो)`);
+  lines.push(...advocateFeeLines(fee, base, amount));
   const warn = underValueWarning(amount, value);
   if (warn) lines.push("", warn);
   return { lines, stamp: st };
@@ -670,6 +674,8 @@ export interface GuideTurn {
   replies: string[];
   /** Why it ended without a value (for the log). */
   outcome?: "answered" | "not-found" | "unsupported-type";
+  /** With outcome "answered": every fact the answer used (so it can be asked again with the registry amount). */
+  answeredState?: GuideState;
 }
 
 /** Fill the state from what the text says, without overwriting answers already given. */
@@ -690,8 +696,13 @@ export function mergeFacts(g: GuideState, f: GuideFacts): GuideState {
   };
 }
 
-/** The next question, or the answer when everything is known. */
+/** The next question, or the answer when everything is known (an answer carries the facts it used). */
 export function guideNext(g: GuideState, fees: WaOfficeFees, given?: GuidelineEntry[]): GuideTurn {
+  const t = guideNextInner(g, fees, given);
+  return t.outcome === "answered" ? { ...t, answeredState: t.answeredState ?? g } : t;
+}
+
+function guideNextInner(g: GuideState, fees: WaOfficeFees, given?: GuidelineEntry[]): GuideTurn {
   const data = given ?? districtRows(g.district);
   if (!g.sno) {
     if (!g.name) return { state: { ...g, step: "NAME" }, replies: [GUIDE_ASK_NAME] };
@@ -855,6 +866,25 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, give
       next = { ...g, lift: l };
       break;
     }
+    case "AMOUNT": {
+      // "25 lakh", "2500000"; a bare 2-999 means that many lakh. "नहीं / पता नहीं": keep the guideline-only estimate.
+      // A correction ("8 number ki thi", "ward 8"): same colony, other ward → look the row up again, rest kept.
+      const fix = f.ward ?? /(?:^|\s)(\d{1,3})\s*(?:number|नंबर|नं\.?|no\.?)\s*(?:ward|वार्ड)?(?:\s|$)/i.exec(normDigits(text))?.[1] ?? null;
+      if (fix && !/लाख|lakh|lac|crore|करोड़|₹|rs/i.test(text)) {
+        return guideNext({ ...g, ward: String(Number(fix)), sno: null, options: undefined, amount: null, step: "PICK" }, fees, given);
+      }
+      const bareNo = /^\d+(\.\d+)?$/.test(bare(text)) ? Number(bare(text)) : null;
+      const m = parseMoney(text) ?? (bareNo != null && bareNo >= 2 && bareNo < 1000 ? Math.round(bareNo * 100_000) : null);
+      if (m) {
+        next = { ...g, amount: m };
+        break;
+      }
+      if (/^(no|nahi|nahin|nhi|pata nahi|pata nahin|नहीं|नही|पता नहीं|पता नही|नहीं पता|skip|छोड़ो)(?:\s|$)/i.test(bare(text))) {
+        return { state: null, replies: ["ठीक है, ऊपर का अनुमान गाइडलाइन मूल्य पर है। रजिस्ट्री की राशि पता चले तो यहीं लिख दीजिए।"], outcome: "answered" };
+      }
+      unclear = GUIDE_ASK_AMOUNT;
+      break;
+    }
     case "IRRIGATED": {
       const i = readIrrigated(text);
       if (i == null) unclear = GUIDE_ASK_IRRIGATED;
@@ -862,7 +892,7 @@ export function guideReply(g: GuideState, text: string, fees: WaOfficeFees, give
       break;
     }
   }
-  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "DISTRICT" || g.step === "AGRI_AREA" || g.step === "FLOORS" ? unclear : `समझ नहीं आया। ${unclear}`] };
+  if (unclear) return { state: g, replies: [g.step === "AREA" || g.step === "NAME" || g.step === "DISTRICT" || g.step === "AGRI_AREA" || g.step === "FLOORS" || g.step === "AMOUNT" ? unclear : `समझ नहीं आया। ${unclear}`] };
   // Anything else the answer also says (e.g. the area together with the type).
   return guideNext(mergeFacts(next, f), fees, given);
 }

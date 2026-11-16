@@ -200,8 +200,26 @@ export function parseCostKind(text: string): "registry" | "other" | null {
   return null;
 }
 
+/**
+ * The office's total charge, shown to customers as "Advocate fees" (writing fee included).
+ * With a registry amount / guideline value the slab is on the higher of the two: that value is
+ * named in a second line so the customer sees what the fee is based on.
+ */
+export function advocateFeeLines(fee: number | null, base: number | null, amount: number | null): string[] {
+  if (fee == null) return ["Advocate fees: कार्यालय बताएगा"];
+  const lines = [`Advocate fees: ₹${inr(fee)} (लेखन शुल्क सहित)`];
+  if (base != null) {
+    lines.push(
+      amount
+        ? `(शुल्क ₹${inr(base)} के हिसाब से — रजिस्ट्री राशि और गाइडलाइन मूल्य में जो ज़्यादा हो)`
+        : `(शुल्क गाइडलाइन मूल्य ₹${inr(base)} के हिसाब से; असली रजिस्ट्री इससे ज़्यादा पर हो तो शुल्क बदलेगा`,
+    );
+  }
+  return lines;
+}
+
 const feeLine = (fee: number | null) =>
-  fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, कुल)`;
+  fee == null ? "Advocate fees: कार्यालय बताएगा" : `Advocate fees: ₹${inr(fee)} (लेखन शुल्क सहित, कुल)`;
 
 /** Other documents (mortgage, lease, gift, will, release, agreement ...): only the office fee is fixed. */
 export function flatFeeText(kind: "other", cfg: WaOfficeFees, label = "यह दस्तावेज़"): string {
@@ -234,7 +252,7 @@ export function registryCostText(
     );
   }
   lines.push(`पंजीयन शुल्क: पुरुष क्रेता 3% = ₹${inr(Math.round(base * 0.03))}, महिला क्रेता 1% = ₹${inr(Math.round(base * 0.01))}`);
-  lines.push(feeLine(officeFeeFor("registry", base, cfg)));
+  lines.push(...advocateFeeLines(officeFeeFor("registry", base, cfg), base, input.amount));
   const warn = underValueWarning(input.amount, input.guideline?.value);
   if (warn) lines.push("", warn);
   lines.push("", "यह अनुमान है; अंतिम गणना संपदा पोर्टल पर होगी।", 'नया ड्राफ्ट बनवाना हो तो "1" लिखें।');

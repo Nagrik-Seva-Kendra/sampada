@@ -102,7 +102,7 @@ describe("the 7:09 PM example: ₹33,47,000, Ganga Vihar ward 60, 2770 sqft", ()
     expect(text).toContain("रजिस्ट्री राशि: ₹33,47,000 (गाइडलाइन से ₹1,563 ज़्यादा)");
     expect(text).toContain("स्टाम्प शुल्क: ₹3,17,897 (नगर निगम क्षेत्र — गाइडलाइन पर 9.5% + ऊपर की राशि ₹1,563 पर 5.1% = ₹80)");
     expect(text).toContain("पंजीयन शुल्क: पुरुष / संयुक्त क्रेता 3% = ₹1,00,363, केवल महिला क्रेता 1% = ₹33,454");
-    expect(text).toContain("कार्यालय शुल्क: ₹5,500 (लेखन शुल्क सहित, ₹33,47,000 पर — जो ज़्यादा हो)");
+    expect(text).toContain("Advocate fees: ₹5,500 (लेखन शुल्क सहित)");
     expect(text).toContain(GUIDE_DISCLAIMER);
   });
 
@@ -352,5 +352,17 @@ describe("house / shop building (the office calculator's bldg mode)", () => {
     expect(t.replies[0]).toContain(`गाइडलाइन मूल्य: ₹${Math.round(want.total).toLocaleString("en-IN")}`);
     expect(t.replies[0]).toContain("व्यावसायिक भूखण्ड दर + कॉर्नर 10%");
     expect(guideReply(g, "5", fees).replies[0]).toContain(GUIDE_ASK_SHOP_KIND);
+  });
+});
+
+describe("registry amount asked after a guideline-only estimate", () => {
+  it("a correction of the ward re-looks the row up; an amount recomputes; 'नहीं' ends", () => {
+    const base: GuideState = { mode: "guide", step: "AMOUNT", amount: null, name: "गंगा विहार", ward: "60", sno: 845, type: "plotRes", area: { value: 1000, unit: "sqft" }, corner: false, boundary: false };
+    const fix = guideReply(base, "sorry 8 number ki guidleine thi", fees);
+    expect(fix.replies[0]).not.toContain(GUIDE_ASK_NAME);
+    const amt = guideReply(base, "50 lakh", fees);
+    expect(amt.outcome).toBe("answered");
+    expect(amt.replies[0]).toContain("रजिस्ट्री राशि: ₹50,00,000");
+    expect(guideReply(base, "नहीं", fees).state).toBeNull();
   });
 });

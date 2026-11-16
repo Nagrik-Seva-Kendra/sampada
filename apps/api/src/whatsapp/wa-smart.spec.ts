@@ -71,11 +71,11 @@ describe("cost estimate text", () => {
     const t = registryCostText({ amount: 4_000_000, guideline: null }, DEFAULT_OFFICE_FEES);
     expect(t).toContain("नगर निगम क्षेत्र 9.5% = ₹3,80,000");
     expect(t).toContain("पंजीयन शुल्क: पुरुष क्रेता 3% = ₹1,20,000");
-    expect(t).toContain("कार्यालय शुल्क: ₹5,500 (लेखन शुल्क सहित, कुल)");
+    expect(t).toContain("Advocate fees: ₹5,500 (लेखन शुल्क सहित)");
     const g = registryCostText({ amount: 4_000_000, guideline: { value: 6_000_000, sdPct: 0.095 } }, DEFAULT_OFFICE_FEES);
     expect(g).toContain("गणना ₹60,00,000 पर");
-    expect(g).toContain("कार्यालय शुल्क: ₹6,500");
-    expect(registryCostText({ amount: 9_000_000, guideline: null }, DEFAULT_OFFICE_FEES)).toContain("कार्यालय शुल्क: कार्यालय बताएगा");
+    expect(g).toContain("Advocate fees: ₹6,500");
+    expect(registryCostText({ amount: 9_000_000, guideline: null }, DEFAULT_OFFICE_FEES)).toContain("Advocate fees: कार्यालय बताएगा");
   });
 });
 
@@ -152,7 +152,7 @@ describe("front door", () => {
     expect((await w.say("2")).replies[0]).toContain("कौन सा दस्तावेज़");
     expect((await w.say("1")).replies[0]).toContain("किस राशि पर");
     const est = (await w.say("60 लाख")).replies[0]!;
-    expect(est).toContain("कार्यालय शुल्क: ₹6,500");
+    expect(est).toContain("Advocate fees: ₹6,500");
     expect(w.contacts.get(PHONE).state).toBeNull();
     // each document of the menu (by number and by name) → its own name + the flat office fee
     const docs: [string, string][] = [
@@ -164,7 +164,7 @@ describe("front door", () => {
     for (const [say, label] of docs) {
       await w.say("2");
       const reply = (await w.say(say)).replies[0]!;
-      expect(reply, say).toContain(`${label} — कार्यालय शुल्क: ₹6,000`);
+      expect(reply, say).toContain(`${label} — Advocate fees: ₹6,000`);
       expect(reply, say).not.toContain("GDA पट्टा");
       expect(w.contacts.get(PHONE).state).toBeNull();
     }
