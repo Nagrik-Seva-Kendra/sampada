@@ -98,8 +98,7 @@ export function redactForModel(text: string): string {
 export const COST_KIND_ASK =
   "खर्च का अनुमान — कौन सा दस्तावेज़? नंबर लिखें:\n" +
   "1. रजिस्ट्री (विक्रय पत्र)\n" +
-  "2. GDA पट्टा\n" +
-  "3. कोई और दस्तावेज़ (दान, बंधक, मुख्तारनामा, अनुबंध आदि)";
+  "2. कोई और दस्तावेज़ (दान, बंधक, मुख्तारनामा, अनुबंध आदि)";
 export const COST_AMOUNT_ASK =
   "रजिस्ट्री किस राशि पर होगी? राशि लिखें (जैसे 15 लाख)।\n" +
   "गाइडलाइन मूल्य भी जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
@@ -169,22 +168,22 @@ export const COST_AMOUNT_UNCLEAR =
   "राशि समझ नहीं आई, कृपया जैसे 33,47,000 या 33 लाख 47 हज़ार लिखें।\n" +
   "गाइडलाइन मूल्य जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
 
-export function parseCostKind(text: string): WaFeeKind | null {
+export function parseCostKind(text: string): "registry" | "other" | null {
   const s = normDigits(text).trim().toLowerCase();
   if (/^1\b|रजिस्ट्री|विक्रय|registry|sale|बैनामा/.test(s)) return "registry";
-  if (/^2\b|पट्टा|patta|gda|जीडीए/.test(s)) return "gdaPatta";
-  if (/^3\b|दान|बंधक|मुख्तार|अनुबंध|other|और|अन्य|वसीयत|gift|mortgage|\bdaa?n\b|bandhak|mukhtar|anubandh|agreement|vasiyat|wasiyat|will\b/.test(s)) return "other";
+  // "2" is the other-documents option; "3" is kept for chats that still show the old 3-option menu.
+  // GDA पट्टा is no longer a separate option: those words get the other-documents answer.
+  if (/^[23]\b|पट्टा|patta|gda|जीडीए|दान|बंधक|मुख्तार|अनुबंध|other|और|अन्य|वसीयत|gift|mortgage|\bdaa?n\b|bandhak|mukhtar|anubandh|agreement|vasiyat|wasiyat|will\b/.test(s)) return "other";
   return null;
 }
 
 const feeLine = (fee: number | null) =>
   fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, कुल)`;
 
-/** GDA पट्टा / other documents: only the office fee is fixed. */
-export function flatFeeText(kind: "gdaPatta" | "other", cfg: WaOfficeFees): string {
-  const label = kind === "gdaPatta" ? "GDA पट्टा" : "यह दस्तावेज़";
+/** Other documents: only the office fee is fixed. */
+export function flatFeeText(kind: "other", cfg: WaOfficeFees): string {
   return [
-    `${label} — ${feeLine(officeFeeFor(kind, null, cfg))}`,
+    `यह दस्तावेज़ — ${feeLine(officeFeeFor(kind, null, cfg))}`,
     "स्टाम्प शुल्क और पंजीयन शुल्क दस्तावेज़ पर निर्भर हैं — स्टाफ बताएगा।",
     'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
   ].join("\n");
