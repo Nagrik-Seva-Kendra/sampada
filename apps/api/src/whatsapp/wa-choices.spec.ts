@@ -14,7 +14,7 @@ describe("which replies become tap menus", () => {
   it("every numbered menu the bot sends", () => {
     expect(ids(MENU_TEXT)).toEqual(["1", "2", "3", "4"]);
     expect(ids(menuText(true))).toEqual(["1", "2", "3", "4", "5"]);
-    expect(ids(COST_KIND_ASK)).toEqual(["1", "2"]);
+    expect(ids(COST_KIND_ASK)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     expect(ids(GUIDE_ASK_TYPE)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     expect(ids(GUIDE_ASK_LIFT)).toEqual(["1", "2"]);
     expect(ids(GUIDE_ASK_HOUSE_KIND)?.[0]).toBe("1");

@@ -151,7 +151,7 @@ describe("the next-day reminder", () => {
 
     const staff = world();
     await staff.say("2", T0);
-    await staff.say("4", new Date(T0.getTime() + 60_000));
+    await staff.say("स्टाफ से बात", new Date(T0.getTime() + 60_000));
     expect(await staff.job.run(new Date(T0.getTime() + 21 * H))).toBe(0);
 
     const late = world();

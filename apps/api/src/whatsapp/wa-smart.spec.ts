@@ -154,14 +154,20 @@ describe("front door", () => {
     const est = (await w.say("60 लाख")).replies[0]!;
     expect(est).toContain("कार्यालय शुल्क: ₹6,500");
     expect(w.contacts.get(PHONE).state).toBeNull();
-    await w.say("2");
-    expect((await w.say("2")).replies[0]).toContain("यह दस्तावेज़ — कार्यालय शुल्क: ₹6,000");
-    await w.say("2");
-    expect((await w.say("dan patra")).replies[0]).toContain("कार्यालय शुल्क: ₹6,000");
-    await w.say("2");
-    const gda = (await w.say("GDA patta")).replies[0]!;
-    expect(gda).toContain("कार्यालय शुल्क: ₹6,000");
-    expect(gda).not.toContain("GDA पट्टा");
+    // each document of the menu (by number and by name) → its own name + the flat office fee
+    const docs: [string, string][] = [
+      ["2", "Mortgage (बंधक)"], ["3", "Lease (पट्टा / किराया)"], ["4", "Gift (दान)"], ["5", "Will (वसीयत)"],
+      ["6", "Release (बंधक मुक्ति)"], ["7", "Agreement (अनुबंध)"],
+      ["mortgage", "Mortgage (बंधक)"], ["lease deed", "Lease (पट्टा / किराया)"], ["dan patra", "Gift (दान)"], ["vasiyat", "Will (वसीयत)"],
+      ["bandhak mukti", "Release (बंधक मुक्ति)"], ["agreement", "Agreement (अनुबंध)"], ["GDA patta", "Lease (पट्टा / किराया)"],
+    ];
+    for (const [say, label] of docs) {
+      await w.say("2");
+      const reply = (await w.say(say)).replies[0]!;
+      expect(reply, say).toContain(`${label} — कार्यालय शुल्क: ₹6,000`);
+      expect(reply, say).not.toContain("GDA पट्टा");
+      expect(w.contacts.get(PHONE).state).toBeNull();
+    }
   });
 
   it("gibberish: 1st → menu, 3rd in a row → notice + 30 min silence; a real message ends it", async () => {

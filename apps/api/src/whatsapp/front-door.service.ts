@@ -28,6 +28,7 @@ import {
   COST_AMOUNT_ASK,
   COST_AMOUNT_UNCLEAR,
   COST_KIND_ASK,
+  costDoc,
   flatFeeText,
   isAbusive,
   isGibberish,
@@ -302,11 +303,11 @@ export class FrontDoorService {
       // Inside the cost questions a bare number answers them ("1" = रजिस्ट्री), and so does
       // any amount ("33,47,000 ... guideline bata do") or words of option 2 itself -- we are
       // already in it. Words of another option ("स्टाफ से बात"), "4" or a greeting leave.
-      const bareDigit = /^\s*[1-4]\s*$/.test(normDigits(text));
+      const bareDigit = /^\s*[1-7]\s*$/.test(normDigits(text));
       const hasAmount = !bareDigit && parseMoney(text) !== null;
       const greeting = isGreeting(text);
       const kindAnswer = state.step === "KIND" && parseCostKind(text) !== null;
-      const switches = !hasAmount && !kindAnswer && (greeting || (choice !== null && choice !== 2 && !bareDigit) || (bareDigit && choice === 4));
+      const switches = !hasAmount && !kindAnswer && (greeting || (choice !== null && choice !== 2 && !bareDigit) || (bareDigit && choice === 4 && state.step !== "KIND")); // "4" in the document menu is Gift
       if (!switches) return this.cost(phone, state, text);
       if (greeting) await this.setContact(phone, { state: null });
     }
@@ -555,7 +556,7 @@ export class FrontDoorService {
         return { replies: [COST_AMOUNT_ASK], route: "cost" };
       }
       await this.setContact(phone, { state: null });
-      return { replies: [flatFeeText(kind, fees)], route: "cost" };
+      return { replies: [flatFeeText(kind, fees, costDoc(text)?.label)], route: "cost" };
     }
     // Waiting for the amount: never silent.
     if (!amount && this.wantsGuideline(text)) return this.guideStart(phone, state.amount ?? null, text);

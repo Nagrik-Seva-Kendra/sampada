@@ -98,7 +98,12 @@ export function redactForModel(text: string): string {
 export const COST_KIND_ASK =
   "खर्च का अनुमान — कौन सा दस्तावेज़? नंबर लिखें:\n" +
   "1. रजिस्ट्री (विक्रय पत्र)\n" +
-  "2. कोई और दस्तावेज़ (दान, बंधक, मुख्तारनामा, अनुबंध आदि)";
+  "2. Mortgage (बंधक)\n" +
+  "3. Lease (पट्टा / किराया)\n" +
+  "4. Gift (दान)\n" +
+  "5. Will (वसीयत)\n" +
+  "6. Release (बंधक मुक्ति)\n" +
+  "7. Agreement (अनुबंध)";
 export const COST_AMOUNT_ASK =
   "रजिस्ट्री किस राशि पर होगी? राशि लिखें (जैसे 15 लाख)।\n" +
   "गाइडलाइन मूल्य भी जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
@@ -168,22 +173,40 @@ export const COST_AMOUNT_UNCLEAR =
   "राशि समझ नहीं आई, कृपया जैसे 33,47,000 या 33 लाख 47 हज़ार लिखें।\n" +
   "गाइडलाइन मूल्य जानना हो तो संपत्ति की पुरानी रजिस्ट्री की PDF या फ़ोटो भेजें।";
 
+/** The documents of cost menu 2 (besides the registry), by menu number and by the words customers use. */
+const COST_DOCS: { no: number; label: string; words: RegExp }[] = [
+  // Release before mortgage: "बंधक मुक्ति" contains "बंधक".
+  { no: 6, label: "Release (बंधक मुक्ति)", words: /बंधक\s*मुक्ति|bandh?a?k\s*mukt|मुक्ति\s*पत्र|release|reconveyance|रिलीज|rilij/ },
+  { no: 2, label: "Mortgage (बंधक)", words: /mortgage|बंधक|बन्धक|bandhak|bandhk|गिरवी|girvi|मॉर्टगेज|मार्टगेज/ },
+  { no: 3, label: "Lease (पट्टा / किराया)", words: /lease|लीज|पट्टा|patta|gda|जीडीए|kirayanama|किरायानामा|किराया/ },
+  { no: 4, label: "Gift (दान)", words: /gift|दान|\bdaa?n\b|हिबा|hiba/ },
+  { no: 5, label: "Will (वसीयत)", words: /\bwill\b|वसीयत|vasiyat|wasiyat/ },
+  { no: 7, label: "Agreement (अनुबंध)", words: /agreement|अनुबंध|anubandh|इकरारनामा|ikrarnama|समझौता/ },
+];
+
+/** Which cost-menu document the customer means (null when none is recognised). */
+export function costDoc(text: string): { no: number; label: string } | null {
+  const s = normDigits(text).trim().toLowerCase();
+  const byNo = /^\s*([2-7])\s*[.)।]?\s*$/.exec(s);
+  if (byNo) return COST_DOCS.find((d) => d.no === Number(byNo[1])) ?? null;
+  return COST_DOCS.find((d) => d.words.test(s)) ?? null;
+}
+
 export function parseCostKind(text: string): "registry" | "other" | null {
   const s = normDigits(text).trim().toLowerCase();
   if (/^1\b|रजिस्ट्री|विक्रय|registry|sale|बैनामा/.test(s)) return "registry";
-  // "2" is the other-documents option; "3" is kept for chats that still show the old 3-option menu.
-  // GDA पट्टा is no longer a separate option: those words get the other-documents answer.
-  if (/^[23]\b|पट्टा|patta|gda|जीडीए|दान|बंधक|मुख्तार|अनुबंध|other|और|अन्य|वसीयत|gift|mortgage|\bdaa?n\b|bandhak|mukhtar|anubandh|agreement|vasiyat|wasiyat|will\b/.test(s)) return "other";
+  // Every other document has the same flat office fee; GDA पट्टा is no longer a separate option (it is a lease).
+  if (costDoc(text) || /^[2-9]\b|मुख्तार|mukhtar|other|और|अन्य/.test(s)) return "other";
   return null;
 }
 
 const feeLine = (fee: number | null) =>
   fee == null ? "कार्यालय शुल्क: कार्यालय बताएगा" : `कार्यालय शुल्क: ₹${inr(fee)} (लेखन शुल्क सहित, कुल)`;
 
-/** Other documents: only the office fee is fixed. */
-export function flatFeeText(kind: "other", cfg: WaOfficeFees): string {
+/** Other documents (mortgage, lease, gift, will, release, agreement ...): only the office fee is fixed. */
+export function flatFeeText(kind: "other", cfg: WaOfficeFees, label = "यह दस्तावेज़"): string {
   return [
-    `यह दस्तावेज़ — ${feeLine(officeFeeFor(kind, null, cfg))}`,
+    `${label} — ${feeLine(officeFeeFor(kind, null, cfg))}`,
     "स्टाम्प शुल्क और पंजीयन शुल्क दस्तावेज़ पर निर्भर हैं — स्टाफ बताएगा।",
     'नया ड्राफ्ट बनवाना हो तो "1" लिखें।',
   ].join("\n");
