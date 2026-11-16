@@ -147,7 +147,7 @@ describe("front door", () => {
     expect(w.outbox.alertOwners).toHaveBeenCalledWith(expect.stringContaining("स्टाफ से बात"));
   });
 
-  it("menu 2: registry → amount → estimate; GDA पट्टा → flat fee; a bare 1 inside answers the cost question", async () => {
+  it("menu 2: registry → amount → estimate; other documents (and GDA पट्टा words) → flat fee; a bare 1 inside answers the cost question", async () => {
     const w = frontWorld();
     expect((await w.say("2")).replies[0]).toContain("कौन सा दस्तावेज़");
     expect((await w.say("1")).replies[0]).toContain("किस राशि पर");
@@ -155,9 +155,13 @@ describe("front door", () => {
     expect(est).toContain("कार्यालय शुल्क: ₹6,500");
     expect(w.contacts.get(PHONE).state).toBeNull();
     await w.say("2");
-    expect((await w.say("2")).replies[0]).toContain("GDA पट्टा — कार्यालय शुल्क: ₹10,000");
+    expect((await w.say("2")).replies[0]).toContain("यह दस्तावेज़ — कार्यालय शुल्क: ₹6,000");
     await w.say("2");
     expect((await w.say("dan patra")).replies[0]).toContain("कार्यालय शुल्क: ₹6,000");
+    await w.say("2");
+    const gda = (await w.say("GDA patta")).replies[0]!;
+    expect(gda).toContain("कार्यालय शुल्क: ₹6,000");
+    expect(gda).not.toContain("GDA पट्टा");
   });
 
   it("gibberish: 1st → menu, 3rd in a row → notice + 30 min silence; a real message ends it", async () => {
