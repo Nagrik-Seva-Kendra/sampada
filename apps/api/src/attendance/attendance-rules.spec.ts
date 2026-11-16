@@ -124,6 +124,12 @@ describe("leave on WhatsApp", () => {
     });
     expect(parseLeaveText("kal chhutti chahiye aadha din: bank jana hai", "2026-10-01")).toMatchObject({ fromDate: "2026-10-02", toDate: "2026-10-02", halfDay: true, type: "OTHER", reason: "bank jana hai" });
     expect(parseLeaveText("kal aaunga", "2026-10-01")).toBeNull();
+    // A leave in everyday words (no "छुट्टी"): "can't come tomorrow".
+    expect(parseLeaveText("Kl nhi aa पाउंगा", "2026-10-01")).toMatchObject({ fromDate: "2026-10-02", toDate: "2026-10-02", type: "OTHER" });
+    expect(parseLeaveText("kal nahi aa paunga bimar hu", "2026-10-01")).toMatchObject({ fromDate: "2026-10-02", type: "SICK" });
+    expect(parseLeaveText("परसों नहीं आऊँगा", "2026-10-01")).toMatchObject({ fromDate: "2026-10-03" });
+    expect(parseLeaveText("aaj absent rahunga", "2026-10-01")).toMatchObject({ fromDate: "2026-10-01" });
+    expect(parseLeaveText("kal aa paunga", "2026-10-01")).toBeNull();
     expect(parseLeaveDecision("मंज़ूर 5")).toEqual({ approve: true, n: 5 });
     expect(parseLeaveDecision("नामंज़ूर 5")).toEqual({ approve: false, n: 5 });
     expect(parseLeaveDecision("reject 12")).toEqual({ approve: false, n: 12 });
